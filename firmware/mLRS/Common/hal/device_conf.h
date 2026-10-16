@@ -381,6 +381,20 @@ The default selection of frequency bands can be overruled by feature defines.
 
 
 //-------------------------------------------------------
+// TetherLRS: a receiver built as the ground radio, with its own hal (platformio-tetherlrs.ini)
+//-------------------------------------------------------
+
+#ifdef TLRS_RX_AS_TX
+  #ifndef DEVICE_IS_RECEIVER
+    #error TLRS_RX_AS_TX needs a receiver
+  #endif
+  #undef DEVICE_IS_RECEIVER
+  #define DEVICE_IS_TRANSMITTER
+  #define DEVICE_HAS_SERIAL_ESCAPE // the receiver's one serial carries data, and the CLI after SiK's +++
+#endif
+
+
+//-------------------------------------------------------
 // MLRS Feature Defines
 //-------------------------------------------------------
 // should go somewhere else !?

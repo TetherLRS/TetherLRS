@@ -21,8 +21,10 @@ jobs:
       list: ${{ steps.list.outputs.list }}
     steps:
       - uses: actions/checkout@v4
+      - name: Receivers as Tx up to date
+        run: python3 tools/tetherlrs_tx_envs.py --check
       - id: list
-        run: echo "list=$(grep -oP '^\[env:\K[^\]]+' platformio.ini | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
+        run: echo "list=$(grep -ohP '^\[env:\K[^\]]+' platformio.ini platformio-tetherlrs.ini | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
 
   build:
     needs: envs
@@ -41,7 +43,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/.platformio
-          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini', 'platformio-tetherlrs.ini') }}
       - run: pip install platformio==6.1.19 esptool==4.8.1
       - name: MAVLink library
         working-directory: mLRS/Common/mavlink
