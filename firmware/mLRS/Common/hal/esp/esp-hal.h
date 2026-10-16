@@ -83,6 +83,10 @@
 #include "rx-hal-bayck-ur1000-lr1121-esp32c3.h"
 #endif
 
+#ifdef RX_ELRS_BAYCK_UR500_LR1121_ESP32C3
+#include "rx-hal-bayck-ur500-lr1121-esp32c3.h"
+#endif
+
 #ifdef RX_ELRS_DAKEFPV_900_MAX_1W_ESP32C3
 #include "rx-hal-dakefpv-900-max-1w-esp32c3.h"
 #endif
