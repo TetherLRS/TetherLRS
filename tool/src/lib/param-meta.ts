@@ -1,5 +1,6 @@
-// How the parameters the firmware lists are shown: readable names, a line of help, and which ones TetherLRS
-// does not use (it carries no RC).
+// How the parameters the firmware lists are shown: readable names, a line of help, and which ones stay hidden.
+
+import type { Param } from './device/cli-parse';
 
 export interface ParamMeta {
   label: string;
@@ -10,7 +11,6 @@ export const SECTIONS = [
   { id: 'link', title: 'Radio link', help: 'Changing these restarts the Tx and the receiver.' },
   { id: 'ground', title: 'Ground radio (Tx)' },
   { id: 'air', title: 'Aircraft radio (Rx)', help: 'Read from the receiver while it is connected.' },
-  { id: 'rc', title: 'RC and failsafe', help: 'TetherLRS carries no RC channels; these stay as they are.' },
 ] as const;
 
 export type SectionId = (typeof SECTIONS)[number]['id'];
@@ -31,6 +31,9 @@ const META: Record<string, ParamMeta> = {
   'Tx Ser Baudrate': { label: 'Serial baud rate', help: 'Towards the ground station program. 115200 carries every air mode.' },
   'Tx Snd RadioStat': { label: 'RADIO_STATUS to the GCS' },
   'Tx Mav Component': { label: 'MAVLink component' },
+  'Tx Ser Port2': { label: 'Second serial port' },
+  'Tx Ser Baudrate2': { label: 'Second serial baud rate' },
+  'Tx Buzzer': { label: 'Buzzer' },
   'Rx Power': { label: 'Transmit power' },
   'Rx Diversity': { label: 'Antennas' },
   'Rx Ser Port': { label: 'Serial port' },
@@ -44,14 +47,19 @@ const META: Record<string, ParamMeta> = {
   },
 };
 
-const RC = /^(Tx Ch |Tx In Mode|Tx Power Sw Ch|Tx Buzzer|Tx Ser Port2|Tx Ser Baudrate2|Rx Ch Order|Rx Out |Rx FailSafe|Rx FS Ch|Rx Power Sw Ch|Rx Snd RcChannel)/;
+// RC and failsafe: the firmware leaves them out (TLRS_NO_RC), firmware built without it still lists them
+const RC = /^(Tx Ch |Tx In Mode|Tx Power Sw Ch|Rx Ch Order|Rx Out |Rx FailSafe|Rx FS Ch|Rx Power Sw Ch|Rx Snd RcChannel)/;
 
 export function paramMeta(name: string): ParamMeta {
   return META[name] ?? { label: name.replace(/^(Tx|Rx) /, '') };
 }
 
+// also those the hardware allows one value for: nothing to choose
+export function paramHidden(p: Param): boolean {
+  return p.unavailable || p.unchangeable || RC.test(p.name);
+}
+
 export function paramSection(name: string): SectionId {
-  if (RC.test(name)) return 'rc';
   if (name.startsWith('Tx ')) return 'ground';
   if (name.startsWith('Rx ')) return 'air';
   return 'link';

@@ -1,16 +1,16 @@
 <script lang="ts">
   import { app } from '$lib/app.svelte';
-  import { SECTIONS, paramSection } from '$lib/param-meta';
+  import { SECTIONS, paramHidden, paramSection } from '$lib/param-meta';
   import ParamRow from './ParamRow.svelte';
   import InfoBar from './InfoBar.svelte';
   import Icon from './Icon.svelte';
 
-  const visible = $derived(app.params.filter((p) => !p.unavailable));
+  const visible = $derived(app.params.filter((p) => !paramHidden(p)));
   const bySection = $derived(Object.fromEntries(SECTIONS.map((s) => [s.id, visible.filter((p) => paramSection(p.name) === s.id)])));
 
-  // options in the background, so the lists are complete when opened; RC ones only when asked
+  // options in the background, so the lists are complete when opened
   $effect(() => {
-    const names = visible.filter((p) => p.kind === 'list' && !p.unchangeable && paramSection(p.name) !== 'rc').map((p) => p.name);
+    const names = visible.filter((p) => p.kind === 'list').map((p) => p.name);
     void (async () => {
       for (const n of names) {
         if (!app.connected || app.streaming) return;
@@ -26,27 +26,15 @@
 
 {#each SECTIONS as s}
   {#if bySection[s.id]?.length}
-    {#if s.id === 'rc'}
-      <details class="card section">
-        <summary>
-          <h2>{s.title}</h2>
-          <span class="caption">{s.help}</span>
-        </summary>
-        {#each bySection[s.id] as p (p.name)}
-          <ParamRow param={p} />
-        {/each}
-      </details>
-    {:else}
-      <section class="card section">
-        <div class="head">
-          <h2>{s.title}</h2>
-          {#if 'help' in s}<span class="caption">{s.help}</span>{/if}
-        </div>
-        {#each bySection[s.id] as p (p.name)}
-          <ParamRow param={p} />
-        {/each}
-      </section>
-    {/if}
+    <section class="card section">
+      <div class="head">
+        <h2>{s.title}</h2>
+        {#if 'help' in s}<span class="caption">{s.help}</span>{/if}
+      </div>
+      {#each bySection[s.id] as p (p.name)}
+        <ParamRow param={p} />
+      {/each}
+    </section>
   {/if}
 {/each}
 
@@ -63,26 +51,11 @@
   .section {
     padding: var(--space-1) 0;
   }
-  .head,
-  summary {
+  .head {
     display: flex;
     flex-direction: column;
     gap: 2px;
     padding: var(--space-3) var(--space-4) var(--space-2);
-  }
-  summary {
-    cursor: default;
-    list-style: none;
-  }
-  summary::-webkit-details-marker {
-    display: none;
-  }
-  summary h2::after {
-    content: '  ›';
-    color: var(--text-2);
-  }
-  details[open] summary h2::after {
-    content: '  ⌄';
   }
   .savebar {
     position: sticky;

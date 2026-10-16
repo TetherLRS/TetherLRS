@@ -18,7 +18,6 @@ interface DemoParam {
 
 const MODES = ['50 Hz', '31 Hz', '19 Hz', 'FLRC', 'FSK', '19 Hz 7x', '18 Hz', 'LR'];
 const BANDS = ['2.4 GHz', '915 MHz FCC', '868 MHz', '433 MHz', '70 cm HAM', '866 MHz IN', '915 MHz + 2.4 GHz', '868 MHz + 2.4 GHz'];
-const CH = ['off', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16'];
 
 export class DemoSerialPort {
   readable: ReadableStream<Uint8Array> | null = null;
@@ -52,34 +51,21 @@ export class DemoSerialPort {
       { name: 'Region', kind: 'list', options: ['free', 'EU'], value: 0 },
       { name: 'Tx Power', kind: 'list', options: ['25 mW', '50 mW', '100 mW', '250 mW', '500 mW'], value: 0 },
       { name: 'Tx Diversity', kind: 'list', options: ['enabled', 'antenna1', 'antenna2', 'r:en. t:ant1', 'r:en. t:ant2'], value: 1, allowed: () => [1] },
-      { name: 'Tx Ch Source', kind: 'list', options: ['none', 'crsf', 'in'], value: 0, allowed: () => [0] },
-      { name: 'Tx Ch Order', kind: 'list', options: ['AETR', 'TAER', 'ETAR'], value: 0 },
-      { name: 'Tx In Mode', kind: 'list', options: ['sbus', 'sbus inv'], value: 0, allowed: () => [] },
       { name: 'Tx Ser Port', kind: 'list', options: ['serial', 'wbridge', 'serial2', 'com', 'crsfbridge'], value: 0, allowed: () => [0] },
       { name: 'Tx Ser Baudrate', kind: 'list', options: ['57600', '115200', '230400'], value: 1 },
       { name: 'Tx Ser Port2', kind: 'list', options: ['none', 'serial', 'wbridge', 'serial2', 'crsfbridge'], value: 0, allowed: () => [] },
       { name: 'Tx Ser Baudrate2', kind: 'list', options: ['57600', '115200', '230400'], value: 1, allowed: () => [] },
       { name: 'Tx Snd RadioStat', kind: 'list', options: ['off', '1 Hz'], value: 0 },
       { name: 'Tx Mav Component', kind: 'list', options: ['off', 'enabled'], value: 0 },
-      { name: 'Tx Power Sw Ch', kind: 'list', options: CH, value: 0 },
       { name: 'Tx Buzzer', kind: 'list', options: ['off', 'LP', 'rxLQ'], value: 0, allowed: () => [] },
       { name: 'Rx Power', kind: 'list', options: ['10 mW', '25 mW', '50 mW', '100 mW', '250 mW', '500 mW'], value: 1 },
       { name: 'Rx Diversity', kind: 'list', options: ['enabled', 'antenna1', 'antenna2', 'r:en. t:ant1', 'r:en. t:ant2'], value: 1, allowed: () => [1] },
-      { name: 'Rx Ch Order', kind: 'list', options: ['AETR', 'TAER', 'ETAR'], value: 0 },
-      { name: 'Rx Out Mode', kind: 'list', options: ['sbus', 'crsf', 'sbus inv'], value: 0, allowed: () => [] },
-      { name: 'Rx FailSafe Mode', kind: 'list', options: ['no sig', 'low thr', 'by cnf', 'low thr cnt', 'ch1ch4 cnt'], value: 0 },
       { name: 'Rx Ser Port', kind: 'list', options: ['serial', 'can', 'canfd'], value: 0, allowed: () => [0] },
       { name: 'Rx Ser Baudrate', kind: 'list', options: ['57600', '115200', '230400'], value: 1 },
       { name: 'Rx Ser Link Mode', kind: 'list', options: ['transp.', 'mavlink', 'mavlinkX', 'mspX'], value: 0 },
       { name: 'Rx Mav System ID', kind: 'list', options: ['51', '52', '53', '54', '55'], value: 0 },
       { name: 'Rx Snd RadioStat', kind: 'list', options: ['off', 'ardu_1', 'meth_b'], value: 0 },
-      { name: 'Rx Snd RcChannel', kind: 'list', options: ['off', 'rc override', 'rc channels'], value: 0 },
-      { name: 'Rx Out Rssi Ch', kind: 'list', options: CH, value: 0 },
-      { name: 'Rx Out LQ Ch', kind: 'list', options: CH, value: 0 },
-      { name: 'Rx Power Sw Ch', kind: 'list', options: CH, value: 0 },
       { name: 'Rx Mav Coalesce', kind: 'list', options: ['off', 'on'], value: 0 },
-      ...Array.from({ length: 12 }, (_, i): DemoParam => ({ name: `Rx FS Ch${i + 1}`, kind: 'value', value: 0, min: -120, max: 120, unit: '%' })),
-      ...Array.from({ length: 4 }, (_, i): DemoParam => ({ name: `Rx FS Ch${i + 13}`, kind: 'list', options: ['-120 %', '0 %', '120 %'], value: 1 })),
     ];
   }
 
