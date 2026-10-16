@@ -6,7 +6,7 @@
   import Icon from './Icon.svelte';
 
   const txEnvs = $derived(app.manifest ? Object.values(app.manifest).filter((f) => f.env.startsWith('tx-')) : []);
-  const rxEnvs = $derived(app.manifest ? Object.values(app.manifest).filter((f) => f.env.startsWith('rx-')) : []);
+  const rxEnvs = $derived(app.manifest ? Object.values(app.manifest).filter((f) => f.env.startsWith(app.rxAsTx ? 'tx-' : 'rx-')) : []);
   const info = $derived(app.manifest?.[app.firmwareEnv]);
   const rxInfo = $derived(app.manifest?.[app.rxEnv]);
 
@@ -80,7 +80,7 @@
   <div class="head">
     <div>
       <h2>ExpressLRS receiver</h2>
-      <p class="caption">To put TetherLRS on a receiver that still runs ExpressLRS, plugged into a USB serial adapter.</p>
+      <p class="caption">To put TetherLRS on a receiver that still runs ExpressLRS, on a USB serial adapter or on its own USB-C. Any receiver can be either radio.</p>
     </div>
     <div class="actions">
       {#if !isDesktop && hasWebSerial}
@@ -92,17 +92,22 @@
   <PortList ports={rxPorts} bind:selected={rxPort} disabled={app.rxBusy} group="rx-port" />
   <div class="line">
     <button class="btn" onclick={() => rxEntry && app.rxIdentify(rxEntry)} disabled={!rxEntry || app.rxBusy}>Identify</button>
-    {#if app.rxTarget}<span class="caption">Answered as {app.rxTarget}, now in its bootloader</span>{/if}
+    {#if app.rxTarget}<span class="caption">Answered as {app.rxTarget}, now in its bootloader</span>
+    {:else if app.rxInRom}<span class="caption">In its bootloader</span>{/if}
   </div>
   <div class="line">
+    <select class="role" value={app.rxAsTx ? 'tx' : 'rx'} onchange={(e) => app.setRxRole((e.target as HTMLSelectElement).value === 'tx')} disabled={app.rxBusy} aria-label="Use as">
+      <option value="rx">Aircraft radio (Rx)</option>
+      <option value="tx">Ground radio (Tx)</option>
+    </select>
     <select bind:value={app.rxEnv} disabled={!rxEnvs.length || app.rxBusy} aria-label="Receiver firmware">
       {#if !rxEnvs.length}<option value="">Load the list first</option>{/if}
       {#each rxEnvs as f}
         <option value={f.env}>{f.env}</option>
       {/each}
     </select>
-    <button class="btn" onclick={rxBackup} disabled={!app.rxTarget || app.rxBusy}>Back up</button>
-    <button class="btn accent" onclick={() => rxEntry && app.rxFlash(rxEntry)} disabled={!app.rxTarget || !rxInfo || app.rxBusy}>Flash</button>
+    <button class="btn" onclick={rxBackup} disabled={!app.rxInRom || app.rxBusy}>Back up</button>
+    <button class="btn accent" onclick={() => rxEntry && app.rxFlash(rxEntry)} disabled={!app.rxInRom || !rxInfo || app.rxBusy}>Flash</button>
   </div>
 </section>
 
@@ -149,6 +154,9 @@
   }
   select {
     min-width: 260px;
+  }
+  select.role {
+    min-width: 0;
   }
   progress {
     width: 100%;

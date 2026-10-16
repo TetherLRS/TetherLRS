@@ -5,7 +5,7 @@ import { TX_BAUDS, TxSession } from './device/tx';
 import type { DeviceVersion, LinkStats, Param, ParamOptions } from './device/cli-parse';
 import { rememberTx, type PortEntry } from './serial/ports';
 import { flashImage, readWholeFlash } from './firmware/flash';
-import { elrsToBootloader } from './firmware/elrs';
+import { elrsToBootloader, romAnswers, usbJtagToBootloader } from './firmware/elrs';
 import { envForDevice, loadImage, loadManifest, type Manifest } from './firmware/manifest';
 
 export type Page = 'device' | 'params' | 'link' | 'terminal' | 'firmware';
@@ -41,6 +41,8 @@ class App {
 
   // an ExpressLRS receiver on a USB serial adapter, for its first TetherLRS flash
   rxTarget = $state(''); // what it printed before entering its ROM bootloader
+  rxInRom = $state(false); // in its ROM bootloader, by bl, the boot button or the USB reset
+  rxAsTx = $state(false); // every receiver can be the ground radio too
   rxEnv = $state('');
   rxBusy = $state(false);
 
@@ -263,20 +265,57 @@ class App {
 
   async rxIdentify(entry: PortEntry): Promise<void> {
     await this.rxStep(async () => {
-      this.rxTarget = (await elrsToBootloader(entry.port)) ?? '';
-      if (!this.rxTarget) {
-        this.error = 'The receiver did not answer. Unplug it, plug it back in and press Identify again within a minute (ExpressLRS stops listening once its WiFi starts). Check that TX and RX are crossed. ESP32 receivers do not answer here: upload <env>.bin on the ExpressLRS web page.';
-      } else if (this.manifest) {
-        this.rxEnv = envForDevice(this.manifest, this.rxTarget, false) ?? this.rxEnv;
+      if (entry.kind === 'esp') {
+        // its own USB: reset into the ROM, nothing to ask ExpressLRS
+        await usbJtagToBootloader(entry.port);
+        this.rxTarget = '';
+        this.rxInRom = await romAnswers(entry.port);
+      } else {
+        this.rxTarget = (await elrsToBootloader(entry.port)) ?? '';
+        this.rxInRom = this.rxTarget !== '' || (await romAnswers(entry.port));
+      }
+      if (!this.rxInRom) {
+        this.error =
+          'The receiver did not answer. Unplug it, plug it back in and press Identify again within a minute (ExpressLRS stops listening once its WiFi starts), and check that TX and RX are crossed. Some adapters cannot send 420000 baud: then hold the boot button while plugging the receiver in, and press Identify. ESP32 receivers on an adapter do not answer: upload <env>.bin on the ExpressLRS web page.';
+      } else {
+        this.pickRxEnv();
       }
     });
   }
 
-  // the receiver must be in its ROM bootloader, after rxIdentify
+  setRxRole(asTx: boolean): void {
+    this.rxAsTx = asTx;
+    this.pickRxEnv();
+  }
+
+  private pickRxEnv(): void {
+    if (!this.manifest) return;
+    const prefix = this.rxAsTx ? 'tx-' : 'rx-';
+    const same = prefix + this.rxEnv.slice(3); // the same receiver in the other role
+    this.rxEnv = (this.rxTarget && envForDevice(this.manifest, this.rxTarget, this.rxAsTx)) || (this.manifest[same] ? same : '');
+  }
+
+  // esptool-js wants the ROM: a native USB receiver is reset into it here, one on an adapter after rxIdentify
+  private async rxRom(entry: PortEntry): Promise<void> {
+    if (entry.kind === 'esp') {
+      await usbJtagToBootloader(entry.port);
+      if (!(await romAnswers(entry.port))) throw new Error('the receiver did not enter its bootloader');
+    } else if (!this.rxInRom) {
+      throw new Error('press Identify first');
+    }
+  }
+
   async rxBackup(entry: PortEntry): Promise<Uint8Array | undefined> {
     this.flashLog = [];
     this.flashProgress = 0;
-    return this.rxStep(() => readWholeFlash(entry.port, this.flashCallbacks()));
+    return this.rxStep(async () => {
+      await this.rxRom(entry);
+      const data = await readWholeFlash(entry.port, this.flashCallbacks());
+      // on an adapter esptool-js's stub is left at its flash baud rate, where the ROM handshake cannot reach it
+      this.rxInRom = false;
+      if (entry.kind !== 'esp') this.flashLog = [...this.flashLog, 'backup done: to flash, power the receiver off and on and press Identify again'];
+      return data;
+    });
   }
 
   async rxFlash(entry: PortEntry): Promise<void> {
@@ -286,9 +325,11 @@ class App {
     this.flashProgress = 0;
     await this.rxStep(async () => {
       const image = await loadImage(this.firmwareBase, info, true);
+      await this.rxRom(entry);
       await flashImage(entry.port, image, 0, this.flashCallbacks());
       this.flashLog = [...this.flashLog, 'done: power the receiver off and on to start TetherLRS'];
       this.rxTarget = '';
+      this.rxInRom = false;
     });
   }
 
