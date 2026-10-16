@@ -8,7 +8,7 @@
     checking,
     group = 'port',
     hideDemo = false,
-  }: { ports: PortEntry[]; selected?: string; disabled?: boolean; checking?: string; group?: string; hideDemo?: boolean } = $props();
+  }: { ports: PortEntry[]; selected?: string; disabled?: boolean; checking?: Set<string>; group?: string; hideDemo?: boolean } = $props();
 
   const shown = $derived(hideDemo ? ports.filter((p) => p.kind !== 'demo') : ports);
 </script>
@@ -24,7 +24,7 @@
           {#if p.kind === 'tlrs' || p.name}<span class="kind">{p.kind === 'tlrs' ? p.known?.txName : p.name}</span>{/if}
         </span>
         <span class="caption">
-          {checking === p.key ? 'Checking for a TetherLRS Tx… · ' : p.kind === 'tlrs' ? `${p.known?.baud} baud · ` : ''}{p.detail}
+          {checking?.has(p.key) ? 'Checking for a TetherLRS Tx… · ' : p.kind === 'tlrs' ? `${p.known?.baud} baud · ` : ''}{p.detail}
         </span>
       </span>
     </label>

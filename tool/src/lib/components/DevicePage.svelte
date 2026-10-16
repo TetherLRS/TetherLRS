@@ -17,7 +17,7 @@
 
   let ports = $state<PortEntry[]>([]);
   let selected = $state('');
-  let checking = $state<string | undefined>(); // the port being asked
+  let checking = $state(new Set<string>()); // the ports being asked
   let probing = $state(false);
 
   async function list() {
@@ -25,28 +25,29 @@
     if (!ports.some((p) => p.key === selected)) selected = ports[0]?.key ?? ''; // a known Tx sorts first
   }
 
-  // asks the adapters whether a TetherLRS Tx is there; the found ones go to the top with their name
+  // asks the adapters whether a TetherLRS Tx is there, all at once (each port is its own conversation); the found ones
+  // go to the top with their name as soon as they answer
   async function recognise(only?: Set<string>) {
     if (probing || app.state !== 'idle') return;
     probing = true;
-    let found: string | undefined;
-    for (const p of ports.filter((x) => probeable(x) && (!only || only.has(x.key)))) {
-      if (app.state !== 'idle') break;
-      checking = p.key;
-      // a port that never answers must not hold up the others
-      const id = await Promise.race([identifyTx(p.port, p.known?.baud).catch(() => undefined), sleep(15000).then(() => undefined)]);
-      if (id) {
-        rememberTx(p, id.txName, id.baud);
-        found ??= p.key;
-        await list(); // shown at once, not after the last port
-      } else {
-        forgetTx(p);
-      }
-    }
-    checking = undefined;
+    const todo = ports.filter((x) => probeable(x) && (!only || only.has(x.key)));
+    checking = new Set(todo.map((p) => p.key));
+    const found = await Promise.all(
+      todo.map(async (p) => {
+        // a port that never answers must not hold up the others
+        const id = await Promise.race([identifyTx(p.port, p.known?.baud).catch(() => undefined), sleep(15000).then(() => undefined)]);
+        if (id) rememberTx(p, id.txName, id.baud);
+        else forgetTx(p);
+        checking.delete(p.key);
+        checking = new Set(checking);
+        await list();
+        return id ? p.key : undefined;
+      }),
+    );
     probing = false;
     await list();
-    if (found) selected = found;
+    const first = found.find(Boolean);
+    if (first && !ports.find((p) => p.key === selected && p.kind === 'tlrs')) selected = first;
   }
 
   async function refresh() {
@@ -117,7 +118,7 @@
   {/if}
 
   <div class="list">
-    <PortList {ports} bind:selected disabled={app.state !== 'idle' || probing} {checking} />
+    <PortList {ports} bind:selected disabled={app.state !== 'idle'} {checking} />
   </div>
 
   <footer>
@@ -134,7 +135,7 @@
     {#if app.connected}
       <button class="btn" onclick={() => app.disconnect()} disabled={app.state === 'busy'}>Disconnect</button>
     {:else}
-      <button class="btn accent" onclick={connect} disabled={!current || app.state !== 'idle' || probing}>
+      <button class="btn accent" onclick={connect} disabled={!current || app.state !== 'idle' || checking.has(selected)}>
         {app.state === 'connecting' ? 'Connecting…' : 'Connect'}
       </button>
     {/if}

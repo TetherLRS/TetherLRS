@@ -48,6 +48,7 @@
     const x = r.found;
     if (!x) return r.entry.kind === 'esp' ? 'Its own USB: Identify reads what it runs' : 'Identify finds out what it runs';
     if (x.how === 'rom') return 'In its bootloader, firmware not recognised';
+    if (x.how === 'seen') return 'TetherLRS ground radio, found by the Device page';
     const role = x.role === 'Tx' ? 'ground radio' : x.role === 'Rx' ? 'receiver' : 'radio';
     return [`${family(x)} ${role}`, x.version].filter(Boolean).join(' · ');
   }
