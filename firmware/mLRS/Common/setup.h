@@ -1245,7 +1245,9 @@ void setup_reload(void)
 // Init
 //-------------------------------------------------------
 
-#define SETUPLAYOUT_L0_0_02    2 // layout version up to v0.3.28
+#include "tlrs_bind.h"
+
+#define SETUPLAYOUT_L0_0_02   2 // layout version up to v0.3.28
 #define SETUPLAYOUT_L0_3_29  329 // layout version from v0.3.29 - v0.3.34
 #define SETUPLAYOUT_L0_3_35  335 // layout version from v0.3.35 onwards
 
@@ -1337,6 +1339,7 @@ bool doEEPROMwrite;
         strbufstrcpy((char*)Setup.MarkerEnd, SETUP_MARKEREND_STR, 8);
         doEEPROMwrite = true;
     }
+    if (tlrs_bind_apply()) doEEPROMwrite = true;
     if (doEEPROMwrite) {
         setup_store_to_EEPROM();
     }

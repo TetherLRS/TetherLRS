@@ -13,6 +13,7 @@ import { TxSession } from '$lib/device/tx';
 import { forgetTx, listPorts, type PortEntry } from '$lib/serial/ports';
 import type { Running } from './detect';
 import { elrsToBootloader, romAnswers } from './elrs';
+import { randomStamp, writeBindPhrase } from './bindphrase';
 import { chooseEnv, loadImage } from './manifest';
 import { probeReceiver, receiverToBootloader } from './mavlink';
 import { RomSession, type Progress } from './rom-session';
@@ -47,6 +48,7 @@ class Radios {
   chip = $state('');
   log = $state<string[]>([]);
   progress = $state(0);
+  phrase = $state(''); // the bind phrase for the next flash: kept while the app runs, never stored
 
   private session?: RomSession;
 
@@ -294,7 +296,8 @@ class Radios {
     return data;
   }
 
-  // TetherLRS onto it; over TetherLRS in the same role only the application, so its settings and its bind stay
+  // TetherLRS onto it; over TetherLRS in the same role only the application, so its settings stay, and its bind phrase
+  // too unless a new one was typed
   async flash(): Promise<void> {
     const r = this.selected;
     const s = this.session;
@@ -305,7 +308,14 @@ class Radios {
       const update = r.found?.family === 'TetherLRS' && r.found.role === this.role;
       this.cb().log(`downloading ${info.env} ${info.version}`);
       const image = await loadImage(app.firmwareBase, info, !update);
-      this.cb().log(update ? 'writing the application, the settings stay' : 'writing the whole image');
+      if (this.phrase) {
+        const esp8266 = info.chip === 'esp8266'; // its application sits behind the boot loader in either file
+        await writeBindPhrase(image, esp8266 ? 0x1000 : update ? 0 : info.app_offset, !esp8266, this.phrase, randomStamp());
+        this.cb().log('bind phrase written into the image: it takes it when it starts');
+      } else if (!update) {
+        throw new Error('Type the bind phrase first: the same on the ground radio and on the aircraft radio.');
+      }
+      this.cb().log(update ? `writing the application, the settings stay${this.phrase ? ' but the bind phrase' : ''}` : 'writing the whole image');
       await s.write(image, update ? info.app_offset : 0, this.cb());
       this.logRetries(s);
       const started = await s.close(true);

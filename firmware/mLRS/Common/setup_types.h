@@ -473,7 +473,8 @@ typedef struct
     uint16_t Layout;
 
     // auxilliary
-    uint8_t spare[9];
+    uint8_t spare[5];
+    uint8_t BindStamp[4]; // TetherLRS: the stamp of the image whose bind phrase was taken, see tlrs_bind.h
 
     uint8_t _ConfigId; // strange name to avoid mistake
 

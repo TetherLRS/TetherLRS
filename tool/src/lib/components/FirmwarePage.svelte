@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import { app } from '$lib/app.svelte';
+  import { randomPhrase, validPhrase } from '$lib/firmware/bindphrase';
   import { byCommand, byMavlink, radios, type Found, type Radio } from '$lib/firmware/radios.svelte';
   import { hasWebSerial, isDesktop, requestPort, watchPorts } from '$lib/serial/ports';
   import Icon from './Icon.svelte';
@@ -25,6 +26,8 @@
   const envs = $derived(app.manifest ? Object.values(app.manifest).filter((x) => x.env.startsWith(radios.role === 'Tx' ? 'tx-' : 'rx-')) : []);
   const info = $derived(app.manifest?.[radios.env]);
   const update = $derived(f?.family === 'TetherLRS' && f.role === radios.role);
+  // a new install needs one; an update may keep the phrase the radio has
+  const phraseOk = $derived(radios.phrase ? validPhrase(radios.phrase) : update);
   let editSource = $state(false);
   let logBox = $state<HTMLPreElement>();
 
@@ -191,6 +194,27 @@
             <button class:on={radios.role === 'Rx'} aria-pressed={radios.role === 'Rx'} onclick={() => radios.setRole('Rx')} disabled={radios.busy}>Aircraft radio (Rx)</button>
             <button class:on={radios.role === 'Tx'} aria-pressed={radios.role === 'Tx'} onclick={() => radios.setRole('Tx')} disabled={radios.busy}>Ground radio (Tx)</button>
           </div>
+          <div class="line phrase">
+            <label>
+              <span class="caption">Bind phrase</span>
+              <input
+                class="mono"
+                type="text"
+                maxlength="6"
+                value={radios.phrase}
+                oninput={(e) => (radios.phrase = e.currentTarget.value.toLowerCase())}
+                placeholder={update ? 'keep its own' : '6 characters'}
+                spellcheck="false"
+                autocomplete="off"
+                aria-invalid={!!radios.phrase && !validPhrase(radios.phrase)}
+                disabled={radios.busy}
+              />
+            </label>
+            <button class="btn" onclick={() => (radios.phrase = randomPhrase())} disabled={radios.busy}>Random</button>
+            <span class="caption hint" class:err={!!radios.phrase && radios.phrase.length === 6 && !validPhrase(radios.phrase)}>
+              The same on both radios of a pair: a to z, 0 to 9, # . _ -. Written into this flash only; the app forgets it when it closes.
+            </span>
+          </div>
           <div class="line">
             <select bind:value={radios.env} disabled={!envs.length || radios.busy} aria-label="Firmware">
               {#if !envs.length}<option value="">{app.manifest ? 'No build for this role' : 'No firmware list'}</option>{/if}
@@ -199,10 +223,10 @@
                 <option value={x.env}>{x.device ?? x.env}{x.bands?.length ? ` (${x.bands.join(', ')})` : ''}</option>
               {/each}
             </select>
-            <button class="btn accent" onclick={() => radios.flash()} disabled={!radios.inRom || !info || radios.busy}>{update ? 'Update' : 'Flash'}</button>
+            <button class="btn accent" onclick={() => radios.flash()} disabled={!radios.inRom || !info || radios.busy || !phraseOk}>{update ? 'Update' : 'Flash'}</button>
           </div>
           <span class="caption">
-            {#if info}{info.env} · {info.version} · {Math.round(info['full.bin'].size / 1024)} KB{update ? ' · only the application: settings and bind stay' : ''}{:else}The board is chosen from what Identify finds.{/if}
+            {#if info}{info.env} · {info.version} · {Math.round(info['full.bin'].size / 1024)} KB{update ? ` · only the application: settings stay${radios.phrase ? ', the bind phrase changes' : ', the bind phrase too'}` : ''}{#if f?.family === 'ExpressLRS' && f.name}<br />the hardware ExpressLRS calls {f.name}{/if}{:else}The board is chosen from what Identify finds.{/if}
           </span>
         </div>
       </div>
@@ -384,6 +408,20 @@
     min-width: 240px;
     flex: 1;
     max-width: 420px;
+  }
+  .phrase label {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+  .phrase input {
+    width: calc(12ch + 28px); /* the placeholder whole */
+  }
+  .phrase .btn {
+    align-self: flex-end;
+  }
+  .phrase .hint {
+    flex-basis: 100%;
   }
   /* two choices side by side, as a Windows segmented control */
   .seg {
