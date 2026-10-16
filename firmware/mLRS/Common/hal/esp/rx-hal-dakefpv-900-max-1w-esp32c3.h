@@ -10,7 +10,9 @@
 // ESP32C3, DAKEFPV 900MHz MAX 1000mW Diversity RX ("915 Pro"), LR1121
 //-------------------------------------------------------
 // https://github.com/ExpressLRS/targets, dakefpv.rx_900.max-1w: layout "Generic C3 LR1121" with the overlay
-// radio_rfsw_ctrl [31,0,4,24,24,0,0,0], ant_ctrl 10, radio_rfo_hf, power_values [-16,-13,-10,-6,-2,2] for 25 mW to 1 W
+// radio_rfsw_ctrl [31,0,4,24,24,0,0,0], ant_ctrl 10, radio_rfo_hf, power_values [-16,-13,-10,-6,-2,2] for 25 mW to 1 W.
+// Our unit came as "DAKEFPV 900MHz S-RF-D-ANT MAX 1000mW RX" (ELRS 3.6.2, a product the targets repo does not list):
+// the same pins and overlay, power_max 1 W, and power_values [-17,-15,-12,-8,-1,2], which are used here
 
 #define DEVICE_HAS_SINGLE_LED_RGB
 #define DEVICE_HAS_NO_DEBUG
@@ -104,37 +106,37 @@ IRAM_ATTR bool button_pressed(void)
 
 #define SX_USE_LP_PA             // the 900 MHz PA is fed from the LP PA output (ELRS radio_rfo_hf)
 
-// sx_power from ELRS's power_values; the board has no 2.4 GHz front end, so the band does not matter
+// sx_power from the unit's own power_values; the board has no 2.4 GHz front end, so the band does not matter
 void lr11xx_rfpower_calc(const int8_t power_dbm, int8_t* sx_power, int8_t* actual_power_dbm, const uint8_t frequency_band)
 {
     if (power_dbm >= POWER_30_DBM) {
         *sx_power = 2;
         *actual_power_dbm = 30;
     } else if (power_dbm >= POWER_27_DBM) {
-        *sx_power = -2;
+        *sx_power = -1;
         *actual_power_dbm = 27;
     } else if (power_dbm >= POWER_24_DBM) {
-        *sx_power = -6;
+        *sx_power = -8;
         *actual_power_dbm = 24;
     } else if (power_dbm >= POWER_20_DBM) {
-        *sx_power = -10;
+        *sx_power = -12;
         *actual_power_dbm = 20;
     } else if (power_dbm >= POWER_17_DBM) {
-        *sx_power = -13;
+        *sx_power = -15;
         *actual_power_dbm = 17;
     } else {
-        *sx_power = -16;
+        *sx_power = -17;
         *actual_power_dbm = 14;
     }
 }
 
 #define RFPOWER_DEFAULT           0 // index into rfpower_list array
 
-// 1 W left out until the board is confirmed to be the max-1w and not the 500 mW pro, which shares its RF overlay
 const rfpower_t rfpower_list[] = {
     { .dbm = POWER_14_DBM, .mW = 25 },
     { .dbm = POWER_17_DBM, .mW = 50 },
     { .dbm = POWER_20_DBM, .mW = 100 },
     { .dbm = POWER_24_DBM, .mW = 250 },
     { .dbm = POWER_27_DBM, .mW = 500 },
+    { .dbm = POWER_30_DBM, .mW = 1000 },
 };

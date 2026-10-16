@@ -29,6 +29,12 @@ OWN_HAL = {
 }
 
 
+# product names found on real units that the targets repo does not list (vendors flash their own configurations)
+SEEN_ONLY_ON_UNITS = {
+    'DAKEFPV 900MHz S-RF-D-ANT MAX 1000mW RX': ['dakefpv-900-max-1w', 'esp32-c3'],  # ELRS 3.6.2 from the factory
+}
+
+
 def slug(layout):
     s = layout.rsplit('.', 1)[0].lower().replace('true diversity', 'td').replace(' ', '-')
     return s
@@ -48,6 +54,7 @@ with open(SRC, encoding='utf-8') as f:
     data = json.load(f)
 products = {}
 walk(data, products)
+products.update(SEEN_ONLY_ON_UNITS)
 with open(OUT, 'w', encoding='utf-8', newline='\n') as f:
     rows = [f'{json.dumps(k)}:{json.dumps(v, separators=(",", ":"))}' for k, v in sorted(products.items())]
     f.write('{\n' + ',\n'.join(rows) + '\n}\n')  # one product a line

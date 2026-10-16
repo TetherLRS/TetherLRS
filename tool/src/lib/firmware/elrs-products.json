@@ -57,6 +57,7 @@
 "DAKEFPV 900MHz MAX 1000mW Diversity RX":["dakefpv-900-max-1w","esp32-c3"],
 "DAKEFPV 900MHz Micro MAX 2W TX":["dakefpv-max","esp32"],
 "DAKEFPV 900MHz NANOPRO MAX 500mW RX":["dakefpv-900-nanopro","esp32-c3"],
+"DAKEFPV 900MHz S-RF-D-ANT MAX 1000mW RX":["dakefpv-900-max-1w","esp32-c3"],
 "DAKEFPV C3 900/2400 Dual Band 100mW Gemini RX":["generic-c3-lr1121-td","esp32-c3"],
 "DAKEFPV Nano 2.4GHz RX":["generic-c3-lr1121","esp32-c3"],
 "DAKEFPV Nano 900MHz RX":["generic-c3-lr1121","esp32-c3"],
