@@ -17,6 +17,9 @@
 #include "../Common/hal/hal.h"
 #include "tasks.h"
 #include "setup_tx.h"
+#ifdef USE_SERIAL_ESCAPE
+#include "sik_at.h"
+#endif
 
 
 extern volatile uint32_t millis32(void);
@@ -368,6 +371,13 @@ class tTxCli
         PL_RX,
     } CLI_PL_ENUM;
     uint8_t print_pl_flag;
+
+#ifdef USE_SERIAL_ESCAPE
+    void sik_at(tSikAtCmd* const c);
+    bool sik_get(uint8_t n, bool remote, uint32_t* const v);
+    bool sik_set(uint8_t n, bool remote, uint32_t v);
+    bool sik_store_pending; // AT&W, stored at ATZ
+#endif
 };
 
 
@@ -382,6 +392,9 @@ void tTxCli::Init(void)
     tlast_ms = 0;
 
     state = CLI_STATE_NORMAL;
+#ifdef USE_SERIAL_ESCAPE
+    sik_store_pending = false;
+#endif
 
     // 9 ms, 20 ms, 32 ms, 53 ms
     if (Config.frame_rate_ms < 19) {
@@ -792,6 +805,7 @@ void tTxCli::print_help_do(void)
             putsn("  listfreqs       -> lists frequencies used in fhss scheme");
 #ifdef USE_SERIAL_ESCAPE
             putsn("  exit, ato       -> back to data on the serial port");
+            putsn("  ATI5, ATSn=v... -> SiK AT commands, RT... for the receiver");
 #endif
             break;
 #if !(defined ESP8266 || defined ESP32) || defined CONFIG_IDF_TARGET_ESP32C3 || defined CONFIG_IDF_TARGET_ESP32S3 // C3 and S3 can, in software
@@ -865,6 +879,12 @@ bool rx_param_changed;
             addc(c);
             continue;
         }
+#ifdef USE_SERIAL_ESCAPE
+        // SiK programs send bare line ends around their commands, and AT/RT lines get SiK's answers
+        if (!pos) continue;
+        tSikAtCmd sik_cmd;
+        if (sik_at_parse(buf, &sik_cmd)) { putsn(""); sik_at(&sik_cmd); clear(); continue; }
+#endif
         putsn(">");
 
         //-- basic commands
@@ -1040,6 +1060,180 @@ bool rx_param_changed;
         clear();
     }
 }
+
+
+#ifdef USE_SERIAL_ESCAPE
+//-------------------------------------------------------
+// SiK AT commands, see sik_at.h
+//-------------------------------------------------------
+
+const uint16_t sik_mode_rates[] = { 4100, 2562, 1547, 9111, 4100, 1547, 1490, 146 }; // downlink bytes/s, by MODE_ENUM
+static_assert(sizeof(sik_mode_rates)/sizeof(sik_mode_rates[0]) == MODE_NUM, "sik_mode_rates");
+
+
+uint8_t sik_param_idx(const char* const name)
+{
+    char s[24];
+    strcpy(s, name);
+    uint8_t idx;
+    if (!param_get_idx_fromname(&idx, s)) while(1){} // must not happen, the names are fixed
+    return idx;
+}
+
+
+void sik_freq_range_khz(uint32_t* const fmin, uint32_t* const fmax)
+{
+    char unit[8];
+    *fmin = UINT32_MAX;
+    *fmax = 0;
+    for (uint8_t i = 0; i < fhss.Cnt(); i++) {
+        uint32_t f = fhss.GetFreq_x1000(unit, i);
+        if (unit[1] == 'M') f *= 1000; // SX128x reports MHz
+        if (f < *fmin) *fmin = f;
+        if (f > *fmax) *fmax = f;
+    }
+}
+
+
+// false: the receiver is needed but not there, SiK then stays silent
+bool tTxCli::sik_get(uint8_t n, bool remote, uint32_t* const v)
+{
+    uint8_t cid = Config.ConfigId;
+    if (remote && !connected_and_rx_setup_available()) return false;
+
+    switch (n) {
+    case SIK_S_FORMAT: *v = 26; break;
+    case SIK_S_SERIAL_SPEED:
+        *v = sik_serial_speeds[(remote) ? Setup.Rx.SerialBaudrate : Setup.Tx[cid].SerialBaudrate];
+        break;
+    case SIK_S_AIR_SPEED: *v = sik_air_speed_from_rate(sik_mode_rates[Setup.Common[cid].Mode]); break;
+    case SIK_S_NETID: *v = sik_netid_from_bindphrase(Setup.Common[cid].BindPhrase); break;
+    case SIK_S_TXPOWER:
+        *v = (remote) ? SetupMetaData.rx_actual_power_dbm : rfpower_list[Setup.Tx[cid].Power].dbm;
+        break;
+    case SIK_S_MAVLINK:
+        if (!connected_and_rx_setup_available()) return false; // a receiver setting
+        *v = Setup.Rx.SerialLinkMode;
+        break;
+    case SIK_S_MIN_FREQ: { uint32_t fmax; sik_freq_range_khz(v, &fmax); } break;
+    case SIK_S_MAX_FREQ: { uint32_t fmin; sik_freq_range_khz(&fmin, v); } break;
+    case SIK_S_NUM_CHANNELS: *v = fhss.Cnt(); break;
+    case SIK_S_DUTY_CYCLE: *v = (Config.Region == REGION_EU && Config.Mode == MODE_LR) ? 10 : 100; break;
+    case SIK_S_LBT_RSSI: *v = (Config.Region == REGION_EU) ? 1 : 0; break;
+    case SIK_S_MAX_WINDOW: *v = Config.frame_rate_ms; break;
+    default: *v = 0; // ECC, OPPRESEND, MANCHESTER, RTSCTS
+    }
+    return true;
+}
+
+
+// false = ERROR
+bool tTxCli::sik_set(uint8_t n, bool remote, uint32_t v)
+{
+    uint8_t cid = Config.ConfigId;
+    uint32_t now;
+    if (!sik_get(n, remote, &now)) return false;
+    if (v == now) return true; // SiK programs write back all registers
+
+    bool rx_param_changed = false;
+    bool ok = false;
+    switch (n) {
+    case SIK_S_SERIAL_SPEED: {
+        int8_t idx = sik_serial_speed_to_idx(v);
+        if (idx < 0) return false;
+        ok = param_set_val_fromint(&rx_param_changed, idx, sik_param_idx((remote) ? "RX_SER_BAUDRATE" : "TX_SER_BAUDRATE"));
+        }break;
+    case SIK_S_AIR_SPEED: {
+        int8_t mode = sik_pick_rate(v, sik_mode_rates, MODE_NUM, SetupMetaData.Mode_allowed_mask);
+        if (mode < 0) return false;
+        if (mode == Setup.Common[cid].Mode) return true; // the closest is the one in use
+        ok = param_set_val_fromint(&rx_param_changed, mode, sik_param_idx("MODE"));
+        }break;
+    case SIK_S_NETID: {
+        if (v >= SIK_NETID_NUM) return false;
+        char bp[6+1];
+        sik_bindphrase_from_netid(bp, v);
+        ok = param_set_str6val(&rx_param_changed, bp, sik_param_idx("BIND_PHRASE"));
+        }break;
+    case SIK_S_TXPOWER: {
+        if (remote) return false; // the receiver's power list is not known here, use its own setting
+        uint8_t idx = 0;
+        for (uint8_t i = 0; i < RFPOWER_LIST_NUM; i++) if (rfpower_list[i].dbm <= (int32_t)v) idx = i;
+        ok = param_set_val_fromint(&rx_param_changed, idx, sik_param_idx("TX_POWER"));
+        }break;
+    case SIK_S_MAVLINK:
+        ok = param_set_val_fromint(&rx_param_changed, v, sik_param_idx("RX_SER_LINK_MODE"));
+        break;
+    default:
+        return false; // fixed registers
+    }
+    if (ok && rx_param_changed) tasks.SetCliTask(TASK_RX_PARAM_SET);
+    return ok;
+}
+
+
+void tTxCli::sik_at(tSikAtCmd* const c)
+{
+    char s[16];
+    uint32_t v;
+
+    if (c->remote && !connected_and_rx_setup_available()) return; // SiK without a link stays silent too
+
+    switch (c->cmd) {
+    case SIK_AT_OK: putsn("OK"); break;
+    case SIK_AT_EXIT: serial_escape.ExitCommand(); break;
+    case SIK_AT_WRITE: sik_store_pending = true; putsn("OK"); break; // stored at ATZ, both ends at once
+    case SIK_AT_RESET:
+        if (c->remote) break; // the receiver restarts with the Tx's store
+        if (sik_store_pending) {
+            sik_store_pending = false;
+            tasks.SetCliTask(TASK_PARAM_STORE); // restarts, back in data mode
+        } else {
+            serial_escape.ExitCommand();
+        }
+        break;
+    case SIK_AT_INFO:
+        switch (c->n) {
+        case 0:
+            puts("SiK 2.2 on TetherLRS ");
+            putsn((c->remote) ? SetupMetaData.rx_device_name : DEVICE_NAME);
+            break;
+        case 1: putsn("TetherLRS, mLRS " VERSIONONLYSTR); break;
+        case 2: putsn("0"); break; // no SiK board id
+        case 3: // SiK's board frequency codes
+            switch (Config.FrequencyBand) {
+            case SETUP_FREQUENCY_BAND_868_MHZ: putsn("134"); break; // 0x86
+            case SETUP_FREQUENCY_BAND_915_MHZ_FCC: putsn("145"); break; // 0x91
+            case SETUP_FREQUENCY_BAND_433_MHZ: putsn("67"); break; // 0x43
+            default: putsn("240"); // 0xF0, none
+            }
+            break;
+        case 4: putsn("0"); break;
+        case 5:
+            for (uint8_t n = 0; n < SIK_S_NUM; n++) {
+                if (!sik_get(n, c->remote, &v)) continue;
+                puts("S");
+                puts(sik_utoa(n, s));
+                puts(":");
+                puts(sik_s_names[n]);
+                puts("=");
+                putsn(sik_utoa(v, s));
+            }
+            break;
+        default: putsn("ERROR");
+        }
+        break;
+    case SIK_AT_GET:
+        if (sik_get(c->n, c->remote, &v)) { putsn(sik_utoa(v, s)); } else { putsn("ERROR"); }
+        break;
+    case SIK_AT_SET:
+        putsn(sik_set(c->n, c->remote, c->value) ? "OK" : "ERROR");
+        break;
+    default:
+        putsn("ERROR");
+    }
+}
+#endif // USE_SERIAL_ESCAPE
 
 
 #endif // TX_CLI_H
