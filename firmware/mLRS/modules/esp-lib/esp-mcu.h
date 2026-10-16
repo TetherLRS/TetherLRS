@@ -51,6 +51,11 @@ void BootLoaderInit(void)
     REG_WRITE(RTC_CNTL_OPTION1_REG, RTC_CNTL_FORCE_DOWNLOAD_BOOT);
     esp_restart();
 #elif defined ESP8266
+    // the core turns the flash cache off before the ROM takes over, and a radio interrupt still pending then ran its
+    // handler from flash: an IllegalInstruction and a restart into the application, every time on the bench
+    timer1_disable();
+    timer1_detachInterrupt();
+    for (uint8_t pin = 0; pin < 16; pin++) detachInterrupt(pin); // also clears what is pending
     ESP.rebootIntoUartDownloadMode(); // the Arduino core does it as ExpressLRS's "bl", flashed through UART0
 #endif
     // the classic ESP32 has no such register: only a hard reset with the boot pin held
