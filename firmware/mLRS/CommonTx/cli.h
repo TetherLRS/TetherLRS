@@ -777,8 +777,13 @@ void tTxCli::print_help_do(void)
         case 12: putsn("  bind            -> start binding"); break;
         case 13: putsn("  reload          -> reload all parameter settings"); break;
         case 14: putsn("  stats           -> starts streaming statistics"); break;
-        case 15: putsn("  listfreqs       -> lists frequencies used in fhss scheme"); break;
-#if !(defined ESP8266 || defined ESP32) // ESP cannot be put into boot
+        case 15:
+            putsn("  listfreqs       -> lists frequencies used in fhss scheme");
+#ifdef USE_SERIAL_ESCAPE
+            putsn("  exit, ato       -> back to data on the serial port");
+#endif
+            break;
+#if !(defined ESP8266 || defined ESP32) || defined CONFIG_IDF_TARGET_ESP32C3 || defined CONFIG_IDF_TARGET_ESP32S3 // C3 and S3 can, in software
         case 16: putsn("  systemboot      -> call system bootloader"); break;
 #else
         case 16: break;
@@ -933,8 +938,16 @@ bool rx_param_changed;
         if (is_cmd("listfreqs")) {
             print_it(CLI_STATE_PRINT_LISTFREQS);
 
+        //-- Serial escape, SiK's ATO too
+#ifdef USE_SERIAL_ESCAPE
+        } else
+        if (is_cmd("exit") || is_cmd("ato")) {
+            putsn("  back to data");
+            serial_escape.ExitCommand();
+#endif
+
         //-- System Bootloader
-#if !(defined ESP8266 || defined ESP32) // ESP cannot be put into boot
+#if !(defined ESP8266 || defined ESP32) || defined CONFIG_IDF_TARGET_ESP32C3 || defined CONFIG_IDF_TARGET_ESP32S3 // C3 and S3 can, in software
         } else
         if (is_cmd("systemboot")) {
             tasks.SetCliTask(TASK_SYSTEM_BOOT);

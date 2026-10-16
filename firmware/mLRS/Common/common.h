@@ -145,6 +145,13 @@ tUartCPort uartc_port;
 tUartDPort uartd_port;
 tUsbPort usb_port;
 
+#ifdef USE_SERIAL_ESCAPE
+#include "serial_escape.h"
+tSerialEscape serial_escape;
+tSerialEscapeDataPort serial_escape_data;
+tSerialEscapeComPort serial_escape_com;
+#endif
+
 typedef struct
 {
     tSerialBase* serial; // assigned according to TxSerPort
@@ -230,6 +237,14 @@ void tSerialPorts::Init(uint8_t serial_port, uint32_t baud, uint8_t serial_port2
         serial = &uartb_port;
         com = com_port();
     }
+
+#ifdef USE_SERIAL_ESCAPE // the uartb pins carry serial and com, switched with +++
+    if (serial == &uartb_port || com == &uartb_port) {
+        serial_escape.Init(&uartb_port);
+        serial = &serial_escape_data;
+        com = &serial_escape_com;
+    }
+#endif
 
     switch (serial_port2) {
     case TX_SERIAL_PORT2_SERIAL:

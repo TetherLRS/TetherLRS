@@ -51,6 +51,7 @@ In tx-hal files:
 #define DEVICE_HAS_NO_COM           // board has no Com port
 #define DEVICE_HAS_COM_ON_USB       // board has a native USB port // TODO: rename to DEVICE_HAS_USB ??
 #define DEVICE_HAS_COM_ON_SERIAL    // board has a UART or USB which is shared between Serial and Com, implies HAS_SERIAL_OR_COM
+#define DEVICE_HAS_SERIAL_ESCAPE    // board shares one UART between Serial and Com, switched at runtime with SiK's +++
 #define DEVICE_HAS_NO_DEBUG         // board has no Debug port
 #define DEVICE_HAS_DEBUG_SWUART     // implement Debug as software UART
 #define DEVICE_HAS_SERIAL2          // board has a Serial2 port
@@ -280,7 +281,10 @@ extern "C" { void delay_ms(uint16_t ms); }
 #endif // DEVICE_IS_RECEIVER
 
 #ifdef DEVICE_IS_TRANSMITTER
-#ifdef DEVICE_HAS_COM_ON_SERIAL // some devices have device dependent ways to select serial or com
+#if defined DEVICE_HAS_SERIAL_ESCAPE // serial and com on one uart, switched with +++
+  #define USE_SERIAL
+  #define USE_SERIAL_ESCAPE
+#elif defined DEVICE_HAS_COM_ON_SERIAL // some devices have device dependent ways to select serial or com
   #define USE_SERIAL
   #define USE_COM_ON_SERIAL
 #else

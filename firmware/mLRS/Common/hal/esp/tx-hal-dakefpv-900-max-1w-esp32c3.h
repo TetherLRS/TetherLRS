@@ -13,7 +13,7 @@
 // Pins and RF overlay as in rx-hal-dakefpv-900-max-1w-esp32c3.h.
 
 #define DEVICE_HAS_SINGLE_LED_RGB
-#define DEVICE_HAS_COM_ON_SERIAL // the board has one UART on its pads, shared by serial and com (CLI)
+#define DEVICE_HAS_SERIAL_ESCAPE // the board has one UART on its pads: serial, and com (CLI) after SiK's +++
 #define DEVICE_HAS_NO_DEBUG
 
 
@@ -94,23 +94,6 @@ IRAM_ATTR bool button_pressed(void)
 #define LED_RGB                   IO_P8
 #define LED_RGB_PIXEL_NUM         1
 #include "esp-hal-led-rgb.h"
-
-
-//-- Serial or Com Switch
-
-#ifdef DEVICE_HAS_COM_ON_SERIAL
-// The button is IO9, a strapping pin: held at power-up it starts the ROM bootloader instead of the firmware. So it is
-// read during the first 1.5 s after the firmware starts: pressed then, the pads carry com (CLI) instead of serial
-bool ser_or_com_init(void) // return true if is_serial
-{
-    gpio_init(BUTTON, IO_MODE_INPUT_PU);
-    for (uint8_t i = 0; i < 150; i++) {
-        if (gpio_read_activelow(BUTTON)) return false;
-        delay(10);
-    }
-    return true;
-}
-#endif
 
 
 //-- POWER

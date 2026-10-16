@@ -1223,6 +1223,9 @@ IF_IN(
 
     //-- Do MAVLink & MSP
 
+#ifdef USE_SERIAL_ESCAPE
+    serial_escape.Do();
+#endif
     mavlink.Do();
     msp.Do();
 

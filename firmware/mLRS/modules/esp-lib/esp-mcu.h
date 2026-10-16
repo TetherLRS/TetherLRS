@@ -40,10 +40,18 @@ uint8_t mac[6];
 // BootLoaderInit
 //-------------------------------------------------------
 
+#if defined CONFIG_IDF_TARGET_ESP32C3 || defined CONFIG_IDF_TARGET_ESP32S3
+#include "soc/rtc_cntl_reg.h"
+#endif
+
 void BootLoaderInit(void)
 {
-    // Not sure what this one needs for the Arduino.
-    // Maybe can be a hard reset using reset pin.
+#if defined CONFIG_IDF_TARGET_ESP32C3 || defined CONFIG_IDF_TARGET_ESP32S3
+    // ROM download mode on the next reset, as holding the boot pin at power up does; flashed through UART0
+    REG_WRITE(RTC_CNTL_OPTION1_REG, RTC_CNTL_FORCE_DOWNLOAD_BOOT);
+    esp_restart();
+#endif
+    // the classic ESP32 and the ESP8266 have no such register: only a hard reset with the boot pin held
 };
 
 
