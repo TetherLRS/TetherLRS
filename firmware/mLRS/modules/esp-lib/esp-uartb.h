@@ -211,11 +211,22 @@ void uartb_rx_enableisr(FunctionalState flag)
 //-------------------------------------------------------
 // System bootloader
 //-------------------------------------------------------
-// ESP8266, ESP32 can't reboot into system bootloader
+// The ROM bootloader listens on UART0 on its default pins. The ESP8266, C3 and S3 restart into it in software
+// (BootLoaderInit()), the classic ESP32 does not.
 
 IRAM_ATTR uint8_t uartb_has_systemboot(void)
 {
+#if defined UARTB_USE_SERIAL && defined ESP8266
+    return 1;
+#elif defined UARTB_USE_SERIAL && defined CONFIG_IDF_TARGET_ESP32C3 && \
+      (!defined UARTB_USE_TX_IO || (UARTB_USE_TX_IO == IO_P21 && UARTB_USE_RX_IO == IO_P20))
+    return 1;
+#elif defined UARTB_USE_SERIAL && defined CONFIG_IDF_TARGET_ESP32S3 && \
+      (!defined UARTB_USE_TX_IO || (UARTB_USE_TX_IO == IO_P43 && UARTB_USE_RX_IO == IO_P44))
+    return 1;
+#else
     return 0;
+#endif
 }
 
 

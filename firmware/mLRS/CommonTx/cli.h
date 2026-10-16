@@ -811,7 +811,7 @@ void tTxCli::print_help_do(void)
             putsn("  ATI5, ATSn=v... -> SiK AT commands, RT... for the receiver");
 #endif
             break;
-#if !(defined ESP8266 || defined ESP32) || defined CONFIG_IDF_TARGET_ESP32C3 || defined CONFIG_IDF_TARGET_ESP32S3 // C3 and S3 can, in software
+#if !defined ESP32 || defined CONFIG_IDF_TARGET_ESP32C3 || defined CONFIG_IDF_TARGET_ESP32S3 // ESP8266, C3 and S3 can, in software
         case 16: putsn("  systemboot      -> call system bootloader"); break;
 #else
         case 16: break;
@@ -981,7 +981,7 @@ bool rx_param_changed;
 #endif
 
         //-- System Bootloader
-#if !(defined ESP8266 || defined ESP32) || defined CONFIG_IDF_TARGET_ESP32C3 || defined CONFIG_IDF_TARGET_ESP32S3 // C3 and S3 can, in software
+#if !defined ESP32 || defined CONFIG_IDF_TARGET_ESP32C3 || defined CONFIG_IDF_TARGET_ESP32S3 // ESP8266, C3 and S3 can, in software
         } else
         if (is_cmd("systemboot")) {
             tasks.SetCliTask(TASK_SYSTEM_BOOT);

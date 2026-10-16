@@ -50,8 +50,10 @@ void BootLoaderInit(void)
     // ROM download mode on the next reset, as holding the boot pin at power up does; flashed through UART0
     REG_WRITE(RTC_CNTL_OPTION1_REG, RTC_CNTL_FORCE_DOWNLOAD_BOOT);
     esp_restart();
+#elif defined ESP8266
+    ESP.rebootIntoUartDownloadMode(); // the Arduino core does it as ExpressLRS's "bl", flashed through UART0
 #endif
-    // the classic ESP32 and the ESP8266 have no such register: only a hard reset with the boot pin held
+    // the classic ESP32 has no such register: only a hard reset with the boot pin held
 };
 
 
