@@ -186,6 +186,10 @@
 #include "tx-hal-radiomaster-nomad-esp32.h"
 #endif
 
+#ifdef TX_ELRS_GENERIC_2400_ESP8285
+#include "tx-hal-generic-2400-esp8285.h"
+#endif
+
 #ifdef TX_ELRS_DAKEFPV_900_MAX_1W_ESP32C3
 #include "tx-hal-dakefpv-900-max-1w-esp32c3.h"
 #endif

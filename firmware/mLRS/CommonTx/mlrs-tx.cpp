@@ -141,7 +141,7 @@ tReceiveArq rarq;
 tCrypto crypto;
 tChannelOrder channelOrder(tChannelOrder::DIRECTION_TX_TO_MLRS);
 tConfigId config_id;
-tTxInfo info;
+tTxInfo txinfo;
 tTxCli cli;
 tTxTasks tasks;
 
@@ -754,7 +754,7 @@ RESTARTCONTROLLER
 
     // startup sign of life
     leds.Init();
-    info.Init();
+    txinfo.Init();
 
     // start up sx
     if (!sx.isOk()) { FAILALWAYS(BLINK_RD_GR_OFF, "Sx not ok"); } // fail!

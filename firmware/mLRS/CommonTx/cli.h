@@ -30,7 +30,7 @@ extern tGlobalConfig Config;
 extern tSetupMetaData SetupMetaData;
 extern tSerialPorts Serials;
 extern tStats stats;
-extern tTxInfo info;
+extern tTxInfo txinfo;
 extern tTxTasks tasks;
 
 
@@ -701,7 +701,7 @@ void tTxCli::print_device_version(void)
 
     puts("  Tx: " DEVICE_NAME ", " VERSIONONLYSTR);
     char s[48];
-    if (info.WirelessDeviceName_cli(s)) {
+    if (txinfo.WirelessDeviceName_cli(s)) {
         puts(", ");
         puts(s);
     }
@@ -998,7 +998,7 @@ bool rx_param_changed;
         } else
         if (is_cmd("espname")) {
             char s[48];
-            if (info.WirelessDeviceName_cli(s)) {
+            if (txinfo.WirelessDeviceName_cli(s)) {
                 puts("  ");putsn(s);
             } else {
                 putsn("  unknown (restart tx module)");
