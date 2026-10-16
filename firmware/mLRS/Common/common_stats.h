@@ -87,6 +87,7 @@ class tStats
     int8_t received_rssi;
 #ifdef DEVICE_IS_TRANSMITTER
     uint8_t received_LQ_rc;
+    uint8_t received_power_code; // the Rx's power index + 1, 0 = not known
 #endif
 #ifdef DEVICE_IS_RECEIVER
     uint8_t received_fhss_index_band;

@@ -348,6 +348,7 @@ uint8_t payload_len = 0;
     frame_stats.rssi = stats.GetLastRssi();
     frame_stats.LQ_rc = stats.GetLQ_rc();
     frame_stats.LQ_serial = stats.GetLQ_serial();
+    frame_stats.power_code = rfpower.Code();
 
     static bool rxFrame_valid = false; // just for now
     if (get_fresh_payload) {

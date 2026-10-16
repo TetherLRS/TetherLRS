@@ -387,6 +387,8 @@ uint16_t crc;
     frame->status.rssi_u7 = rssi_u7_from_i8(frame_stats->rssi);
     frame->status.LQ_rc = frame_stats->LQ_rc;
     frame->status.LQ_serial = frame_stats->LQ_serial;
+    frame->status.power_hi = frame_stats->power_code >> 2;
+    frame->status.power_lo = frame_stats->power_code & 0x03;
     // keep !! frame->status.payload_len = payload_len;
 
     // TODO: we should also update the nonce
@@ -428,6 +430,8 @@ uint16_t crc;
     frame->status.rssi_u7 = rssi_u7_from_i8(frame_stats->rssi);
     frame->status.LQ_rc = frame_stats->LQ_rc;
     frame->status.LQ_serial = frame_stats->LQ_serial;
+    frame->status.power_hi = frame_stats->power_code >> 2;
+    frame->status.power_lo = frame_stats->power_code & 0x03;
     frame->status.payload_len = payload_len;
 
     // pack the payload

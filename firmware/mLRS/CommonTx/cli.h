@@ -691,6 +691,21 @@ void tTxCli::stream(void)
             }
             puts(" pwr "); // what the Tx transmits with now, below the setting with Dyn Power
             puts(s8toBCD_s(rfpower.Current_dbm()));
+            puts("; rxp "); // the Rx's power now, named as its Rx Power option; - when it does not tell (mLRS)
+            {
+                char s[16] = "-";
+                const char* p = (stats.received_power_code) ? SetupMetaData.Rx_Power_optstr : nullptr;
+                for (uint8_t n = 1; p && n < stats.received_power_code; n++) {
+                    p = strchr(p, ',');
+                    if (p) p++;
+                }
+                if (p && *p) {
+                    uint8_t i = 0;
+                    for (; p[i] && p[i] != ',' && i < sizeof(s) - 1; i++) s[i] = p[i];
+                    s[i] = '\0';
+                }
+                puts(s);
+            }
             puts(";");
             putsn("");
         }

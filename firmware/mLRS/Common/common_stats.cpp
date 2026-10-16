@@ -50,6 +50,7 @@ void tStats::Clear(void) // called then not connected
     received_rssi = RSSI_INVALID;
 #ifdef DEVICE_IS_TRANSMITTER
     received_LQ_rc = 0; //UINT8_MAX;
+    received_power_code = 0;
 #endif
     received_LQ_serial = 0; //UINT8_MAX;
     received_antenna = UINT8_MAX;

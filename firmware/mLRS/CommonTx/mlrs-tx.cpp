@@ -547,6 +547,7 @@ void process_received_frame(bool do_payload, tRxFrame* const frame)
     stats.received_transmit_antenna = frame->status.transmit_antenna;
     stats.received_rssi = rssi_i8_from_u7(frame->status.rssi_u7);
     stats.received_LQ_rc = frame->status.LQ_rc;
+    stats.received_power_code = (frame->status.power_hi << 2) | frame->status.power_lo;
     stats.received_LQ_serial = frame->status.LQ_serial;
 
     if (!do_payload) {

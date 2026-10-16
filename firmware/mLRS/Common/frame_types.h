@@ -44,6 +44,7 @@ typedef struct
     uint8_t LQ_serial;
     uint8_t antenna;
     uint8_t transmit_antenna;
+    uint8_t power_code; // Rx: its power index + 1, for the Tx to show
     // not stats but needed
     uint8_t tx_fhss_index_band;
     uint8_t tx_fhss_index;
@@ -83,13 +84,13 @@ typedef struct
     uint32_t seq_no : 3;
     uint32_t ack : 1;
     uint32_t frame_type : 3;
-    uint32_t spare1 : 1;
+    uint32_t power_hi : 1; // TetherLRS: the Rx's power index + 1, 0 = not known (an mLRS receiver); with power_lo
     uint32_t antenna : 1;
     uint32_t rssi_u7 : 7;
     uint32_t LQ_rc : 7; // available only for Rx->Tx frame, not for Tx->Rx
     uint32_t LQ_serial : 7;
     uint32_t transmit_antenna : 1;
-    uint32_t spare : 2;
+    uint32_t power_lo : 2;
     uint32_t payload_len : 7;
 }) tRxFrameStatus; // 5 bytes
 

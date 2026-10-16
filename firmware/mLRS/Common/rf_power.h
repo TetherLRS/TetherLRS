@@ -24,6 +24,7 @@ class tRfPower
     void Set(uint8_t power);
     void Dynamic(bool enabled, bool connected, int8_t peer_rssi_dbm, uint8_t peer_lq, int8_t sensitivity_dbm);
     int8_t Current_dbm(void) { return (rfpower_current_idx < RFPOWER_LIST_NUM) ? rfpower_list[rfpower_current_idx].dbm : 0; }
+    uint8_t Code(void) { return (rfpower_current_idx < 7) ? rfpower_current_idx + 1 : 0; } // 3 bits in the Rx frames
 
   private:
     uint8_t rfpower_current_idx;
