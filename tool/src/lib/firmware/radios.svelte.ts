@@ -160,10 +160,17 @@ class Radios {
       this.chip = this.session.chip;
       this.cb().log(`${this.chip}, ${this.session.flashSize / 1048576} MB of flash (id ${this.session.flashId.toString(16)}); reading its firmware`);
       const found = await this.session.identify(this.cb());
+      this.logRetries(this.session);
       r.found = found ? { ...found, how: 'flash' } : elrsName ? { family: 'ExpressLRS', role: 'Rx', name: elrsName, how: 'bl' } : { how: 'rom' };
       this.progress = 0;
       this.pick();
     });
+  }
+
+  // how often the link spoiled something, then reset for the next job
+  private logRetries(s: RomSession): void {
+    if (s.retries) this.cb().log(`${s.retries} time${s.retries > 1 ? 's' : ''} it arrived spoiled and was done again: the adapter or its wires lose bytes`);
+    s.retries = 0;
   }
 
   // the rate its ROM answers at: 115200, or 420000 when an ExpressLRS "bl" reached it first
@@ -192,7 +199,8 @@ class Radios {
     await this.run(async () => {
       this.cb().log(`reading all ${s.flashSize / 1048576} MB`);
       data = await s.backup(this.cb());
-      this.cb().log('backup read');
+      this.cb().log('backup read, every piece checked by MD5');
+      this.logRetries(s);
     });
     return data;
   }
@@ -210,6 +218,7 @@ class Radios {
       const image = await loadImage(app.firmwareBase, info, !update);
       this.cb().log(update ? 'writing the application, the settings stay' : 'writing the whole image');
       await s.write(image, update ? info.app_offset : 0, this.cb());
+      this.logRetries(s);
       const started = await s.close(true);
       this.session = undefined;
       this.inRom = false;
@@ -234,7 +243,11 @@ class Radios {
   pickEnv(): void {
     if (!app.manifest) return;
     const f = this.selected?.found;
-    const chosen = f?.family ? chooseEnv(app.manifest, this.role, f.family, f.name) : undefined;
+    if (!f?.family) {
+      this.env = ''; // nothing known of this radio yet: Identify chooses, never the board of the radio picked before
+      return;
+    }
+    const chosen = chooseEnv(app.manifest, this.role, f.family, f.name);
     const other = this.env ? `${this.role.toLowerCase()}-${this.env.slice(3)}` : ''; // the same board in the other role
     this.env = chosen ?? (app.manifest[other] ? other : '');
   }
