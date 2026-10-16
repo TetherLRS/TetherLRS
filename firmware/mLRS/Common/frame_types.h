@@ -201,8 +201,9 @@ typedef struct
     uint8_t Ortho : 4;
     uint8_t Privacy : 4;
     uint8_t Region; // 0 = free from an mLRS transmitter
+    uint8_t DynPower; // 0 = off from an mLRS transmitter
 
-    uint8_t spare3[50];
+    uint8_t spare3[49];
 
     uint8_t tx_uid[12]; // 12 bytes = 96 bits
     uint64_t tx_random; //  8 bytes = 64 bits
@@ -349,8 +350,7 @@ typedef struct
     uint8_t Ortho : 4;
     uint8_t Privacy : 4;
     uint8_t Region; // 0 = free from an mLRS transmitter
-
-    uint8_t spare2;
+    uint8_t DynPower; // 0 = off from an mLRS transmitter
 
     tCmdFrameRxParameters RxParams; // 24 bytes
 

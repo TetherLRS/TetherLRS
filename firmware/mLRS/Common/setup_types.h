@@ -401,8 +401,9 @@ typedef struct
     uint8_t Ortho;
     uint8_t Privacy;
     uint8_t Region;
+    uint8_t DynPower;
 
-    uint8_t spare[4];
+    uint8_t spare[3];
 } tCommonSetup; // 16 bytes
 
 

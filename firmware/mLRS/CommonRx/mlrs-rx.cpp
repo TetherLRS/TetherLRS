@@ -1003,6 +1003,10 @@ dbg.puts(s8toBCD_s(stats.last_rssi2));*/
             }
             rfpower.Set(Setup.Rx.Power); // force to Setup Power
         }
+        if (!bind.IsInBind()) {
+            rfpower.Dynamic(Setup.Common[0].DynPower, connected(), stats.received_rssi, stats.received_LQ_serial,
+                            sx.ReceiverSensitivity_dbm());
+        }
     }//end of if(doPostReceive2)
 
     out.Do();

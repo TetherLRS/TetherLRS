@@ -102,7 +102,8 @@
   X( Setup.Common[0].FrequencyBand, LIST, "RF Band",          "RF_BAND",          0,0,0,"", SETUP_OPT_RFBAND, SETUP_MSK_RFBAND )\
   X( Setup.Common[0].Ortho,         LIST, "RF Ortho",         "RF_ORTHO",         0,0,0,"", "off,1/3,2/3,3/3", SETUP_MSK_RFORTHO ) \
   X( Setup.Common[0].Privacy,       LIST, "Privacy",          "PRIVACY",          0,0,0,"", "off,lvl 1,lvl 2,lvl 3", SETUP_MSK_PRIVACY )\
-  X( Setup.Common[0].Region,        LIST, "Region",           "REGION",           0,0,0,"", "free,EU", SETUP_MSK_REGION )
+  X( Setup.Common[0].Region,        LIST, "Region",           "REGION",           0,0,0,"", "free,EU", SETUP_MSK_REGION )\
+  X( Setup.Common[0].DynPower,      LIST, "Dyn Power",        "DYN_POWER",        0,0,0,"", "off,on", MSK_ALL )
 
 #define SETUP_PARAMETER_LIST_TX_MAIN \
   X( Setup.Tx[0].Power,             LIST, "Tx Power",         "TX_POWER",         0,0,0,"", SETUP_OPT_TX_POWER, MSK_ALL )\

@@ -356,6 +356,7 @@ void setup_default(uint8_t config_id)
     Setup.Common[config_id].Ortho = SETUP_RF_ORTHO;
     Setup.Common[config_id].Privacy = SETUP_PRIVACY;
     Setup.Common[config_id].Region = SETUP_REGION;
+    Setup.Common[config_id].DynPower = SETUP_DYN_POWER;
 
     Setup.Tx[config_id].Power = SETUP_TX_POWER;
     Setup.Tx[config_id].Diversity = SETUP_TX_DIVERSITY;
@@ -424,6 +425,7 @@ void _setup_sanitize_config(uint8_t config_id, bool only_rx)
 
     // the region limits the bands, so it comes first
     SANITIZE(Common[config_id].Region, REGION_NUM, SETUP_REGION, REGION_FREE);
+    SANITIZE(Common[config_id].DynPower, 2, SETUP_DYN_POWER, 1);
     TST_NOTALLOWED(Region_allowed_mask, Common[config_id].Region, REGION_FREE);
     if (Setup.Common[config_id].Region == REGION_EU) {
         SetupMetaData.FrequencyBand_allowed_mask &= (1 << SETUP_FREQUENCY_BAND_2P4_GHZ) | (1 << SETUP_FREQUENCY_BAND_868_MHZ);

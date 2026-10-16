@@ -12,6 +12,7 @@
 
 
 #include "hal/hal.h"
+#include "dynamic_power.h"
 
 
 class tRfPower
@@ -21,10 +22,14 @@ class tRfPower
     void Update(void);
     void Set(tRcData* const rc, uint8_t power_switch_channel, uint8_t power);
     void Set(uint8_t power);
+    void Dynamic(bool enabled, bool connected, int8_t peer_rssi_dbm, uint8_t peer_lq, int8_t sensitivity_dbm);
+    int8_t Current_dbm(void) { return (rfpower_current_idx < RFPOWER_LIST_NUM) ? rfpower_list[rfpower_current_idx].dbm : 0; }
 
   private:
     uint8_t rfpower_current_idx;
-    uint8_t rfpower_new_idx;
+    uint8_t rfpower_new_idx; // the configured power, the ceiling for the dynamic one
+    uint8_t dyn_idx;
+    tDynPower dynpower;
 };
 
 
@@ -32,14 +37,29 @@ void tRfPower::Init(void)
 {
     rfpower_current_idx = UINT8_MAX;  // to initialize properly
     rfpower_new_idx = rfpower_current_idx; // to prevent update before first Set
+    dyn_idx = UINT8_MAX;
+    dynpower.Init();
+}
+
+
+// called once per frame cycle, after Set()
+void tRfPower::Dynamic(bool enabled, bool connected, int8_t peer_rssi_dbm, uint8_t peer_lq, int8_t sensitivity_dbm)
+{
+    if (!enabled || rfpower_new_idx >= RFPOWER_LIST_NUM) {
+        dyn_idx = UINT8_MAX;
+        return;
+    }
+    dyn_idx = dynpower.Step(millis32(), connected, peer_rssi_dbm, peer_lq, sensitivity_dbm, rfpower_new_idx);
 }
 
 
 void tRfPower::Update(void)
 {
-    if (rfpower_new_idx == rfpower_current_idx) return; // no change required
+    uint8_t idx = (dyn_idx < rfpower_new_idx) ? dyn_idx : rfpower_new_idx;
 
-    rfpower_current_idx = rfpower_new_idx;
+    if (idx == rfpower_current_idx) return; // no change required
+
+    rfpower_current_idx = idx;
 
     if (rfpower_current_idx >= RFPOWER_LIST_NUM) { // should not happen, play it safe
         rfpower_current_idx = RFPOWER_LIST_NUM - 1;

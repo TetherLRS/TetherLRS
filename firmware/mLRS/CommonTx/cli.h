@@ -689,6 +689,9 @@ void tTxCli::stream(void)
                 puts(s);
                 puts(";");
             }
+            puts(" pwr "); // what the Tx transmits with now, below the setting with Dyn Power
+            puts(s8toBCD_s(rfpower.Current_dbm()));
+            puts(";");
             putsn("");
         }
     }

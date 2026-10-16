@@ -105,6 +105,7 @@
 #define SETUP_RF_ORTHO                  0 // 0: off, 1: 1/3, 2: 2/3, 3: 3/3
 #define SETUP_PRIVACY                   0 // 0: off, 1: lvl1, 2: lvl2, 3: lvl3
 #define SETUP_REGION                    0 // 0: free, 1: EU
+#define SETUP_DYN_POWER                 1 // 0: off, 1: on, the power setting is then the ceiling
 
 #define TLRS_NO_RC                      // TetherLRS: no RC channels, so no RC and failsafe parameters
 

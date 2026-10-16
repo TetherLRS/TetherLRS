@@ -1115,6 +1115,13 @@ IF_SX2(
             }
         }
 
+        // the configured power, or less with Dyn Power; binding keeps its lowest power, an RC power switch its own Set()
+        if (!bind.IsInBind()) {
+            if (Setup.Tx[Config.ConfigId].PowerSwitchChannel == POWER_SWITCH_CHANNEL_OFF) rfpower.Set(Setup.Tx[Config.ConfigId].Power);
+            rfpower.Dynamic(Setup.Common[Config.ConfigId].DynPower, connected(), stats.received_rssi, stats.received_LQ_serial,
+                            sx.ReceiverSensitivity_dbm());
+        }
+
         DECc(tick_1hz_commensurate, Config.frame_rate_hz);
         if (!tick_1hz_commensurate) {
             stats.Update1Hz();
