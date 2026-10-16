@@ -79,8 +79,8 @@
 <section class="card">
   <div class="head">
     <div>
-      <h2>Receiver with ExpressLRS on a USB serial adapter</h2>
-      <p class="caption">First TetherLRS flash of an ESP8285 receiver, wired RX to TX, TX to RX, 5 V and ground. Plug it in, then identify it within a minute: after that ExpressLRS starts its WiFi and stops listening. ESP32 receivers: upload &lt;env&gt;.bin on the ExpressLRS web page instead.</p>
+      <h2>ExpressLRS receiver</h2>
+      <p class="caption">To put TetherLRS on a receiver that still runs ExpressLRS, plugged into a USB serial adapter.</p>
     </div>
     <div class="actions">
       {#if !isDesktop && hasWebSerial}

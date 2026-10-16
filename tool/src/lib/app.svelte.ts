@@ -236,7 +236,7 @@ class App {
     await this.rxStep(async () => {
       this.rxTarget = (await elrsToBootloader(entry.port)) ?? '';
       if (!this.rxTarget) {
-        this.error = 'The receiver did not answer. Unplug it, plug it back in and try again within a minute: ExpressLRS stops listening to its serial port when it starts its WiFi.';
+        this.error = 'The receiver did not answer. Unplug it, plug it back in and press Identify again within a minute (ExpressLRS stops listening once its WiFi starts). Check that TX and RX are crossed. ESP32 receivers do not answer here: upload <env>.bin on the ExpressLRS web page.';
       } else if (this.manifest) {
         this.rxEnv = envForDevice(this.manifest, this.rxTarget, false) ?? this.rxEnv;
       }
