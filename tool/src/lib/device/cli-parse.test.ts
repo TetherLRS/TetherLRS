@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { cliName, parseParamLine, parseParamList, parseParamOptions, parseStatsLine, parseVersion } from './cli-parse';
+import { cliName, parseParamLine, parseParamList, parseParamOptions, parseRxVersion, parseStatsLine, parseVersion } from './cli-parse';
+
+describe("a receiver's own settings session", () => {
+  it('answers v with its device and version, as rx_cli.h prints them', () => {
+    expect(parseRxVersion('v\r\n>\r\n  Rx: DAKEFPV 2400 NANO, v1.4.05\r\n')).toEqual({
+      txName: '',
+      txVersion: '',
+      rxName: 'DAKEFPV 2400 NANO',
+      rxVersion: 'v1.4.05',
+      rxConnected: true,
+      onlyRx: true,
+    });
+    expect(parseRxVersion('  Tx: GENERIC 2400, v1.4.05\r\n')).toBeUndefined();
+  });
+});
 
 describe('parameter lines, as cli.h print_param() writes them', () => {
   it('list value with its index', () => {

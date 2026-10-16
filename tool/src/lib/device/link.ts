@@ -9,6 +9,7 @@ export class DeviceLink {
   private lastRxMs = 0;
   private reading?: Promise<void>;
   private listeners = new Set<(text: string) => void>();
+  private raw: number[] = []; // the same bytes undecoded, for a receiver's binary MAVLink answer
   isOpen = false;
   onLost?: () => void; // the port went away without close(): unplugged
 
@@ -18,6 +19,7 @@ export class DeviceLink {
     await this.port.open({ baudRate });
     this.isOpen = true;
     this.buf = '';
+    this.raw = [];
     this.reading = this.readLoop();
   }
 
@@ -49,6 +51,8 @@ export class DeviceLink {
         if (!value?.length) continue;
         const text = this.decoder.decode(value, { stream: true });
         this.buf += text;
+        this.raw.push(...value);
+        if (this.raw.length > 4096) this.raw.splice(0, this.raw.length - 4096);
         this.lastRxMs = performance.now();
         for (const l of this.listeners) l(text);
       }
@@ -81,7 +85,22 @@ export class DeviceLink {
   take(): string {
     const b = this.buf;
     this.buf = '';
+    this.raw = [];
     return b;
+  }
+
+  bytes(): Uint8Array {
+    return Uint8Array.from(this.raw);
+  }
+
+  async writeBytes(data: Uint8Array): Promise<void> {
+    const writer = this.port.writable?.getWriter();
+    if (!writer) throw new Error('port not writable');
+    try {
+      await writer.write(data);
+    } finally {
+      writer.releaseLock();
+    }
   }
 
   // waits for the text to contain pattern; returns everything received so far, or undefined on timeout

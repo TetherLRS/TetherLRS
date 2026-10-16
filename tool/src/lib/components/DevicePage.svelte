@@ -91,7 +91,7 @@
   const region = $derived(app.param('Region')?.text);
 
   // the link at a glance, live while this page is open; a measure opens large on the Link page
-  const live = $derived(app.connected && app.state === 'connected');
+  const live = $derived(app.connected && app.state === 'connected' && !app.version?.onlyRx); // a receiver alone has no link
   $effect(() => {
     if (live && app.page === 'device' && !app.streaming) void app.startStats();
   });
@@ -136,13 +136,13 @@
       {probing
         ? 'Looking for TetherLRS radios on the USB serial adapters…'
         : current?.kind === 'tlrs-rx' && !app.connected
-          ? `${current.label} is an aircraft radio: its settings come through the ground radio once they are linked. Flash it on the Firmware page.`
+          ? `${current.label} is an aircraft radio. Connect opens its settings while it hears no Tx; linked, they come through the ground radio.`
           : app.status}
     </span>
     {#if app.connected}
       <button class="btn" onclick={() => app.disconnect()} disabled={app.state === 'busy'}>Disconnect</button>
     {:else}
-      <button class="btn accent" onclick={connect} disabled={!current || current.kind === 'tlrs-rx' || app.state !== 'idle' || checking.has(selected)}>
+      <button class="btn accent" onclick={connect} disabled={!current || app.state !== 'idle' || checking.has(selected)}>
         {app.state === 'connecting' ? 'Connecting…' : 'Connect'}
       </button>
     {/if}
@@ -152,7 +152,7 @@
 <section class="radios">
   <div class="card radio">
     <span class="caption">Ground radio (Tx)</span>
-    {#if app.connected && app.version}
+    {#if app.connected && app.version && !app.version.onlyRx}
       <span class="name">{app.version.txName}</span>
       <span class="caption">{app.version.txVersion}</span>
     {:else}
@@ -164,7 +164,7 @@
     <span class="caption">Aircraft radio (Rx)</span>
     {#if app.version?.rxConnected}
       <span class="name">{app.version.rxName}</span>
-      <span class="caption">{app.version.rxVersion}</span>
+      <span class="caption">{app.version.rxVersion}{app.version.onlyRx ? ' · its settings, on its own serial' : ''}</span>
     {:else}
       <span class="name muted">Not connected</span>
       <span class="caption">{app.connected ? 'Power the receiver to read and set its parameters.' : 'Read through the ground radio.'}</span>

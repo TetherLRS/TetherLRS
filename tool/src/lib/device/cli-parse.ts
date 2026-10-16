@@ -25,6 +25,7 @@ export interface DeviceVersion {
   rxName?: string;
   rxVersion?: string;
   rxConnected: boolean;
+  onlyRx?: boolean; // the receiver's own settings session: no Tx in it
 }
 
 export interface LinkStats {
@@ -117,6 +118,13 @@ export function parseVersion(text: string): DeviceVersion | undefined {
     v.rxConnected = true;
   }
   return v;
+}
+
+// a receiver's own settings session answers "v" with "  Rx: <device>, <version>"
+export function parseRxVersion(text: string): DeviceVersion | undefined {
+  const rx = /^ {2}Rx: ([^,\r\n]+), (v[^,\r\n]+)/m.exec(text);
+  if (!rx) return undefined;
+  return { txName: '', txVersion: '', rxName: rx[1].trim(), rxVersion: rx[2].trim(), rxConnected: true, onlyRx: true };
 }
 
 // one line of the "stats" stream, e.g. " 98(100), 97,-61/-127,-63, 8/ 0; 120, 410; cca 0, lim 2;"

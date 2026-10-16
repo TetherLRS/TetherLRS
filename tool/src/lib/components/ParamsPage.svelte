@@ -20,6 +20,9 @@
   });
 </script>
 
+{#if app.version?.onlyRx}
+  <InfoBar kind="info" text="The receiver alone, while it hears no Tx. Saving writes these and restarts it; the radio link settings must be the same as on its Tx." />
+{/if}
 {#if app.unsaved}
   <InfoBar kind="warning" text="Changes are active but not stored. Saving restarts the radios if a link setting changed." />
 {/if}

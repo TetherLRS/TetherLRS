@@ -28,19 +28,19 @@
   <ul>
     {#each items as item}
       <li>
-        <button class="item" class:selected={app.page === item.page} disabled={item.needsDevice && !app.connected} onclick={() => go(item.page)} title={item.label}>
+        <button class="item" class:selected={app.page === item.page} disabled={(item.needsDevice && !app.connected) || (item.page === 'link' && !!app.version?.onlyRx)} onclick={() => go(item.page)} title={item.label}>
           <Icon name={item.icon} />
           <span class="label">{item.label}</span>
         </button>
       </li>
     {/each}
   </ul>
-  <div class="conn" title={app.connected && app.version ? app.version.txName : 'Not connected'}>
+  <div class="conn" title={app.connected && app.version ? (app.version.onlyRx ? app.version.rxName : app.version.txName) : 'Not connected'}>
     <span class="dot" class:on={app.connected} class:pending={app.state === 'connecting'}></span>
     <div class="conn-text">
       {#if app.connected && app.version}
-        <span class="conn-name">{app.version.txName}</span>
-        <span class="caption">{app.version.rxConnected ? 'Receiver connected' : 'No receiver'}</span>
+        <span class="conn-name">{app.version.onlyRx ? app.version.rxName : app.version.txName}</span>
+        <span class="caption">{app.version.onlyRx ? 'Receiver settings' : app.version.rxConnected ? 'Receiver connected' : 'No receiver'}</span>
       {:else if app.state === 'connecting'}
         <span class="conn-name">Connecting…</span>
       {:else}

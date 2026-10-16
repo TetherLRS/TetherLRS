@@ -2,8 +2,9 @@
 
 import { DeviceLink, sleep } from './device/link';
 import { TX_BAUDS, TxSession } from './device/tx';
+import { RX_BAUDS, RxSession } from './device/rx';
 import type { DeviceVersion, LinkStats, Param, ParamOptions } from './device/cli-parse';
-import { rememberTx, type PortEntry } from './serial/ports';
+import { rememberRx, rememberTx, type PortEntry } from './serial/ports';
 import { loadManifest, type Manifest } from './firmware/manifest';
 
 export type Page = 'device' | 'params' | 'link' | 'terminal' | 'firmware';
@@ -60,6 +61,7 @@ class App {
   private link?: DeviceLink;
   private tx?: TxSession;
   private queue: Promise<unknown> = Promise.resolve();
+  private keepAlive?: ReturnType<typeof setInterval>;
 
   // one CLI conversation at a time: option prefetch and user edits share the port
   private exclusive<T>(fn: () => Promise<T>): Promise<T> {
@@ -85,14 +87,16 @@ class App {
     this.error = e instanceof Error ? e.message : String(e);
   }
 
+  // a receiver is talked to alone, in its settings session, which it opens only while it hears no Tx
   async connect(entry: PortEntry): Promise<void> {
     await this.disconnect();
     this.entry = entry;
     this.portKey = entry.key;
     this.state = 'connecting';
     this.error = '';
+    const rx = entry.kind === 'tlrs-rx';
     // a remembered baud rate first, then SiK's 57600 and the others
-    const bauds = this.baud ? [this.baud] : [...new Set([entry.known?.baud ?? TX_BAUDS[0], ...TX_BAUDS])];
+    const bauds = this.baud ? [this.baud] : rx ? RX_BAUDS : [...new Set([entry.known?.baud ?? TX_BAUDS[0], ...TX_BAUDS])];
     for (const baud of bauds) {
       this.status = `Trying ${entry.label} at ${baud} baud…`;
       const link = new DeviceLink(entry.port);
@@ -104,7 +108,7 @@ class App {
         this.status = '';
         return;
       }
-      const tx = new TxSession(link);
+      const tx = rx ? new RxSession(link) : new TxSession(link);
       if (await tx.enterCommandMode()) {
         this.link = link;
         this.tx = tx;
@@ -116,17 +120,31 @@ class App {
         } finally {
           this.state = 'connected';
         }
-        if (this.version) rememberTx(entry, this.version.txName, baud);
+        if (this.version?.onlyRx) {
+          rememberRx(entry, this.version.rxName);
+          // its session ends after 10 s without a byte; never in the middle of a save or another command
+          this.keepAlive = setInterval(() => {
+            void this.exclusive(async () => {
+              if (this.state === 'connected' && this.tx instanceof RxSession) await this.tx.keepAlive();
+            });
+          }, 3000);
+        } else if (this.version) {
+          rememberTx(entry, this.version.txName, baud);
+        }
         return;
       }
       await link.close();
     }
     this.state = 'idle';
     this.status = '';
-    this.error = 'No TetherLRS Tx answered on this port.';
+    this.error = rx
+      ? 'The receiver did not open its settings. It does only while it hears no Tx: switch its Tx off, then Connect.'
+      : 'No TetherLRS Tx answered on this port.';
   }
 
   async disconnect(): Promise<void> {
+    clearInterval(this.keepAlive);
+    this.keepAlive = undefined;
     if (this.streaming) await this.stopStats();
     if (this.tx && this.link?.isOpen) {
       try {
@@ -149,6 +167,8 @@ class App {
   // the Tx was unplugged: nothing more can go to it, so everything goes back without a word to the port
   private lost(link: DeviceLink): void {
     if (this.link !== link) return;
+    clearInterval(this.keepAlive);
+    this.keepAlive = undefined;
     this.link = undefined;
     this.tx = undefined;
     this.streaming = false;
@@ -212,7 +232,7 @@ class App {
       this.unsaved = false;
       await sleep(1500);
       if (!(await this.tx.enterCommandMode())) {
-        this.error = 'Saved, but the Tx did not answer after its restart. Connect again.';
+        this.error = `Saved, but the ${this.version?.onlyRx ? 'receiver' : 'Tx'} did not answer after its restart. Connect again.`;
         await this.disconnect();
         return;
       }
@@ -266,7 +286,7 @@ class App {
   }
 
   private wantStats(on: boolean): Promise<void> {
-    this.statsWanted = on;
+    this.statsWanted = on && !this.version?.onlyRx; // a receiver alone has no link to measure
     this.statsMoving ??= (async () => {
       while (this.tx && this.streaming !== this.statsWanted) {
         if (this.statsWanted) {

@@ -18,10 +18,11 @@ export function x25(data: Uint8Array, crc = 0xffff): number {
   return crc;
 }
 
-export function commandLong(seq: number, confirmation: number, targetSystem = 51): Uint8Array {
+// COMMAND_LONG to the radio component, as a GCS (255, 190) sends it
+function commandLongFrame(seq: number, command: number, params: number[], confirmation: number, targetSystem: number): Uint8Array {
   const p = new DataView(new ArrayBuffer(33));
-  [0, 0, 3, 68, 0, 0, MAGIC].forEach((v, i) => p.setFloat32(i * 4, v, true));
-  p.setUint16(28, 246, true); // MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN
+  params.forEach((v, i) => p.setFloat32(i * 4, v, true));
+  p.setUint16(28, command, true);
   p.setUint8(30, targetSystem);
   p.setUint8(31, 68); // MAV_COMP_ID_TELEMETRY_RADIO
   p.setUint8(32, confirmation);
@@ -31,6 +32,16 @@ export function commandLong(seq: number, confirmation: number, targetSystem = 51
   const crc = x25(new Uint8Array([CRC_EXTRA[76]]), x25(body));
   return new Uint8Array([0xfd, ...body, crc & 0xff, crc >> 8]);
 }
+
+export function commandLong(seq: number, confirmation: number, targetSystem = 51): Uint8Array {
+  return commandLongFrame(seq, 246, [0, 0, 3, 68, 0, 0, MAGIC], confirmation, targetSystem); // MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN
+}
+
+// opens a TetherLRS receiver's settings session (CommonRx/rx_cli.h): MAV_CMD_USER_1, "TLRS" in param1-4, the magic in
+// param7; it answers COMMAND_ACK with result_param2 = magic + 1, and only while it hears no Tx
+export const RXCLI_CMD = 31010;
+export const RXCLI_ANSWER = MAGIC + 1;
+export const rxCliUnlock = (seq: number, targetSystem = 51) => commandLongFrame(seq, RXCLI_CMD, [84, 76, 82, 83, 0, 0, MAGIC], 0, targetSystem);
 
 export interface Ack {
   command: number;
