@@ -2,11 +2,11 @@
 // Data from a port goes to the webview on a Channel as raw bytes, writes come as raw invoke bodies.
 
 use std::collections::HashMap;
-use std::io::{ErrorKind, Read, Write};
+use std::io::{ErrorKind, Read};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use tauri::ipc::{Channel, InvokeBody, InvokeResponseBody, Request};
@@ -22,8 +22,9 @@ pub struct PortInfo {
     serial: Option<String>,
 }
 
+// each port has its own lock: a write to a device that takes no data must not hold up the others
 struct OpenPort {
-    port: Box<dyn serialport::SerialPort>,
+    port: Arc<Mutex<Box<dyn serialport::SerialPort>>>,
     stop: Arc<AtomicBool>,
     reader: Option<JoinHandle<()>>,
 }
@@ -91,7 +92,7 @@ pub fn serial_open(path: String, baud: u32, on_data: Channel<InvokeResponseBody>
         }
     });
     let id = ports.next_id.fetch_add(1, Ordering::Relaxed);
-    ports.open.lock().unwrap().insert(id, OpenPort { port, stop, reader: Some(reader) });
+    ports.open.lock().unwrap().insert(id, OpenPort { port: Arc::new(Mutex::new(port)), stop, reader: Some(reader) });
     Ok(id)
 }
 
@@ -104,27 +105,50 @@ fn port_id(request: &Request<'_>) -> Result<u32, String> {
         .ok_or_else(|| "missing x-port-id".to_string())
 }
 
+fn port_of(ports: &Ports, id: u32) -> Result<Arc<Mutex<Box<dyn serialport::SerialPort>>>, String> {
+    ports.open.lock().unwrap().get(&id).map(|p| p.port.clone()).ok_or_else(|| "port not open".to_string())
+}
+
+// No flush: on Windows it waits, with no deadline, for a device that takes no data, as an ESP32-C3 whose firmware
+// does not read its USB. A write that makes no progress for 1 s gives up instead.
+fn write_with_deadline(port: &mut dyn serialport::SerialPort, mut data: &[u8]) -> std::io::Result<()> {
+    let mut progress = Instant::now();
+    while !data.is_empty() {
+        match port.write(data) {
+            Ok(n) if n > 0 => {
+                data = &data[n..];
+                progress = Instant::now();
+            }
+            Ok(_) => {}
+            Err(e) if e.kind() == ErrorKind::TimedOut || e.kind() == ErrorKind::Interrupted => {}
+            Err(e) => return Err(e),
+        }
+        if progress.elapsed() > Duration::from_millis(1000) {
+            return Err(std::io::Error::new(ErrorKind::TimedOut, "the device takes no data"));
+        }
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn serial_write(request: Request<'_>, ports: State<'_, Ports>) -> Result<(), String> {
     let InvokeBody::Raw(data) = request.body() else {
         return Err("expected raw bytes".into());
     };
-    let id = port_id(&request)?;
-    let mut open = ports.open.lock().unwrap();
-    let p = open.get_mut(&id).ok_or("port not open")?;
-    p.port.write_all(data).map_err(|e| e.to_string())?;
-    p.port.flush().map_err(|e| e.to_string())
+    let port = port_of(&ports, port_id(&request)?)?;
+    let mut port = port.lock().unwrap();
+    write_with_deadline(port.as_mut(), data).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn serial_set_signals(id: u32, dtr: Option<bool>, rts: Option<bool>, ports: State<'_, Ports>) -> Result<(), String> {
-    let mut open = ports.open.lock().unwrap();
-    let p = open.get_mut(&id).ok_or("port not open")?;
+    let port = port_of(&ports, id)?;
+    let mut port = port.lock().unwrap();
     if let Some(v) = dtr {
-        p.port.write_data_terminal_ready(v).map_err(|e| e.to_string())?;
+        port.write_data_terminal_ready(v).map_err(|e| e.to_string())?;
     }
     if let Some(v) = rts {
-        p.port.write_request_to_send(v).map_err(|e| e.to_string())?;
+        port.write_request_to_send(v).map_err(|e| e.to_string())?;
     }
     Ok(())
 }

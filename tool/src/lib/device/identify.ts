@@ -28,6 +28,8 @@ export async function identifyTx(port: SerialPort, firstBaud?: number): Promise<
         await link.write('ATO\r'); // a SiK radio answers +++ as well: give it its data mode back
         return undefined;
       }
+    } catch {
+      return undefined; // the device took no data (a receiver's own USB the firmware does not read), or went away
     } finally {
       await link.close();
     }
