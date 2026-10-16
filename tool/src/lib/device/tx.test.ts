@@ -35,6 +35,15 @@ describe('a session with the demo Tx', () => {
     await link.close();
   }, 10000);
 
+  it('parameter names as the firmware takes them: blanks dropped, so underscores are needed', async () => {
+    const { link, tx } = await session();
+    await tx.enterCommandMode();
+    expect(await tx.command('p tx power = 2')).toContain('err: invalid parameter name');
+    expect(await tx.command('p TX_POWER = 2')).toContain('Tx Power = 100 mW [2]');
+    expect(await tx.command('p mode')).toContain('  6 = 18 Hz'); // no "=" lists the options too
+    await link.close();
+  }, 10000);
+
   it('EU region narrows the modes', async () => {
     const { link, tx } = await session();
     await tx.enterCommandMode();

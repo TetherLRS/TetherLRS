@@ -6,6 +6,7 @@
     { page: 'device', label: 'Device', icon: 'device', needsDevice: false },
     { page: 'params', label: 'Parameters', icon: 'params', needsDevice: true },
     { page: 'link', label: 'Link', icon: 'link', needsDevice: true },
+    { page: 'terminal', label: 'Terminal', icon: 'terminal', needsDevice: true },
     { page: 'firmware', label: 'Firmware', icon: 'firmware', needsDevice: false },
   ];
 

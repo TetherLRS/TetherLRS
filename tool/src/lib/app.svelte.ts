@@ -8,7 +8,7 @@ import { flashImage, readWholeFlash } from './firmware/flash';
 import { elrsToBootloader } from './firmware/elrs';
 import { envForDevice, loadImage, loadManifest, type Manifest } from './firmware/manifest';
 
-export type Page = 'device' | 'params' | 'link' | 'firmware';
+export type Page = 'device' | 'params' | 'link' | 'terminal' | 'firmware';
 export type ConnState = 'idle' | 'connecting' | 'connected' | 'busy';
 
 // the web app on GitHub Pages has the firmware next to it; the desktop app and a local dev server fetch it from there
@@ -31,6 +31,7 @@ class App {
   unsaved = $state(false);
   stats = $state<LinkStats[]>([]);
   streaming = $state(false);
+  terminal = $state<string[]>([]); // the CLI conversation on the Terminal page
 
   firmwareBase = $state(DEFAULT_FIRMWARE_BASE);
   manifest = $state<Manifest | undefined>();
@@ -183,6 +184,34 @@ class App {
       this.fail(e);
     } finally {
       if (this.tx) this.state = 'connected';
+    }
+  }
+
+  // a CLI command typed by the user; the ones that would end the session go through the pages instead
+  async runCommand(cmd: string): Promise<void> {
+    const c = cmd.trim();
+    if (!this.tx || !c || this.streaming) return;
+    const say = (...lines: string[]) => (this.terminal = [...this.terminal, ...lines].slice(-1000));
+    if (/^(exit|ato|systemboot|stats)$/i.test(c)) {
+      say(`> ${c}`, `  ${c === 'stats' ? 'use the Link page' : c === 'systemboot' ? 'use the Firmware page' : 'use Disconnect'} for this`);
+      return;
+    }
+    if (c === 'pstore') {
+      say(`> ${c}`);
+      await this.save();
+      say(this.error ? `  ${this.error}` : '  stored');
+      return;
+    }
+    await this.exclusive(async () => {
+      if (!this.tx) return;
+      const out = await this.tx.command(c, 300, 6000);
+      // the CLI echoes the command and a ">" line first
+      const lines = out.replace(/\r/g, '').split('\n').filter((l, i) => !(i === 0 && l.startsWith(c)) && l !== '>');
+      say(`> ${c}`, ...lines.filter((l, i, a) => l !== '' || i < a.length - 1));
+    });
+    if (/^p\s+\S+\s*=\s*[^?\s]/i.test(c) || /^ATS\d+=/i.test(c)) {
+      this.unsaved = true;
+      await this.exclusive(() => this.refresh());
     }
   }
 

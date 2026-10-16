@@ -12,6 +12,7 @@
     warning: 'M10 7.5v4 M10 14v.5',
     close: 'M5.5 5.5l9 9 M14.5 5.5l-9 9',
     check: 'M4.5 10.5l3.5 3.5 7.5-8',
+    terminal: 'M4.5 6.5l3.5 3.5-3.5 3.5 M10 14h5.5',
     usb: 'M10 3v11 M7.5 6.5h5 M6 9.5v2h8v-2 M10 14a1.5 1.5 0 1 0 0.01 0',
   };
   const circles: Record<string, [number, number, number][]> = {

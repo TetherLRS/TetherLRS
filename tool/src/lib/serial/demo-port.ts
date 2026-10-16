@@ -159,12 +159,22 @@ export class DemoSerialPort {
     if (!line) return;
     if (/^(at|rt)/i.test(line)) {
       this.putsn('');
-      this.putsn(/^ato$/i.test(line) ? '' : 'OK');
-      if (/^ato$/i.test(line)) this.command = false;
+      this.sikAt(line.toUpperCase().replace(/ /g, ''));
       return;
     }
     this.putsn('>');
     this.cli(line);
+  }
+
+  // a few of cli.h's SiK answers (CommonTx/sik_at.h), enough to try the Terminal page
+  private sikAt(cmd: string) {
+    const regs = ['FORMAT=26', 'SERIAL_SPEED=57', 'AIR_SPEED=19', 'NETID=137', 'TXPOWER=14', 'ECC=0', 'MAVLINK=0', 'OPPRESEND=0',
+      'MIN_FREQ=863275', 'MAX_FREQ=868000', 'NUM_CHANNELS=6', 'DUTY_CYCLE=100', 'LBT_RSSI=0', 'MANCHESTER=0', 'RTSCTS=0', 'MAX_WINDOW=32'];
+    if (cmd === 'ATO') this.command = false;
+    else if (cmd === 'AT' || cmd === 'AT&W' || /^ATS\d+=\d+$/.test(cmd)) this.putsn('OK');
+    else if (cmd === 'ATI') this.putsn('SiK 2.2 on TetherLRS DAKEFPV 900 MAX 1W TX');
+    else if (cmd === 'ATI5') regs.forEach((r, i) => this.putsn(`S${i}:${r}`));
+    else this.putsn('ERROR');
   }
 
   private find(cliName: string): DemoParam | undefined {
@@ -191,7 +201,6 @@ export class DemoSerialPort {
 
   private cli(line: string) {
     const isRx = (p: DemoParam) => p.name.startsWith('Rx ');
-    let m: RegExpExecArray | null;
     if (line === 'v') {
       this.putsn('  Tx: DAKEFPV 900 MAX 1W TX, v1.4.05');
       this.putsn(this.rxConnected ? '  Rx: DAKEFPV 900 NANOPRO, v1.4.05' : '  Rx: receiver not connected');
@@ -204,9 +213,12 @@ export class DemoSerialPort {
         if (isRx(p) && !this.rxConnected) continue;
         this.printParam(p);
       }
-    } else if ((m = /^p\s*([A-Za-z][\w ]*?)\s*(?:=\s*(.*))?$/.exec(line))) {
-      const p = this.find(m[1].replace(/ /g, '_'));
-      const v = m[2];
+    } else if (line.startsWith('p ') && /[A-Za-z]/.test(line[2] ?? '')) {
+      // as cli.h is_cmd_param_set(): blanks removed, name in upper case, no "=" asks for the value with its options
+      const s = line.slice(2).replace(/ /g, '');
+      const sep = s.indexOf('=');
+      const p = this.find((sep < 0 ? s : s.slice(0, sep)).toUpperCase());
+      const v = sep < 0 ? '?' : s.slice(sep + 1);
       if (!p) return this.putsn('err: invalid parameter name');
       if (isRx(p) && !this.rxConnected) return this.putsn('warn: receiver not connected');
       if (v === undefined) return this.printParam(p);
@@ -246,6 +258,12 @@ export class DemoSerialPort {
       this.command = false;
     } else if (line === 'systemboot') {
       this.command = false;
+    } else if (line === 'h' || line === 'help' || line === '?') {
+      for (const l of ['  help, h, ?      -> this help page', '  v               -> print device and version', '  pl              -> list all parameters',
+        '  p name          -> get parameter value', '  p name = value  -> set parameter value', '  pstore          -> store parameters',
+        '  listfreqs       -> lists frequencies used in fhss scheme', '  ATI5, ATSn=v... -> SiK AT commands, RT... for the receiver']) this.putsn(l);
+    } else if (line === 'listfreqs') {
+      [863.325, 865.333, 864.0, 867.667, 868.3].forEach((f, i) => this.putsn(`  ${i}: ${Math.round(f * 1000)} kHz`));
     } else {
       this.putsn('  invalid cmd');
     }

@@ -6,8 +6,9 @@
   import ParamsPage from '$lib/components/ParamsPage.svelte';
   import LinkPage from '$lib/components/LinkPage.svelte';
   import FirmwarePage from '$lib/components/FirmwarePage.svelte';
+  import TerminalPage from '$lib/components/TerminalPage.svelte';
 
-  const titles = { device: 'Device', params: 'Parameters', link: 'Link', firmware: 'Firmware' };
+  const titles = { device: 'Device', params: 'Parameters', link: 'Link', terminal: 'Terminal', firmware: 'Firmware' };
 </script>
 
 <div class="shell">
@@ -24,6 +25,8 @@
         <ParamsPage />
       {:else if app.page === 'link'}
         <LinkPage />
+      {:else if app.page === 'terminal'}
+        <TerminalPage />
       {:else}
         <FirmwarePage />
       {/if}
