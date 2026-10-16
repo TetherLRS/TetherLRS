@@ -1,8 +1,8 @@
 // The Firmware page: every radio on this computer, what it runs (ExpressLRS, mLRS or TetherLRS), and TetherLRS onto
 // it as the aircraft radio or the ground radio.
 //
-// Looking at the ports changes nothing: "+++" finds a TetherLRS Tx, a MAVLink question that arms nothing finds a
-// TetherLRS or mLRS receiver. Identify then takes the radio to its ROM bootloader (its own USB resets it there; a
+// Looking at the ports changes nothing: listening tells a TetherLRS Tx (its HEARTBEAT) from a receiver (RADIO_STATUS),
+// "+++" gives a Tx's name, a MAVLink question that arms nothing confirms a TetherLRS or mLRS receiver. Identify then takes the radio to its ROM bootloader (its own USB resets it there; a
 // TetherLRS Tx by command, a receiver by MAVLink, ExpressLRS by "bl", anything else held there by its boot button),
 // keeps that one esptool session open and reads the start of the firmware to say what it is.
 
@@ -15,7 +15,7 @@ import type { Running } from './detect';
 import { elrsToBootloader, romAnswers } from './elrs';
 import { randomStamp, writeBindPhrase } from './bindphrase';
 import { chooseEnv, loadImage } from './manifest';
-import { probeReceiver, receiverToBootloader } from './mavlink';
+import { HEARTBEAT, listen, probeReceiver, RADIO_STATUS, receiverToBootloader } from './mavlink';
 import { RomSession, type Progress } from './rom-session';
 
 export interface Found extends Partial<Running> {
@@ -152,16 +152,27 @@ class Radios {
       }
       r.checking = true;
       try {
-        const rom = await this.romRate(e.port); // first: a ROM keeps the rate of the first bytes it hears
-        if (rom) return await this.openRom(r, rom);
-        this.cb().log('asking what it runs');
-        const tx = await within(identifyTx(e.port, e.known?.baud), 12000);
-        if (tx) {
-          rememberTx(e, tx.txName, tx.baud); // the Device page shows it at once
-          r.found = { family: 'TetherLRS', role: 'Tx', name: tx.txName.replace(/ TX$/i, ''), version: tx.txVersion, how: 'cli' };
-          this.cb().log(`a TetherLRS Tx, ${r.found.name} ${tx.txVersion ?? ''}: it keeps running`);
-          return this.pick();
+        // listening first, which a ROM held by its button does not mind either: a TetherLRS or mLRS radio talks on its
+        // own, and the questions at other rates are noise to it
+        this.cb().log('listening');
+        const heard = (await within(listen(e.port, RX_BAUD, 1500), 4000)) ?? [];
+        const sendsHeartbeat = heard.includes(HEARTBEAT);
+        const sendsStatus = !sendsHeartbeat && heard.includes(RADIO_STATUS);
+        if (!sendsHeartbeat && !sendsStatus) {
+          const rom = await this.romRate(e.port); // a ROM keeps the rate of the first bytes it hears
+          if (rom) return await this.openRom(r, rom);
         }
+        if (!sendsStatus) {
+          this.cb().log('asking what it runs');
+          const tx = await within(identifyTx(e.port, sendsHeartbeat ? RX_BAUD : e.known?.baud), 12000);
+          if (tx) {
+            rememberTx(e, tx.txName, tx.baud); // the Device page shows it at once
+            r.found = { family: 'TetherLRS', role: 'Tx', name: tx.txName.replace(/ TX$/i, ''), version: tx.txVersion, how: 'cli' };
+            this.cb().log(`a TetherLRS Tx, ${r.found.name} ${tx.txVersion ?? ''}: it keeps running`);
+            return this.pick();
+          }
+        }
+        if (sendsStatus) this.cb().log('it sends RADIO_STATUS: asking it as a receiver');
         if (await within(probeReceiver(e.port, RX_BAUD), 5000)) {
           r.found = { role: 'Rx', how: 'mavlink' };
           this.cb().log('a TetherLRS or mLRS receiver: it keeps running, Connect reads which');

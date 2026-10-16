@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { commandLong, findAcks, x25 } from './mavlink';
+import { commandLong, findAcks, HEARTBEAT, RADIO_STATUS, radioMessages, x25 } from './mavlink';
 
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
 
@@ -28,5 +28,17 @@ describe('MAVLink to the receiver', () => {
     const broken = frame.slice();
     broken[12] ^= 1;
     expect(findAcks(broken)).toEqual([]);
+  });
+
+  it('a Tx and a receiver told apart by what they send on their own', () => {
+    const bytes = (s: string) => new Uint8Array(s.split(' ').map((x) => parseInt(x, 16)));
+    // as caught on the bench: the Flywoo Tx's HEARTBEAT, the DAKEFPV 2.4 receiver's RADIO_STATUS
+    const heartbeat = bytes('fd 09 00 00 3a 33 44 00 00 00 00 00 00 00 00 08 80 04 03 b7 aa');
+    const status = bytes('fd 09 00 00 2d 33 44 6d 00 00 00 00 00 00 12 ff 64 0d ff 6b 01');
+    expect(radioMessages(new Uint8Array([0x33, 0xfd, ...heartbeat, 0x44]))).toEqual([HEARTBEAT]);
+    expect(radioMessages(new Uint8Array([...status, ...status.subarray(0, 9)]))).toEqual([RADIO_STATUS]);
+    const broken = status.slice();
+    broken[15] ^= 1;
+    expect(radioMessages(broken)).toEqual([]);
   });
 });

@@ -57,6 +57,48 @@ export function findAcks(buf: Uint8Array): Ack[] {
   return out;
 }
 
+export const HEARTBEAT = 0;
+export const RADIO_STATUS = 109;
+const RADIO_EXTRA: Record<number, number> = { [HEARTBEAT]: 50, [RADIO_STATUS]: 185 };
+
+// what the radio component (51, 68) says on its own in a byte stream, checksums checked: a TetherLRS or mLRS Tx sends
+// a HEARTBEAT every second, a receiver RADIO_STATUS
+export function radioMessages(buf: Uint8Array): number[] {
+  const out: number[] = [];
+  for (let i = buf.indexOf(0xfd); i >= 0 && i + 12 <= buf.length; i = buf.indexOf(0xfd, i + 1)) {
+    const n = buf[i + 1];
+    const end = i + 12 + n;
+    const msgid = buf[i + 7] | (buf[i + 8] << 8) | (buf[i + 9] << 16);
+    if (end > buf.length || buf[i + 5] !== 51 || buf[i + 6] !== 68 || RADIO_EXTRA[msgid] === undefined) continue;
+    const crc = x25(new Uint8Array([RADIO_EXTRA[msgid]]), x25(buf.subarray(i + 1, i + 10 + n)));
+    if ((crc & 0xff) === buf[end - 2] && crc >> 8 === buf[end - 1]) out.push(msgid);
+  }
+  return out;
+}
+
+// only listens: nothing written, so nothing on the other side can be disturbed
+export async function listen(port: SerialPort, baud: number, ms: number): Promise<number[]> {
+  await port.open({ baudRate: baud });
+  const reader = port.readable!.getReader();
+  const read = timedReader(reader);
+  const seen = new Set<number>();
+  let buf = new Uint8Array(0);
+  try {
+    const end = performance.now() + ms;
+    while (performance.now() < end) {
+      const next = await read(end - performance.now());
+      if (!next || next.done) break;
+      buf = new Uint8Array([...buf.slice(-300), ...next.value]);
+      for (const m of radioMessages(buf)) seen.add(m);
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
+    await port.close();
+  }
+  return [...seen];
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function ask(port: SerialPort, baud: number, confirmations: number[]): Promise<Ack | undefined> {
@@ -66,6 +108,10 @@ async function ask(port: SerialPort, baud: number, confirmations: number[]): Pro
   const writer = port.writable!.getWriter();
   let last: Ack | undefined;
   try {
+    // bytes sent at another rate before can leave the receiver's parser inside a made-up frame up to 280 bytes long,
+    // which then swallowed all three questions (measured on a DAKEFPV 2.4); zeros end it and start nothing new
+    await writer.write(new Uint8Array(300));
+    await sleep(50);
     for (const conf of confirmations) {
       let got: Ack | undefined;
       let buf = new Uint8Array(0);
