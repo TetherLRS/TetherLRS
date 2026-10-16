@@ -30,6 +30,8 @@ class tLEDs
 #else
 
 
+// TetherLRS: one rule on every board, Tx and Rx alike. Slow blink = looking for the other radio, steady = connected,
+// fast blink = binding. Colour LEDs are green in normal use and blue while binding; red is left to the fault codes.
 class tLEDs
 {
   public:
@@ -37,76 +39,37 @@ class tLEDs
     {
         blink = 0;
         is_in_bind = false;
+        on = false;
+        shown = 0xFF;
 
-        led_red_off();
-        for (uint8_t i = 0; i < 7; i++) { led_red_toggle(); delay_ms(50); }
+        for (uint8_t i = 0; i < 7; i++) { on = !on; show(); delay_ms(50); }
     }
 
     void Tick_ms(bool connected)
     {
-#ifdef DEVICE_HAS_SINGLE_LED
-        if (!is_in_bind) {
-            DECc(blink, SYSTICK_DELAY_MS(500));
-        } else {
-            DECc(blink, SYSTICK_DELAY_MS(100));
-        }
+        DECc(blink, SYSTICK_DELAY_MS(is_in_bind ? 100 : 500));
 
         if (connected && !is_in_bind) {
-            led_red_on();
+            on = true;
         } else if (!blink) {
-            led_red_toggle();
+            on = !on;
         }
-#elif defined DEVICE_HAS_SINGLE_LED_RGB 
-        if (connected) {
-            DECc(blink, SYSTICK_DELAY_MS(500));
-        } else {
-            DECc(blink, SYSTICK_DELAY_MS(200));
-        }
-
-        if (is_in_bind) {
-            if (!blink) { led_blue_toggle(); }
-        } else
-        if (connected) {
-            if (!blink) led_green_toggle();
-        } else {
-            if (!blink) led_red_toggle();
-        }
-#else
-        if (connected) {
-            DECc(blink, SYSTICK_DELAY_MS(500));
-        } else {
-            DECc(blink, SYSTICK_DELAY_MS(200));
-        }
-
-        if (is_in_bind) {
-            if (!blink) { led_green_toggle(); led_red_toggle(); }
-        } else
-        if (connected) {
-            if (!blink) led_green_toggle();
-            led_red_off();
-        } else {
-            led_green_off();
-            if (!blink) led_red_toggle();
-        }
-#endif
+        show();
     }
 
     void SetToBind(void)
     {
-#ifndef DEVICE_HAS_SINGLE_LED
-        led_green_on();
-#endif
-        led_red_off();
         is_in_bind = true;
-     }
+        on = true;
+        blink = 0;
+        show();
+    }
 
     void SetToParamStore(void)
     {
-        led_red_on();
-#ifndef DEVICE_HAS_SINGLE_LED
-        led_green_on();
-#endif
-     }
+        on = true;
+        show();
+    }
 
     void InitPassthrough(void)
     {
@@ -132,6 +95,23 @@ class tLEDs
   private:
     uint16_t blink;
     bool is_in_bind;
+    bool on;
+    uint8_t shown; // what the LED shows now, so an RGB LED is written only on a change
+
+    void show(void)
+    {
+        uint8_t want = (on ? 1 : 0) | (is_in_bind ? 2 : 0);
+        if (want == shown) return;
+        shown = want;
+#ifdef DEVICE_HAS_SINGLE_LED
+        if (on) { led_red_on(); } else { led_red_off(); }
+#elif defined DEVICE_HAS_SINGLE_LED_RGB
+        if (!on) { led_green_off(); } else if (is_in_bind) { led_blue_on(); } else { led_green_on(); }
+#else
+        led_red_off();
+        if (on) { led_green_on(); } else { led_green_off(); }
+#endif
+    }
 };
 
 
