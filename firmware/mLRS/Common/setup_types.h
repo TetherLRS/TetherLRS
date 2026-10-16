@@ -447,8 +447,9 @@ typedef struct
     uint8_t PowerSwitchChannel;
     uint8_t SerialPort;
     uint8_t MavlinkSystemID;
+    uint8_t MavCoalesce; // TetherLRS: drop stale copies of state messages waiting for the link
 
-    uint8_t spare[4];
+    uint8_t spare[3];
 
     int8_t FailsafeOutChannelValues_Ch1_Ch12[12]; // -120 .. +120
     uint8_t FailsafeOutChannelValues_Ch13_Ch16[4]; // 0,1,2 = -120, 0, +120

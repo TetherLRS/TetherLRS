@@ -15,6 +15,10 @@
 #include "../Common/libs/filters.h"
 #include "../Common/thirdparty/mavlinkx.h"
 #include "../Common/libs/fifo.h"
+#if defined ESP8266 || defined ESP32 // it takes about 3 KB of RAM, which STM32 receivers may not have
+  #define USE_MAVLINK_COALESCE
+  #include "../Common/mavlink_coalesce.h"
+#endif
 
 
 extern volatile uint32_t millis32(void);
@@ -114,6 +118,18 @@ class tRxMavlink
     uint8_t buf_serial_in[MAVLINK_BUF_SIZE]; // buffer for serial in parser
     fmav_message_t msg_link_out; // could be avoided by more efficient coding, is used only momentarily/locally
     tFifo<char,512> fifo_link_out; // needs to be at least 82 + 280
+#ifdef USE_MAVLINK_COALESCE
+    tMavlinkCoalesce coalesce_link_out; // in place of fifo_link_out with Rx Mav Coalesce on
+    bool coalesce(void) { return Setup.Rx.MavCoalesce; }
+#else
+    bool coalesce(void) { return false; }
+#endif
+    bool coalesce_last; // the setting can change on the fly, then both queues start empty
+    bool link_out_has_space(uint16_t len);
+    void link_out_put(uint8_t* const buf, uint16_t len, fmav_message_t* const msg);
+    uint16_t link_out_available(void);
+    uint8_t link_out_get(void);
+    void link_out_flush(void);
     uint32_t bytes_parser_in; // bytes in the parser
     void parse_serial_in_link_out(void);
 
@@ -182,6 +198,10 @@ void tRxMavlink::Init(void)
 
     status_serial_in = {};
     fifo_link_out.Init();
+#ifdef USE_MAVLINK_COALESCE
+    coalesce_link_out.Init();
+#endif
+    coalesce_last = coalesce();
     bytes_parser_in = 0;
 
     radio_status_tlast_ms = millis32() + 1000;
@@ -259,7 +279,12 @@ void tRxMavlink::Do(void)
     if (!connected()) {
         //Init();
         //radio_status_tlast_ms = tnow_ms + 1000;
-        fifo_link_out.Flush();
+        link_out_flush();
+    }
+
+    if (coalesce() != coalesce_last) {
+        coalesce_last = coalesce();
+        link_out_flush();
     }
 
     if (!SERIAL_LINK_MODE_IS_MAVLINK(Setup.Rx.SerialLinkMode)) return;
@@ -361,7 +386,7 @@ void tRxMavlink::parse_serial_in_link_out(void)
 fmav_result_t result;
 
     // parse serial in -> link out
-    if (fifo_link_out.HasSpace(290)) { // we have space for a full MAVLink message, so can safely parse
+    if (link_out_has_space(290)) { // we have space for a full MAVLink message, so can safely parse
         while (serial->available()) {
             char c = serial->getc();
             bytes_parser_in++; // memorize it is still in processing
@@ -380,7 +405,7 @@ fmav_result_t result;
                     len = fmav_msg_to_frame_buf(_buf, &msg_link_out);
                 }
 
-                fifo_link_out.PutBuf(_buf, len);
+                link_out_put(_buf, len, &msg_link_out);
                 bytes_parser_in = 0;
 
                 handle_msg(&msg_link_out);
@@ -473,7 +498,7 @@ void tRxMavlink::putc(char c)
 
 bool tRxMavlink::available(void)
 {
-    return fifo_link_out.Available();
+    return link_out_available();
 }
 
 
@@ -482,14 +507,61 @@ uint8_t tRxMavlink::getc(void)
     bytes_link_out++;
     bytes_link_out_cnt++;
 
-    return fifo_link_out.Get();
+    return link_out_get();
 }
 
 
 void tRxMavlink::flush(void)
 {
-    fifo_link_out.Flush();
+    link_out_flush();
     serial->flush();
+}
+
+
+//-- link out queue: plain fifo, or with Rx Mav Coalesce the queue which drops stale state messages
+
+bool tRxMavlink::link_out_has_space(uint16_t len)
+{
+#ifdef USE_MAVLINK_COALESCE
+    if (coalesce()) return coalesce_link_out.HasSpace(len);
+#endif
+    return fifo_link_out.HasSpace(len);
+}
+
+
+void tRxMavlink::link_out_put(uint8_t* const buf, uint16_t len, fmav_message_t* const msg)
+{
+#ifdef USE_MAVLINK_COALESCE
+    if (coalesce()) { coalesce_link_out.Put(buf, len, msg->msgid, msg->sysid, msg->compid); return; }
+#endif
+    fifo_link_out.PutBuf(buf, len);
+}
+
+
+uint16_t tRxMavlink::link_out_available(void)
+{
+#ifdef USE_MAVLINK_COALESCE
+    if (coalesce()) return coalesce_link_out.Available();
+#endif
+    return fifo_link_out.Available();
+}
+
+
+uint8_t tRxMavlink::link_out_get(void)
+{
+#ifdef USE_MAVLINK_COALESCE
+    if (coalesce()) return coalesce_link_out.Get();
+#endif
+    return fifo_link_out.Get();
+}
+
+
+void tRxMavlink::link_out_flush(void)
+{
+#ifdef USE_MAVLINK_COALESCE
+    coalesce_link_out.Flush();
+#endif
+    fifo_link_out.Flush();
 }
 
 
@@ -501,7 +573,7 @@ void tRxMavlink::flush(void)
 uint16_t tRxMavlink::serial_in_available(void)
 {
     // count all bytes still in processing
-    return fifo_link_out.Available() + serial->bytes_available() + bytes_parser_in;
+    return link_out_available() + serial->bytes_available() + bytes_parser_in;
 }
 
 

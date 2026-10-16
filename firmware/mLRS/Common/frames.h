@@ -533,6 +533,7 @@ void _copy_rxsetup_to_cmdframerxparameters(tCmdFrameRxParameters* const rx_param
     rx_params->SendRcChannels = Setup.Rx.SendRcChannels;
     rx_params->PowerSwitchChannel = Setup.Rx.PowerSwitchChannel;
     rx_params->MavlinkSystemID = Setup.Rx.MavlinkSystemID;
+    rx_params->MavCoalesce = Setup.Rx.MavCoalesce;
 
     for (uint8_t i = 0; i < 12; i++) {
         rx_params->FailsafeOutChannelValues_Ch1_Ch12[i] = Setup.Rx.FailsafeOutChannelValues_Ch1_Ch12[i];
@@ -561,6 +562,7 @@ void _copy_cmdframerxparameters_to_rxsetup(tCmdFrameRxParameters* const rx_param
     Setup.Rx.SendRcChannels = rx_params->SendRcChannels;
     Setup.Rx.PowerSwitchChannel = rx_params->PowerSwitchChannel;
     Setup.Rx.MavlinkSystemID = rx_params->MavlinkSystemID;
+    Setup.Rx.MavCoalesce = rx_params->MavCoalesce;
 
     for (uint8_t i = 0; i < 12; i++) {
         Setup.Rx.FailsafeOutChannelValues_Ch1_Ch12[i] = rx_params->FailsafeOutChannelValues_Ch1_Ch12[i];

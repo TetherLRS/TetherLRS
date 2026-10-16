@@ -283,7 +283,8 @@ typedef struct
     uint8_t SerialPort : 4;
     uint8_t MavlinkSystemID : 4;
 
-    uint8_t spare3[3];
+    uint8_t MavCoalesce; // 0 from an mLRS transmitter
+    uint8_t spare3[2];
 
     int8_t FailsafeOutChannelValues_Ch1_Ch12[12]; // -120 .. +120
     uint8_t FailsafeOutChannelValue_Ch13 : 2;

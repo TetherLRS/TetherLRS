@@ -387,6 +387,7 @@ void setup_default(uint8_t config_id)
     Setup.Rx.SendRadioStatus = SETUP_RX_SEND_RADIO_STATUS;
     Setup.Rx.SendRcChannels = SETUP_RX_SEND_RC_CHANNELS;
     Setup.Rx.PowerSwitchChannel = POWER_SWITCH_CHANNEL_OFF;
+    Setup.Rx.MavCoalesce = 0;
 
     for (uint8_t ch = 0; ch < 12; ch++) { Setup.Rx.FailsafeOutChannelValues_Ch1_Ch12[ch] = 0; }
     for (uint8_t ch = 0; ch < 4; ch++) { Setup.Rx.FailsafeOutChannelValues_Ch13_Ch16[ch] = 1; }
@@ -624,6 +625,8 @@ if (!only_rx) {
     SANITIZE(Rx.PowerSwitchChannel, POWER_SWITCH_CHANNEL_NUM, POWER_SWITCH_CHANNEL_OFF, POWER_SWITCH_CHANNEL_OFF);
 
     SANITIZE(Rx.MavlinkSystemID, 5, SETUP_RX_MAVLINK_SYSTEM_ID, 0);
+
+    SANITIZE(Rx.MavCoalesce, 2, 0, 0);
 
     //-- Spares and deprecated options:
     // should be 0xFF'ed
