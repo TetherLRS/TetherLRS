@@ -34,7 +34,8 @@ export class TauriSerialPort {
     const onData = new Channel<ArrayBuffer>();
     onData.onmessage = (data) => {
       try {
-        controller.enqueue(new Uint8Array(data));
+        if (data.byteLength === 0) controller.close(); // the bridge's word that the port is gone (unplugged)
+        else controller.enqueue(new Uint8Array(data));
       } catch {
         // reader gone
       }

@@ -103,6 +103,7 @@ class App {
       if (await tx.enterCommandMode()) {
         this.link = link;
         this.tx = tx;
+        link.onLost = () => this.lost(link);
         this.state = 'busy'; // connected only once version and parameters are read: nothing else may use the CLI before
         this.status = `Connected to ${entry.label} at ${baud} baud`;
         try {
@@ -138,6 +139,22 @@ class App {
     this.options = {};
     this.unsaved = false;
     this.status = '';
+  }
+
+  // the Tx was unplugged: nothing more can go to it, so everything goes back without a word to the port
+  private lost(link: DeviceLink): void {
+    if (this.link !== link) return;
+    this.link = undefined;
+    this.tx = undefined;
+    this.streaming = false;
+    this.statsWanted = false;
+    this.state = 'idle';
+    this.version = undefined;
+    this.params = [];
+    this.options = {};
+    this.unsaved = false;
+    this.status = '';
+    this.error = `${this.entry?.label ?? 'The radio'} was unplugged.`;
   }
 
   async refresh(): Promise<void> {

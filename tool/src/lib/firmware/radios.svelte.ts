@@ -61,6 +61,8 @@ class Radios {
     };
   }
 
+  private stale = false; // ports came or went during a job
+
   private async run(fn: () => Promise<void>): Promise<void> {
     if (this.busy) return;
     this.busy = true;
@@ -72,7 +74,10 @@ class Radios {
     } finally {
       this.busy = false;
     }
+    if (this.stale) void this.portsChanged();
   }
+
+  private ports = async () => (await listPorts()).filter((p) => p.kind !== 'fc' && p.kind !== 'demo');
 
   // the ports and what answers on them, without changing anything on the radios
   async scan(): Promise<void> {
@@ -80,25 +85,55 @@ class Radios {
       await this.release();
       this.log = [];
       this.progress = 0;
-      const ports = (await listPorts()).filter((p) => p.kind !== 'fc' && p.kind !== 'demo');
-      this.list = ports.map((entry) => ({ entry }));
+      this.stale = false;
+      this.list = (await this.ports()).map((entry) => ({ entry }));
       if (!this.list.some((r) => r.entry.key === this.key)) this.key = this.list[0]?.entry.key ?? '';
-      for (const r of this.list) {
-        if (app.connected && app.portKey === r.entry.key && app.version) {
-          r.found = { family: 'TetherLRS', role: 'Tx', name: app.version.txName.replace(/ TX$/i, ''), version: app.version.txVersion, how: 'connected' };
-          continue;
-        }
-        r.checking = true;
-        const tx = await within(identifyTx(r.entry.port, r.entry.known?.baud), 12000);
-        if (tx) {
-          r.found = { family: 'TetherLRS', role: 'Tx', name: tx.txName.replace(/ TX$/i, ''), how: 'cli' };
-        } else if (await within(probeReceiver(r.entry.port, RX_BAUD), 5000)) {
-          r.found = { role: 'Rx', how: 'mavlink' }; // TetherLRS or mLRS: Identify tells which
-        }
-        r.checking = false;
-      }
+      for (const r of this.list) await this.probe(r);
       this.pick();
     });
+  }
+
+  // a radio plugged in or pulled out: the ones still there keep what is known of them, new ones are asked
+  async portsChanged(): Promise<void> {
+    if (this.busy) {
+      this.stale = true;
+      return;
+    }
+    this.stale = false;
+    const ports = await this.ports();
+    const there = new Set(ports.map((p) => p.key));
+    if (!there.has(this.key) && this.session) {
+      this.cb().log('unplugged');
+      await this.release();
+    }
+    const known = new Map(this.list.map((r) => [r.entry.key, r]));
+    this.list = ports.map((entry) => known.get(entry.key) ?? { entry });
+    if (!there.has(this.key)) {
+      this.key = this.list[0]?.entry.key ?? '';
+      this.pick();
+    }
+    const fresh = this.list.filter((r) => !known.has(r.entry.key));
+    if (fresh.length) {
+      await this.run(async () => {
+        for (const r of fresh) await this.probe(r);
+        this.pick();
+      });
+    }
+  }
+
+  private async probe(r: Radio): Promise<void> {
+    if (app.connected && app.portKey === r.entry.key && app.version) {
+      r.found = { family: 'TetherLRS', role: 'Tx', name: app.version.txName.replace(/ TX$/i, ''), version: app.version.txVersion, how: 'connected' };
+      return;
+    }
+    r.checking = true;
+    const tx = await within(identifyTx(r.entry.port, r.entry.known?.baud), 12000);
+    if (tx) {
+      r.found = { family: 'TetherLRS', role: 'Tx', name: tx.txName.replace(/ TX$/i, ''), how: 'cli' };
+    } else if (await within(probeReceiver(r.entry.port, RX_BAUD), 5000)) {
+      r.found = { role: 'Rx', how: 'mavlink' }; // TetherLRS or mLRS: Identify tells which
+    }
+    r.checking = false;
   }
 
   select(key: string): void {

@@ -85,6 +85,32 @@ const demoEntry: PortEntry = { key: 'demo', label: 'Demo Tx', kind: 'demo', name
 
 const sorted = (list: PortEntry[]) => list.sort((a, b) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind) || a.label.localeCompare(b.label, undefined, { numeric: true }));
 
+// calls back when a port comes or goes (a radio plugged in or pulled out); returns the stop function
+export function watchPorts(changed: () => void): () => void {
+  if (!isDesktop) {
+    if (!hasWebSerial) return () => {};
+    navigator.serial.addEventListener('connect', changed);
+    navigator.serial.addEventListener('disconnect', changed);
+    return () => {
+      navigator.serial.removeEventListener('connect', changed);
+      navigator.serial.removeEventListener('disconnect', changed);
+    };
+  }
+  let last: string | undefined;
+  let stopped = false;
+  const look = async () => {
+    const now = (await listNativePorts().catch(() => [])).map((p) => `${p.path}|${p.vid}:${p.pid}|${p.serial ?? ''}`).sort().join(',');
+    if (!stopped && last !== undefined && now !== last) changed();
+    last = now;
+  };
+  void look();
+  const timer = setInterval(() => void look(), 1500);
+  return () => {
+    stopped = true;
+    clearInterval(timer);
+  };
+}
+
 export async function listPorts(): Promise<PortEntry[]> {
   const memory = loadMemory();
   if (isDesktop) {

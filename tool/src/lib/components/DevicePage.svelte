@@ -5,7 +5,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import { app } from '$lib/app.svelte';
-  import { forgetTx, hasWebSerial, isDesktop, listPorts, probeable, rememberTx, requestPort, type PortEntry } from '$lib/serial/ports';
+  import { forgetTx, hasWebSerial, isDesktop, listPorts, probeable, rememberTx, requestPort, watchPorts, type PortEntry } from '$lib/serial/ports';
   import { identifyTx } from '$lib/device/identify';
   import { sleep } from '$lib/device/link';
   import { linkMetrics } from '$lib/link-metrics';
@@ -26,11 +26,11 @@
   }
 
   // asks the adapters whether a TetherLRS Tx is there; the found ones go to the top with their name
-  async function recognise() {
+  async function recognise(only?: Set<string>) {
     if (probing || app.state !== 'idle') return;
     probing = true;
     let found: string | undefined;
-    for (const p of ports.filter(probeable)) {
+    for (const p of ports.filter((x) => probeable(x) && (!only || only.has(x.key)))) {
       if (app.state !== 'idle') break;
       checking = p.key;
       // a port that never answers must not hold up the others
@@ -67,13 +67,24 @@
     if (entry) await app.connect(entry);
   }
 
+  // a radio plugged in or pulled out: the list follows, and only a new port is asked
+  async function portsChanged() {
+    const before = new Set(ports.map((p) => p.key));
+    await list();
+    const fresh = new Set(ports.filter((p) => !before.has(p.key)).map((p) => p.key));
+    if (fresh.size) await recognise(fresh);
+  }
+
+  let unwatch = () => {};
   onMount(async () => {
+    unwatch = watchPorts(() => void portsChanged());
     await list();
     if (!autoChecked) {
       autoChecked = true;
       await recognise();
     }
   });
+  onDestroy(() => unwatch());
 
   const region = $derived(app.param('Region')?.text);
 

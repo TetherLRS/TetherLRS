@@ -87,7 +87,11 @@ pub fn serial_open(path: String, baud: u32, on_data: Channel<InvokeResponseBody>
                     }
                 }
                 Err(e) if e.kind() == ErrorKind::TimedOut => {}
-                Err(_) => break, // unplugged; the webview sees the stream end when it closes
+                Err(_) => {
+                    // unplugged: an empty message ends the webview's stream, or it would wait for data for ever
+                    let _ = on_data.send(InvokeResponseBody::Raw(Vec::new()));
+                    break;
+                }
             }
         }
     });

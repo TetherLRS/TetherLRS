@@ -10,6 +10,7 @@ export class DeviceLink {
   private reading?: Promise<void>;
   private listeners = new Set<(text: string) => void>();
   isOpen = false;
+  onLost?: () => void; // the port went away without close(): unplugged
 
   constructor(readonly port: SerialPort) {}
 
@@ -56,7 +57,9 @@ export class DeviceLink {
     } finally {
       this.reader.releaseLock();
       this.reader = undefined;
+      const lost = this.isOpen; // close() clears it first
       this.isOpen = false;
+      if (lost) this.onLost?.();
     }
   }
 

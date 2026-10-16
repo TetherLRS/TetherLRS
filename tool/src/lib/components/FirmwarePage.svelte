@@ -2,15 +2,18 @@
   import { onDestroy, onMount } from 'svelte';
   import { app } from '$lib/app.svelte';
   import { byCommand, byMavlink, radios, type Found, type Radio } from '$lib/firmware/radios.svelte';
-  import { hasWebSerial, isDesktop, requestPort } from '$lib/serial/ports';
+  import { hasWebSerial, isDesktop, requestPort, watchPorts } from '$lib/serial/ports';
   import Icon from './Icon.svelte';
 
   // the radios are looked at while the list loads, not after: an address that does not answer takes its time
+  let unwatch = () => {};
   onMount(() => {
     if (!app.manifest) void app.loadFirmwareList().then(() => radios.pickEnv());
     void radios.scan();
+    unwatch = watchPorts(() => void radios.portsChanged());
   });
   onDestroy(() => {
+    unwatch();
     if (app.page !== 'firmware') void radios.release();
   });
 
