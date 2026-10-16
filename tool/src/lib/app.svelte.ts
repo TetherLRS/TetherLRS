@@ -10,7 +10,12 @@ import { envForDevice, loadImage, loadManifest, type Manifest } from './firmware
 export type Page = 'device' | 'params' | 'link' | 'firmware';
 export type ConnState = 'idle' | 'connecting' | 'connected' | 'busy';
 
-export const DEFAULT_FIRMWARE_BASE = 'https://tetherlrs.github.io/TetherLRS/firmware/latest/';
+// the web app on GitHub Pages has the firmware next to it; the desktop app and a local dev server fetch it from there
+const PAGES_FIRMWARE = 'https://tetherlrs.github.io/TetherLRS/firmware/latest/';
+export const DEFAULT_FIRMWARE_BASE =
+  typeof location !== 'undefined' && location.protocol === 'https:' && location.hostname.endsWith('github.io')
+    ? new URL('firmware/latest/', location.href).href
+    : PAGES_FIRMWARE;
 
 class App {
   page = $state<Page>('device');

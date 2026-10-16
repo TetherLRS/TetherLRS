@@ -1,6 +1,7 @@
-# TetherLRS: builds every PlatformIO environment; on a v* tag publishes them as a GitHub Release, with
-# manifest.json for the tool (env, chip, offsets, sizes, sha256). Per env: <env>.bin for the ELRS web page or an
-# update over TetherLRS, <env>-full.bin for the ESP ROM bootloader at 0x0.
+# TetherLRS: builds every PlatformIO environment; on a v* tag publishes them as a GitHub Release with
+# manifest.json for the tool (env, chip, offsets, sizes, sha256), and the web app with the firmware on GitHub
+# Pages. Per env: <env>.bin for the ELRS web page or an update over TetherLRS, <env>-full.bin for the ESP ROM
+# bootloader at 0x0.
 name: TetherLRS firmware
 
 on:
@@ -77,3 +78,44 @@ jobs:
         with:
           files: rel/*
           generate_release_notes: true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-files
+          path: rel
+
+  # the web app, with this release's firmware next to it (the browser cannot read release assets: CORS)
+  pages:
+    needs: release
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Web app
+        working-directory: tool
+        env:
+          BASE_PATH: /${{ github.event.repository.name }}
+        run: |
+          npm ci
+          npm run build
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-files
+          path: rel
+      - name: Firmware next to the web app
+        run: |
+          mkdir -p "tool/build/firmware/${{ github.ref_name }}" tool/build/firmware/latest
+          cp rel/* "tool/build/firmware/${{ github.ref_name }}/"
+          cp rel/* tool/build/firmware/latest/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: tool/build
+      - id: deploy
+        uses: actions/deploy-pages@v4

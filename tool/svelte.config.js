@@ -12,6 +12,8 @@ const config = {
     adapter: adapter({
       fallback: "index.html",
     }),
+    // GitHub Pages serves the web app under the repository name
+    paths: { base: process.env.BASE_PATH ?? "" },
   },
 };
 
