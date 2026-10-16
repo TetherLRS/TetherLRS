@@ -93,10 +93,10 @@ export class RomSession {
   ) {}
 
   // a native USB port: esptool-js resets the chip into the ROM itself; otherwise it has to be there already
-  static async open(port: SerialPort, nativeUsb: boolean, cb: Progress): Promise<RomSession> {
+  static async open(port: SerialPort, nativeUsb: boolean, cb: Progress, romBaud = 115200): Promise<RomSession> {
     const transport = new Transport(port, false);
-    // adapters stay at 115200 all along: some cannot do more, and a stub left at another rate is lost
-    const loader = new ESPLoader({ transport, baudrate: nativeUsb ? 921600 : 115200, romBaudrate: 115200, terminal: terminal(cb.log) });
+    // adapters stay at the ROM's rate all along: some cannot do more, and a stub left at another rate is lost
+    const loader = new ESPLoader({ transport, baudrate: nativeUsb ? 921600 : romBaud, romBaudrate: romBaud, terminal: terminal(cb.log) });
     keepPendingRead(transport);
     // main() passes the baud rate as the number of attempts, so a chip that never answers kept it trying for hours
     loader.detectChip = async (mode) => {

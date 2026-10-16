@@ -119,6 +119,7 @@ class Radios {
       const e = r.entry;
       const native = e.kind === 'esp';
       let elrsName: string | undefined;
+      let romBaud = 115200;
       if (!native) {
         this.cb().log('asking it to restart into its bootloader');
         if (app.connected && app.portKey === e.key) {
@@ -128,18 +129,25 @@ class Radios {
         } else if (byMavlink(r.found)) {
           if (!(await receiverToBootloader(e.port, RX_BAUD))) throw new Error('The receiver stopped answering. Power it off and on, then Refresh.');
         } else {
-          elrsName = (await within(elrsToBootloader(e.port), 4000)) ?? undefined;
-          if (!elrsName && !(await within(romAnswers(e.port), 3000))) {
+          // one already in its ROM by its button keeps the rate it hears first, so the ROM is asked before any "bl"
+          let found = await this.romRate(e.port);
+          if (!found) {
+            elrsName = (await within(elrsToBootloader(e.port), 4000)) ?? undefined;
+            found = await this.romRate(e.port);
+          }
+          if (!found) {
             throw new Error(
-              'Nothing answered. An ExpressLRS receiver listens for about a minute after power on: power it off and on and press Identify again. ' +
-                'Some adapters cannot send the 420000 baud ExpressLRS needs: then hold the boot button while powering the receiver, and press Identify.',
+              elrsName
+                ? `It says it is ${elrsName}, but its bootloader did not answer: power it off, hold its boot button while powering it on, then Identify.`
+                : 'Nothing answered. Hold its boot button while powering it on, then Identify. Check that the adapter\'s TX goes to its RX and RX to its TX.',
             );
           }
+          romBaud = found;
         }
       }
-      this.cb().log(native ? 'resetting it into its bootloader over USB' : 'in its bootloader, connecting');
+      this.cb().log(native ? 'resetting it into its bootloader over USB' : `in its bootloader at ${romBaud} baud, connecting`);
       try {
-        this.session = await RomSession.open(e.port, native, this.cb());
+        this.session = await RomSession.open(e.port, native, this.cb(), romBaud);
       } catch (err) {
         this.cb().log(err instanceof Error ? err.message : String(err));
         throw new Error(
@@ -156,6 +164,12 @@ class Radios {
       this.progress = 0;
       this.pick();
     });
+  }
+
+  // the rate its ROM answers at: 115200, or 420000 when an ExpressLRS "bl" reached it first
+  private async romRate(port: SerialPort): Promise<number | undefined> {
+    for (const baud of [115200, 420000]) if (await within(romAnswers(port, baud), 3000)) return baud;
+    return undefined;
   }
 
   private async txToBootloader(e: PortEntry): Promise<void> {

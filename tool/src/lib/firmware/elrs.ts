@@ -46,11 +46,12 @@ export async function elrsToBootloader(port: SerialPort, timeoutMs = 2000): Prom
   return name || undefined;
 }
 
-// one SLIP SYNC at 115200: the ROM bootloader answers with its own SYNC response, whatever brought it there
-// (the boot button held at power on, "bl", the USB reset); leaves it in the ROM, ready for esptool-js
-export async function romAnswers(port: SerialPort, tries = 3): Promise<boolean> {
+// one SLIP SYNC: the ROM bootloader answers with its own SYNC response, whatever brought it there (the boot button
+// held at power on, "bl", the USB reset); leaves it in the ROM, ready for esptool-js. A C3's ROM keeps the rate of the
+// first bytes it heard: 115200 from us, but 420000 if a "bl" got there first (measured on a DAKEFPV 2.4)
+export async function romAnswers(port: SerialPort, baud = 115200, tries = 3): Promise<boolean> {
   const sync = new Uint8Array([0xc0, 0x00, 0x08, 0x24, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07, 0x07, 0x12, 0x20, ...new Array(32).fill(0x55), 0xc0]);
-  await port.open({ baudRate: 115200 });
+  await port.open({ baudRate: baud });
   const reader = port.readable!.getReader();
   const read = timedReader(reader);
   const writer = port.writable!.getWriter();
