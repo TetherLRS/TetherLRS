@@ -49,16 +49,22 @@
     return [`${family(x)} ${role}`, x.version].filter(Boolean).join(' · ');
   }
 
-  const how = $derived(
+  const identifyHow = $derived(
+    sel?.entry.kind === 'esp'
+      ? 'On its own USB it is read in its bootloader: it restarts there, nothing to press.'
+      : 'Asks it what it runs. A TetherLRS radio keeps running. ExpressLRS restarts to say it; one on an ESP32 can be read only from its bootloader: hold its boot button while powering it, then Identify. The same if nothing answers.',
+  );
+
+  const connectHow = $derived(
     !sel
       ? ''
       : sel.entry.kind === 'esp'
-        ? 'It restarts into its bootloader over its own USB, nothing to press.'
+        ? 'Back up and flash work in its bootloader. It restarts there over its own USB, nothing to press.'
         : byCommand(f)
-          ? 'A TetherLRS ground radio goes to its bootloader by command.'
+          ? 'Back up and flash work in its bootloader. A TetherLRS ground radio goes there by command.'
           : byMavlink(f)
-            ? 'The receiver goes to its bootloader by a MAVLink command, through a flight controller too.'
-            : 'Identify asks it what it runs and takes it to its bootloader: TetherLRS by command, a receiver by MAVLink, ExpressLRS by its own request. If nothing answers, hold its boot button while powering it, then Identify.',
+            ? 'Back up and flash work in its bootloader. The receiver goes there by a MAVLink command, through a flight controller too.'
+            : 'Back up and flash work in its bootloader. Identify it first, or hold its boot button while powering it.',
   );
 
   async function add() {
@@ -144,17 +150,30 @@
         <span class="n">1</span>
         <div class="body">
           <span class="step-title">Identify</span>
-          <span class="caption">{how}</span>
+          <span class="caption">{identifyHow}</span>
           <div class="line">
-            <button class="btn" class:accent={!radios.inRom} onclick={() => radios.identify()} disabled={radios.busy || radios.inRom}>
-              {radios.inRom ? 'In its bootloader' : 'Identify'}
-            </button>
+            <button class="btn" class:accent={!f} onclick={() => radios.identify()} disabled={radios.busy || radios.inRom}>Identify</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <span class="n">2</span>
+        <div class="body">
+          <span class="step-title">Bootloader</span>
+          <span class="caption">{radios.inRom ? `In its bootloader${radios.chip ? `, ${radios.chip}` : ''}. Restart leaves it without flashing.` : connectHow}</span>
+          <div class="line">
+            {#if radios.inRom}
+              <button class="btn" onclick={() => radios.restart()} disabled={radios.busy}>Restart</button>
+            {:else}
+              <button class="btn" class:accent={!!f} onclick={() => radios.connect()} disabled={radios.busy}>Connect</button>
+            {/if}
           </div>
         </div>
       </div>
 
       <div class="step" class:off={!radios.inRom}>
-        <span class="n">2</span>
+        <span class="n">3</span>
         <div class="body">
           <span class="step-title">Back up</span>
           <span class="caption">Everything on it now, to a file, to go back to it. Before the first TetherLRS; an update can skip it.</span>
@@ -165,7 +184,7 @@
       </div>
 
       <div class="step" class:off={!radios.inRom}>
-        <span class="n">3</span>
+        <span class="n">4</span>
         <div class="body">
           <span class="step-title">TetherLRS</span>
           <div class="seg" role="group" aria-label="Use as">

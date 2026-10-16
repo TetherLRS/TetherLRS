@@ -6,6 +6,7 @@ import { TX_BAUDS, TxSession } from './tx';
 
 export interface Identity {
   txName: string;
+  txVersion?: string;
   baud: number;
 }
 
@@ -23,7 +24,7 @@ export async function identifyTx(port: SerialPort, firstBaud?: number): Promise<
         const v = await tx.version();
         if (v) {
           await tx.exitCommandMode();
-          return { txName: v.txName, baud };
+          return { txName: v.txName, txVersion: v.txVersion, baud };
         }
         await link.write('ATO\r'); // a SiK radio answers +++ as well: give it its data mode back
         return undefined;

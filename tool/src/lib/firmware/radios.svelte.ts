@@ -128,7 +128,9 @@ class Radios {
     this.pick();
   }
 
-  // to its ROM bootloader, one session open, and what its flash holds
+  // what it runs, without restarting it where it can answer: its ROM if it sits there already (boot button), a TetherLRS
+  // Tx by +++ (name and version from its CLI), a TetherLRS or mLRS receiver by a MAVLink question that changes nothing.
+  // Only ExpressLRS has to restart into its bootloader to say what it is, and a radio on its own USB to be read.
   async identify(): Promise<void> {
     const r = this.selected;
     if (!r) return;
@@ -137,85 +139,127 @@ class Radios {
     await this.run(async () => {
       await this.release();
       const e = r.entry;
-      const native = e.kind === 'esp';
-      let elrsName: string | undefined;
+      if (e.kind === 'esp') return this.openRom(r, 115200);
+      if (app.connected && app.portKey === e.key && app.version) {
+        this.seed(r);
+        this.cb().log('the Tx the Device page is connected to');
+        return this.pick();
+      }
+      r.checking = true;
+      try {
+        const rom = await this.romRate(e.port); // first: a ROM keeps the rate of the first bytes it hears
+        if (rom) return await this.openRom(r, rom);
+        this.cb().log('asking what it runs');
+        const tx = await within(identifyTx(e.port, e.known?.baud), 12000);
+        if (tx) {
+          r.found = { family: 'TetherLRS', role: 'Tx', name: tx.txName.replace(/ TX$/i, ''), version: tx.txVersion, how: 'cli' };
+          this.cb().log(`a TetherLRS Tx, ${r.found.name} ${tx.txVersion ?? ''}: it keeps running`);
+          return this.pick();
+        }
+        if (await within(probeReceiver(e.port, RX_BAUD), 5000)) {
+          r.found = { role: 'Rx', how: 'mavlink' };
+          this.cb().log('a TetherLRS or mLRS receiver: it keeps running, Connect reads which');
+          return this.pick();
+        }
+        const name = (await within(elrsToBootloader(e.port), 4000)) ?? undefined;
+        if (name) r.found = { family: 'ExpressLRS', role: 'Rx', name, how: 'bl' };
+        const after = await this.romRate(e.port);
+        // an ESP8285 restarts into its ROM, which then hears our 115200 first; an ESP32 goes to ExpressLRS's own
+        // updater instead, at 420000, which answers like esptool's stub but reads nothing (flash id 0, no read)
+        if (name && after === 420000) {
+          throw new Error(
+            `${name} went to ExpressLRS's own updater, which cannot be read or backed up. For its first TetherLRS: power it off, hold its boot button while powering it on, then Identify. After that TetherLRS restarts by command, no button.`,
+          );
+        }
+        if (after) return await this.openRom(r, after);
+        throw new Error(
+          name
+            ? `It says it is ${name}, but its bootloader did not answer: power it off, hold its boot button while powering it on, then Identify.`
+            : "Nothing answered. Hold its boot button while powering it on, then Identify. Check that the adapter's TX goes to its RX and RX to its TX.",
+        );
+      } finally {
+        r.checking = false;
+      }
+    });
+  }
+
+  // to its ROM bootloader by the way it takes, one session open, and what its flash holds: back up and flash need it
+  async connect(): Promise<void> {
+    const r = this.selected;
+    if (!r) return;
+    this.log = [];
+    this.progress = 0;
+    await this.run(async () => {
+      await this.release();
+      const e = r.entry;
       let romBaud = 115200;
-      if (!native) {
-        this.cb().log('asking it to restart into its bootloader');
+      if (e.kind !== 'esp') {
         if (app.connected && app.portKey === e.key) {
+          this.cb().log('asking it to restart into its bootloader');
           await app.handOverForFlash();
         } else if (byCommand(r.found)) {
+          this.cb().log('asking it to restart into its bootloader');
           await this.txToBootloader(e);
         } else if (byMavlink(r.found)) {
-          if (!(await receiverToBootloader(e.port, RX_BAUD))) throw new Error('The receiver stopped answering. Power it off and on, then Refresh.');
+          this.cb().log('asking it to restart into its bootloader');
+          if (!(await receiverToBootloader(e.port, RX_BAUD))) throw new Error('The receiver stopped answering. Power it off and on, then Identify.');
         } else {
-          romBaud = await this.discover(r);
-          elrsName = r.found?.how === 'bl' ? r.found.name : undefined;
+          const rom = await this.romRate(e.port);
+          if (!rom) throw new Error('It is not in its bootloader: Identify it first, or hold its boot button while powering it on.');
+          romBaud = rom;
         }
       }
-      this.cb().log(native ? 'resetting it into its bootloader over USB' : `in its bootloader at ${romBaud} baud, connecting`);
-      try {
-        this.session = await RomSession.open(e.port, native, this.cb(), romBaud);
-      } catch (err) {
-        this.cb().log(err instanceof Error ? err.message : String(err));
-        throw new Error(
-          native
-            ? 'It did not come up in its bootloader. Unplug it, hold its boot button while plugging it back in, then Refresh and Identify.'
-            : 'It did not come up in its bootloader. Power it off, hold its boot button while powering it on, then Refresh and Identify.',
-        );
-      }
-      this.inRom = true;
-      this.chip = this.session.chip;
-      this.cb().log(`${this.chip}, ${this.session.flashSize / 1048576} MB of flash (id ${this.session.flashId.toString(16)}); reading its firmware`);
-      const found = await this.session.identify(this.cb());
-      this.logRetries(this.session);
-      r.found = found ? { ...found, how: 'flash' } : elrsName ? { family: 'ExpressLRS', role: 'Rx', name: elrsName, how: 'bl' } : { how: 'rom' };
-      this.progress = 0;
-      this.pick();
+      await this.openRom(r, romBaud);
     });
+  }
+
+  // out of its bootloader without flashing: its firmware starts again where the chip allows it without a power cycle
+  async restart(): Promise<void> {
+    const s = this.session;
+    if (!s) return;
+    await this.run(async () => {
+      this.session = undefined;
+      this.inRom = false;
+      this.chip = '';
+      const started = await s.close(true);
+      this.cb().log(started ? 'it runs its firmware again' : 'power it off and on to start its firmware');
+    });
+  }
+
+  private async openRom(r: Radio, romBaud: number): Promise<void> {
+    const e = r.entry;
+    const native = e.kind === 'esp';
+    this.cb().log(native ? 'resetting it into its bootloader over USB' : `in its bootloader at ${romBaud} baud, connecting`);
+    try {
+      this.session = await RomSession.open(e.port, native, this.cb(), romBaud);
+    } catch (err) {
+      this.cb().log(err instanceof Error ? err.message : String(err));
+      throw new Error(
+        native
+          ? 'It did not come up in its bootloader. Unplug it, hold its boot button while plugging it back in, then Connect.'
+          : 'It did not come up in its bootloader. Power it off, hold its boot button while powering it on, then Connect.',
+      );
+    }
+    this.inRom = true;
+    this.chip = this.session.chip;
+    this.cb().log(`${this.chip}, ${this.session.flashSize / 1048576} MB of flash (id ${this.session.flashId.toString(16)}); reading its firmware`);
+    let found: Awaited<ReturnType<RomSession['identify']>>;
+    try {
+      found = await this.session.identify(this.cb());
+    } catch (err) {
+      await this.release(); // half open is worse than closed: back up and flash would act on what could not be read
+      throw new Error(`Its flash could not be read (${err instanceof Error ? err.message : String(err)}). Power it off, hold its boot button while powering it on, then Identify.`);
+    }
+    this.logRetries(this.session);
+    r.found = found ? { ...found, how: 'flash' } : r.found?.how === 'bl' ? r.found : { how: 'rom' };
+    this.progress = 0;
+    this.pick();
   }
 
   // how often the link spoiled something, then reset for the next job
   private logRetries(s: RomSession): void {
     if (s.retries) this.cb().log(`${s.retries} time${s.retries > 1 ? 's' : ''} it arrived spoiled and was done again: the adapter or its wires lose bytes`);
     s.retries = 0;
-  }
-
-  // what a port nothing is known of runs, asked on Identify, to its ROM: in it already by its boot button (asked
-  // first, as the ROM keeps the rate of the first bytes it hears), a TetherLRS Tx (+++, then systemboot), a TetherLRS or
-  // mLRS receiver (MAVLink), ExpressLRS ("bl"). Returns the rate the ROM answers at.
-  private async discover(r: Radio): Promise<number> {
-    const e = r.entry;
-    r.checking = true;
-    try {
-      const rom = await this.romRate(e.port);
-      if (rom) return rom;
-      this.cb().log('asking what it runs');
-      const tx = await within(identifyTx(e.port, e.known?.baud), 12000);
-      if (tx) {
-        r.found = { family: 'TetherLRS', role: 'Tx', name: tx.txName.replace(/ TX$/i, ''), how: 'cli' };
-        this.cb().log(`a TetherLRS Tx, ${r.found.name}: to its bootloader by command`);
-        await this.txToBootloader(e);
-        return 115200;
-      }
-      if (await within(probeReceiver(e.port, RX_BAUD), 5000)) {
-        r.found = { role: 'Rx', how: 'mavlink' };
-        this.cb().log('a TetherLRS or mLRS receiver: to its bootloader by MAVLink');
-        if (!(await receiverToBootloader(e.port, RX_BAUD))) throw new Error('The receiver stopped answering. Power it off and on, then Identify.');
-        return 115200;
-      }
-      const name = (await within(elrsToBootloader(e.port), 4000)) ?? undefined;
-      if (name) r.found = { family: 'ExpressLRS', role: 'Rx', name, how: 'bl' };
-      const after = await this.romRate(e.port);
-      if (after) return after;
-      throw new Error(
-        name
-          ? `It says it is ${name}, but its bootloader did not answer: power it off, hold its boot button while powering it on, then Identify.`
-          : "Nothing answered. Hold its boot button while powering it on, then Identify. Check that the adapter's TX goes to its RX and RX to its TX.",
-      );
-    } finally {
-      r.checking = false;
-    }
   }
 
   // the rate its ROM answers at: 115200, or 420000 when an ExpressLRS "bl" reached it first

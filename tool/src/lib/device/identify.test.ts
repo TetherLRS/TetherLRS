@@ -23,7 +23,7 @@ class SilentPort {
 describe('recognising a TetherLRS Tx on a port', () => {
   it('finds the demo Tx and leaves it in data mode', async () => {
     const demo = new DemoSerialPort();
-    expect(await identifyTx(demo as unknown as SerialPort)).toEqual({ txName: 'DAKEFPV 900 MAX 1W TX', baud: 115200 });
+    expect(await identifyTx(demo as unknown as SerialPort)).toEqual({ txName: 'DAKEFPV 900 MAX 1W TX', txVersion: 'v1.4.05', baud: 115200 });
     expect((demo as unknown as { command: boolean }).command).toBe(false);
   }, 15000);
 
