@@ -50,6 +50,9 @@ describe('options, versions, stats', () => {
       lq: 98, lqValid: 100, rxLq: 97, rssi1: -61, rssi2: -127, rxRssi: -63, snr1: 8, snr2: 0, bytesTx: 120, bytesRx: 410, ccaBusy: 3, limited: 2,
     });
     expect(parseStatsLine('100(100),100, -040/-127,-041,  010/ 000; 00000, 00000;')?.ccaBusy).toBeUndefined();
+    // the power the Tx transmits with, after the EU counters when they are there
+    expect(parseStatsLine('098(100),096, -029/ 127,-071,  009/ 127; 00000, 00000; pwr -018;')?.txPower).toBe(-18);
+    expect(parseStatsLine('098(100),097, -061/-127,-063,  008/ 000; 00120, 00410; cca 0000000003, lim 0000000002; pwr  012;')).toMatchObject({ ccaBusy: 3, txPower: 12 });
     expect(parseStatsLine('  starts streaming stats')).toBeUndefined();
   });
   it('CLI names', () => {

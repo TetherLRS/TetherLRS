@@ -49,6 +49,7 @@ export class DemoSerialPort {
       { name: 'RF Ortho', kind: 'list', options: ['off', '1/3', '2/3', '3/3'], value: 0, allowed: () => (band() === 1 ? [0, 1, 2, 3] : []) },
       { name: 'Privacy', kind: 'list', options: ['off', 'lvl 1', 'lvl 2', 'lvl 3'], value: 0 },
       { name: 'Region', kind: 'list', options: ['free', 'EU'], value: 0 },
+      { name: 'Dyn Power', kind: 'list', options: ['off', 'on'], value: 1 },
       { name: 'Tx Power', kind: 'list', options: ['25 mW', '50 mW', '100 mW', '250 mW', '500 mW'], value: 0 },
       { name: 'Tx Diversity', kind: 'list', options: ['enabled', 'antenna1', 'antenna2', 'r:en. t:ant1', 'r:en. t:ant2'], value: 1, allowed: () => [1] },
       { name: 'Tx Ser Port', kind: 'list', options: ['serial', 'wbridge', 'serial2', 'com', 'crsfbridge'], value: 0, allowed: () => [0] },
@@ -265,6 +266,7 @@ export class DemoSerialPort {
     const lq = r(92, 100);
     let line = `${p3(lq)}(${p3(Math.min(100, lq + r(0, 4)))}),${p3(r(90, 100))}, ${s8(r(-75, -60))}/${s8(-127)},${s8(r(-78, -62))}, ${s8(r(5, 9))}/${s8(0)}; ${p5(r(80, 400))}, ${p5(r(900, 1450))};`;
     if (this.find('REGION')!.value === 1) line += ` cca ${p10(r(0, 3))}, lim ${p10(0)};`;
+    line += ` pwr ${s8(this.find('DYN_POWER')!.value === 1 ? r(10, 14) : 14)};`;
     this.putsn(line);
   }
 }

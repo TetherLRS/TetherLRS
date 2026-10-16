@@ -25,6 +25,10 @@ const META: Record<string, ParamMeta> = {
     label: 'Region',
     help: 'EU follows the European rules: listen before talk, on-time limits per channel, power caps. Free sets no limits: the local rules are up to you.',
   },
+  'Dyn Power': {
+    label: 'Dynamic power',
+    help: 'Both radios turn their power down while the link is strong, never above the transmit power set below, and back up at once when it weakens.',
+  },
   'Tx Power': { label: 'Transmit power' },
   'Tx Diversity': { label: 'Antennas' },
   'Tx Ser Port': { label: 'Serial port' },

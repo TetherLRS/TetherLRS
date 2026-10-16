@@ -18,7 +18,7 @@
       { label: 'Link quality', value: last?.lq, unit: '%', series: app.stats.map((s) => s.lq), lo: 0, hi: 100 },
       { label: 'Signal, ground', value: last?.rssi1, unit: 'dBm', series: app.stats.map((s) => s.rssi1), lo: -120, hi: -30 },
       { label: 'Signal, aircraft', value: last?.rxRssi, unit: 'dBm', series: app.stats.map((s) => s.rxRssi), lo: -120, hi: -30 },
-      { label: 'SNR, ground', value: last?.snr1, unit: 'dB', series: app.stats.map((s) => s.snr1), lo: -20, hi: 20 },
+      { label: 'Power, ground', value: last?.txPower, unit: 'dBm', series: app.stats.map((s) => s.txPower ?? 0), lo: -20, hi: 33 },
       { label: 'Data down', value: last?.bytesRx, unit: 'B/s', series: app.stats.map((s) => s.bytesRx), lo: 0, hi: 4200 },
       { label: 'Data up', value: last?.bytesTx, unit: 'B/s', series: app.stats.map((s) => s.bytesTx), lo: 0, hi: 3300 },
     ] as { label: string; value: number | undefined; unit: string; series: number[]; lo: number; hi: number }[],
