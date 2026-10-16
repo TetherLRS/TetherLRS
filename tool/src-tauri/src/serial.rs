@@ -34,6 +34,19 @@ pub struct Ports {
     open: Mutex<HashMap<u32, OpenPort>>,
 }
 
+impl Ports {
+    // a reloaded page has lost the ids of what it opened, so nothing else would close those ports
+    pub fn close_all(&self) {
+        let all: Vec<OpenPort> = self.open.lock().unwrap().drain().map(|(_, p)| p).collect();
+        for mut p in all {
+            p.stop.store(true, Ordering::Relaxed);
+            if let Some(t) = p.reader.take() {
+                let _ = t.join();
+            }
+        }
+    }
+}
+
 #[tauri::command]
 pub fn serial_list() -> Result<Vec<PortInfo>, String> {
     let ports = serialport::available_ports().map_err(|e| e.to_string())?;
