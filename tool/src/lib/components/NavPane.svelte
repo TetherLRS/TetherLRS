@@ -11,10 +11,12 @@
     { page: 'firmware', label: 'Firmware', icon: 'firmware', needsDevice: false },
   ];
 
+  // the page changes first: stopping the stats while the Device page still showed made it start them again, and the
+  // Parameters page was left with every list disabled; the page that wants the stats starts them again
   async function go(page: Page) {
     if (page === app.page) return;
-    await app.stopStats(); // the page that wants the stats starts them again
     app.page = page;
+    await app.stopStats();
   }
 </script>
 

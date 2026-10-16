@@ -93,7 +93,7 @@
   // the link at a glance, live while this page is open; a measure opens large on the Link page
   const live = $derived(app.connected && app.state === 'connected');
   $effect(() => {
-    if (live && !app.streaming) void app.startStats();
+    if (live && app.page === 'device' && !app.streaming) void app.startStats();
   });
   onDestroy(() => {
     if (app.page !== 'device') void app.stopStats();

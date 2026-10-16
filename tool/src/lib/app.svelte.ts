@@ -63,7 +63,12 @@ class App {
 
   // one CLI conversation at a time: option prefetch and user edits share the port
   private exclusive<T>(fn: () => Promise<T>): Promise<T> {
-    const run = this.queue.then(fn, fn);
+    // a stats stream being stopped still writes and reads the port: the CLI waits until it is done
+    const go = async () => {
+      await this.statsMoving;
+      return fn();
+    };
+    const run = this.queue.then(go, go);
     this.queue = run.catch(() => undefined);
     return run;
   }
