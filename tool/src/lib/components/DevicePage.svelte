@@ -5,8 +5,8 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import { app } from '$lib/app.svelte';
-  import { forgetTx, hasWebSerial, isDesktop, listPorts, probeable, rememberTx, requestPort, watchPorts, type PortEntry } from '$lib/serial/ports';
-  import { identifyTx } from '$lib/device/identify';
+  import { forget, hasWebSerial, isDesktop, listPorts, probeable, rememberRx, rememberTx, requestPort, watchPorts, type PortEntry } from '$lib/serial/ports';
+  import { recogniseRadio } from '$lib/device/identify';
   import { sleep } from '$lib/device/link';
   import { linkMetrics } from '$lib/link-metrics';
   import LinkGraph from './LinkGraph.svelte';
@@ -25,8 +25,8 @@
     if (!ports.some((p) => p.key === selected)) selected = ports[0]?.key ?? ''; // a known Tx sorts first
   }
 
-  // asks the adapters whether a TetherLRS Tx is there, all at once (each port is its own conversation); the found ones
-  // go to the top with their name as soon as they answer
+  // asks the adapters whether a TetherLRS radio is there, all at once (each port is its own conversation); the found ones
+  // go to the top as soon as they answer, a Tx with its name, a receiver as the aircraft radio
   async function recognise(only?: Set<string>) {
     if (probing || app.state !== 'idle') return;
     probing = true;
@@ -35,13 +35,14 @@
     const found = await Promise.all(
       todo.map(async (p) => {
         // a port that never answers must not hold up the others
-        const id = await Promise.race([identifyTx(p.port, p.known?.baud).catch(() => undefined), sleep(15000).then(() => undefined)]);
-        if (id) rememberTx(p, id.txName, id.baud);
-        else forgetTx(p);
+        const id = await Promise.race([recogniseRadio(p.port, p.known?.baud).catch(() => undefined), sleep(15000).then(() => undefined)]);
+        if (id?.role === 'Tx') rememberTx(p, id.txName, id.baud);
+        else if (id?.role === 'Rx') rememberRx(p, p.receiver?.name); // the board, if the Firmware page read it
+        else forget(p);
         checking.delete(p.key);
         checking = new Set(checking);
         await list();
-        return id ? p.key : undefined;
+        return id?.role === 'Tx' ? p.key : undefined;
       }),
     );
     probing = false;
@@ -131,11 +132,17 @@
         {/each}
       </select>
     </label>
-    <span class="status caption">{probing ? 'Looking for TetherLRS radios on the USB serial adapters…' : app.status}</span>
+    <span class="status caption">
+      {probing
+        ? 'Looking for TetherLRS radios on the USB serial adapters…'
+        : current?.kind === 'tlrs-rx' && !app.connected
+          ? `${current.label} is an aircraft radio: its settings come through the ground radio once they are linked. Flash it on the Firmware page.`
+          : app.status}
+    </span>
     {#if app.connected}
       <button class="btn" onclick={() => app.disconnect()} disabled={app.state === 'busy'}>Disconnect</button>
     {:else}
-      <button class="btn accent" onclick={connect} disabled={!current || app.state !== 'idle' || checking.has(selected)}>
+      <button class="btn accent" onclick={connect} disabled={!current || current.kind === 'tlrs-rx' || app.state !== 'idle' || checking.has(selected)}>
         {app.state === 'connecting' ? 'Connecting…' : 'Connect'}
       </button>
     {/if}

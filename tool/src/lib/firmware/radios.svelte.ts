@@ -10,7 +10,7 @@ import { app } from '$lib/app.svelte';
 import { identifyTx } from '$lib/device/identify';
 import { DeviceLink } from '$lib/device/link';
 import { TxSession } from '$lib/device/tx';
-import { forgetTx, listPorts, rememberTx, type PortEntry } from '$lib/serial/ports';
+import { listPorts, rememberRx, rememberTx, type PortEntry } from '$lib/serial/ports';
 import type { Running } from './detect';
 import { elrsToBootloader, romAnswers } from './elrs';
 import { randomStamp, writeBindPhrase } from './bindphrase';
@@ -94,13 +94,16 @@ class Radios {
     this.pick();
   }
 
-  // the Tx this app is connected to is known already, and one the Device page found answering on this port
+  // the Tx this app is connected to is known already, and a radio the Device page found answering on this port
   private seed(r: Radio): Radio {
-    const known = r.entry.known;
+    const { known, receiver } = r.entry;
     if (app.connected && app.portKey === r.entry.key && app.version) {
       r.found = { family: 'TetherLRS', role: 'Tx', name: app.version.txName.replace(/ TX$/i, ''), version: app.version.txVersion, how: 'connected' };
     } else if (known) {
       r.found = { family: 'TetherLRS', role: 'Tx', name: known.txName.replace(/ TX$/i, ''), how: 'seen' };
+    } else if (receiver) {
+      // MAVLink alone cannot tell TetherLRS from mLRS: only a board read from its flash says it
+      r.found = receiver.name ? { family: 'TetherLRS', role: 'Rx', name: receiver.name, how: 'seen' } : { role: 'Rx', how: 'mavlink' };
     }
     return r;
   }
@@ -174,6 +177,7 @@ class Radios {
         }
         if (sendsStatus) this.cb().log('it sends RADIO_STATUS: asking it as a receiver');
         if (await within(probeReceiver(e.port, RX_BAUD), 5000)) {
+          rememberRx(e, e.receiver?.name);
           r.found = { role: 'Rx', how: 'mavlink' };
           this.cb().log('a TetherLRS or mLRS receiver: it keeps running, Connect reads which');
           return this.pick();
@@ -269,6 +273,7 @@ class Radios {
     }
     this.logRetries(this.session);
     r.found = found ? { ...found, how: 'flash' } : r.found?.how === 'bl' ? r.found : { how: 'rom' };
+    if (found?.family === 'TetherLRS' && found.role === 'Rx') rememberRx(e, found.name);
     this.progress = 0;
     this.pick();
   }
@@ -338,7 +343,7 @@ class Radios {
       this.inRom = false;
       // what the Device page shows for this port; an update keeps the Tx's serial rate, a new one starts at 115200
       if (this.role === 'Tx') rememberTx(r.entry, info.device ?? info.env, update ? (r.entry.known?.baud ?? 115200) : 115200);
-      else forgetTx(r.entry);
+      else rememberRx(r.entry, info.device);
       this.cb().log(started ? 'done, it starts TetherLRS' : 'done: power it off and on to start TetherLRS');
       r.found = { family: 'TetherLRS', role: this.role, name: info.device, version: info.version, how: 'flashed' };
     });

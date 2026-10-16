@@ -20,11 +20,13 @@
       <span class="port-text">
         <span class="port-title">
           <span>{p.label}</span>
-          {#if p.kind === 'tlrs'}<span class="badge">TetherLRS</span>{/if}
-          {#if p.kind === 'tlrs' || p.name}<span class="kind">{p.kind === 'tlrs' ? p.known?.txName : p.name}</span>{/if}
+          {#if p.kind === 'tlrs' || p.kind === 'tlrs-rx'}<span class="badge">TetherLRS</span>{/if}
+          {#if p.kind === 'tlrs'}<span class="kind">{p.known?.txName}</span>
+          {:else if p.kind === 'tlrs-rx'}<span class="kind">{['Aircraft radio (Rx)', p.receiver?.name].filter(Boolean).join(' · ')}</span>
+          {:else if p.name}<span class="kind">{p.name}</span>{/if}
         </span>
         <span class="caption">
-          {checking?.has(p.key) ? 'Checking for a TetherLRS Tx… · ' : p.kind === 'tlrs' ? `${p.known?.baud} baud · ` : ''}{p.detail}
+          {checking?.has(p.key) ? 'Checking for a TetherLRS radio… · ' : p.kind === 'tlrs' ? `${p.known?.baud} baud · ` : ''}{p.detail}
         </span>
       </span>
     </label>

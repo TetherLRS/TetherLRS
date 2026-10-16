@@ -1,16 +1,24 @@
 // Which ports the user can pick: the desktop app lists them, the browser asks through its own chooser.
-// A TetherLRS Tx sits behind a plain USB serial adapter, so USB alone cannot tell it apart: ports where the tool
-// once found one are remembered, the others are named after what their USB IDs say they are.
+// A TetherLRS radio sits behind a plain USB serial adapter, so USB alone cannot tell it apart: ports where the tool
+// once found a Tx or a receiver are remembered, the others are named after what their USB IDs say they are.
 
 import { DemoSerialPort } from './demo-port';
 import { listNativePorts, TauriSerialPort, type NativePortInfo } from './tauri-port';
 
-export type PortKind = 'tlrs' | 'adapter' | 'esp' | 'other' | 'fc' | 'demo';
+export type PortKind = 'tlrs' | 'tlrs-rx' | 'adapter' | 'esp' | 'other' | 'fc' | 'demo';
 
 export interface KnownTx {
   txName: string;
   baud: number;
 }
+
+// a receiver on the adapter: its settings come through the ground radio, so the Device page only names it
+export interface KnownRx {
+  rx: true;
+  name?: string; // its board, once the Firmware page read it
+}
+
+type Known = KnownTx | KnownRx;
 
 export interface PortEntry {
   key: string; // stable across refreshes, also the memory key
@@ -20,6 +28,7 @@ export interface PortEntry {
   via: string; // how it is plugged in, the same even once a TetherLRS Tx was found on it
   detail: string; // product string and USB IDs
   known?: KnownTx;
+  receiver?: KnownRx;
   port: SerialPort;
 }
 
@@ -27,7 +36,7 @@ export const isDesktop = typeof window !== 'undefined' && '__TAURI_INTERNALS__' 
 export const hasWebSerial = typeof navigator !== 'undefined' && 'serial' in navigator;
 
 const MEMORY = 'tetherlrs.knownPorts';
-const ORDER: PortKind[] = ['tlrs', 'adapter', 'esp', 'other', 'fc', 'demo'];
+const ORDER: PortKind[] = ['tlrs', 'tlrs-rx', 'adapter', 'esp', 'other', 'fc', 'demo'];
 
 const hex = (n?: number) => (n === undefined ? '' : n.toString(16).padStart(4, '0'));
 
@@ -43,7 +52,7 @@ function classify(vid?: number, pid?: number): { kind: PortKind; name: string } 
   return { kind: 'other', name: 'USB serial device' };
 }
 
-function loadMemory(): Record<string, KnownTx> {
+function loadMemory(): Record<string, Known> {
   try {
     return JSON.parse(localStorage.getItem(MEMORY) ?? '{}');
   } catch {
@@ -51,7 +60,7 @@ function loadMemory(): Record<string, KnownTx> {
   }
 }
 
-function saveMemory(memory: Record<string, KnownTx>) {
+function saveMemory(memory: Record<string, Known>) {
   try {
     localStorage.setItem(MEMORY, JSON.stringify(memory));
   } catch {
@@ -63,20 +72,25 @@ export function rememberTx(entry: PortEntry, txName: string, baud: number): void
   if (entry.kind !== 'demo') saveMemory({ ...loadMemory(), [entry.key]: { txName, baud } });
 }
 
-export function forgetTx(entry: PortEntry): void {
+export function rememberRx(entry: PortEntry, name?: string): void {
+  if (entry.kind !== 'demo') saveMemory({ ...loadMemory(), [entry.key]: { rx: true, name } });
+}
+
+export function forget(entry: PortEntry): void {
   const memory = loadMemory();
   delete memory[entry.key];
   saveMemory(memory);
 }
 
-// ports the tool may ask with +++ on its own: never flight controllers or unknown devices
-export const probeable = (entry: PortEntry) => entry.kind === 'adapter' || entry.kind === 'esp' || entry.kind === 'tlrs';
+// ports the tool may ask on its own: never flight controllers or unknown devices
+export const probeable = (entry: PortEntry) => entry.kind === 'adapter' || entry.kind === 'esp' || entry.kind === 'tlrs' || entry.kind === 'tlrs-rx';
 
-function entry(key: string, label: string, vid: number | undefined, pid: number | undefined, product: string | undefined, port: SerialPort, memory: Record<string, KnownTx>): PortEntry {
+function entry(key: string, label: string, vid: number | undefined, pid: number | undefined, product: string | undefined, port: SerialPort, memory: Record<string, Known>): PortEntry {
   const known = memory[key];
   const c = classify(vid, pid);
   const product_ = product?.replace(/\s*\(COM\d+\)\s*$/, ''); // Windows repeats the port name
   const detail = [product_, vid !== undefined ? `USB ${hex(vid)}:${hex(pid)}` : undefined].filter(Boolean).join(' · ');
+  if (known && 'rx' in known) return { key, label, kind: 'tlrs-rx', name: ['TetherLRS Rx', known.name].filter(Boolean).join(' · '), via: c.name, detail, receiver: known, port };
   return known ? { key, label, kind: 'tlrs', name: `TetherLRS Tx · ${known.txName}`, via: c.name, detail, known, port } : { key, label, ...c, via: c.name, detail, port };
 }
 
