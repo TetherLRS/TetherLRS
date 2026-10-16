@@ -518,8 +518,17 @@ void power_optstr_from_power_list(char* const Power_optstr, int16_t* const power
         char s[16]; // single entry, e.g. "2000 mW,"
         if (power_list[i] == INT16_MAX) break;
 
-        if (power_list[i] <= 0) {
-            strcpy(s, "min,");
+        if (power_list[i] <= 0) { // a power under 1 mW comes as its dBm (-18): shown in mW too, as "0.02 mW"
+            uint32_t x = 100000; // 1 mW in units of 1/100000 mW
+            for (int16_t d = power_list[i]; d < 0; d++) x = (x * 794 + 500) / 1000; // -1 dB each
+            uint16_t centi = (x + 500) / 1000;
+            if (centi == 0) centi = 1;
+            if (centi >= 100) {
+                strcpy(s, "1 mW,");
+            } else {
+                s[0] = '0'; s[1] = '.'; s[2] = '0' + centi / 10; s[3] = '0' + centi % 10;
+                strcpy(s + ((centi % 10) ? 4 : 3), " mW,"); // 0.1 mW, not 0.10 mW
+            }
         } else {
             u16toBCDstr(power_list[i], s);
             remove_leading_zeros(s);
