@@ -1,3 +1,5 @@
+import products from './elrs-products.json';
+
 // Firmware published by the CI (.github/workflows/tetherlrs-firmware.yml): manifest.json, <env>.bin, <env>-full.bin.
 
 export interface FirmwareFile {
@@ -8,6 +10,8 @@ export interface FirmwareFile {
 export interface FirmwareInfo {
   env: string;
   version: string;
+  role?: 'Tx' | 'Rx'; // from the marker in the image
+  device?: string; // its DEVICE_NAME, as a running TetherLRS or mLRS radio reports it
   chip: string; // esp32, esp32c3, esp32s3, esp8266
   app_offset: number;
   'firmware.bin': FirmwareFile;
@@ -44,19 +48,16 @@ export async function loadImage(base: string, info: FirmwareInfo, full: boolean)
   return data;
 }
 
-// the env a running device belongs to, from the name its CLI reports ("DAKEFPV 900 MAX 1W TX")
-export function envForDevice(manifest: Manifest, deviceName: string, isTx: boolean): string | undefined {
-  const words = deviceName.toLowerCase().replace(/\b(tx|rx)\b/g, '').split(/[^a-z0-9]+/).filter(Boolean);
-  const prefix = isTx ? 'tx-' : 'rx-';
-  let best: string | undefined;
-  let bestScore = 0;
-  for (const env of Object.keys(manifest)) {
-    if (!env.startsWith(prefix)) continue;
-    const score = words.filter((w) => env.includes(w)).length;
-    if (score > bestScore) {
-      best = env;
-      bestScore = score;
-    }
+// the env for a radio found running something, in the role chosen for it: TetherLRS and mLRS report the DEVICE_NAME
+// the envs carry; an ExpressLRS product goes by the table made from ExpressLRS's targets (tools/tetherlrs_elrs_products.py):
+// its own hal here when there is one, else its hardware layout as a generic env
+export function chooseEnv(manifest: Manifest, role: 'Tx' | 'Rx', family: string, name: string | undefined): string | undefined {
+  if (!name) return undefined;
+  const prefix = role === 'Tx' ? 'tx-' : 'rx-';
+  if (family !== 'ExpressLRS') {
+    const want = name.replace(/ TX$/i, '').toLowerCase();
+    return Object.values(manifest).find((f) => f.env.startsWith(prefix) && f.device?.toLowerCase() === want)?.env;
   }
-  return best;
+  const product = (products as unknown as Record<string, [string, string]>)[name];
+  return product && manifest[prefix + product[0]] ? prefix + product[0] : undefined;
 }

@@ -17,6 +17,7 @@ export interface PortEntry {
   label: string; // COM17
   kind: PortKind;
   name: string; // what it is, e.g. "USB serial adapter (CP210x)"
+  via: string; // how it is plugged in, the same even once a TetherLRS Tx was found on it
   detail: string; // product string and USB IDs
   known?: KnownTx;
   port: SerialPort;
@@ -76,11 +77,11 @@ function entry(key: string, label: string, vid: number | undefined, pid: number 
   const c = classify(vid, pid);
   const product_ = product?.replace(/\s*\(COM\d+\)\s*$/, ''); // Windows repeats the port name
   const detail = [product_, vid !== undefined ? `USB ${hex(vid)}:${hex(pid)}` : undefined].filter(Boolean).join(' · ');
-  return known ? { key, label, kind: 'tlrs', name: `TetherLRS Tx · ${known.txName}`, detail, known, port } : { key, label, ...c, detail, port };
+  return known ? { key, label, kind: 'tlrs', name: `TetherLRS Tx · ${known.txName}`, via: c.name, detail, known, port } : { key, label, ...c, via: c.name, detail, port };
 }
 
 const demo = new DemoSerialPort();
-const demoEntry: PortEntry = { key: 'demo', label: 'Demo Tx', kind: 'demo', name: '', detail: 'No hardware: answers like a TetherLRS Tx, to try the tool', port: demo as unknown as SerialPort };
+const demoEntry: PortEntry = { key: 'demo', label: 'Demo Tx', kind: 'demo', name: '', via: '', detail: 'No hardware: answers like a TetherLRS Tx, to try the tool', port: demo as unknown as SerialPort };
 
 const sorted = (list: PortEntry[]) => list.sort((a, b) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind) || a.label.localeCompare(b.label, undefined, { numeric: true }));
 

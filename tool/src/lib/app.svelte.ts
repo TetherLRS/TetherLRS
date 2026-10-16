@@ -4,9 +4,7 @@ import { DeviceLink, sleep } from './device/link';
 import { TX_BAUDS, TxSession } from './device/tx';
 import type { DeviceVersion, LinkStats, Param, ParamOptions } from './device/cli-parse';
 import { rememberTx, type PortEntry } from './serial/ports';
-import { flashImage, readWholeFlash } from './firmware/flash';
-import { elrsToBootloader, romAnswers, usbJtagToBootloader } from './firmware/elrs';
-import { envForDevice, loadImage, loadManifest, type Manifest } from './firmware/manifest';
+import { loadManifest, type Manifest } from './firmware/manifest';
 
 export type Page = 'device' | 'params' | 'link' | 'terminal' | 'firmware';
 export type ConnState = 'idle' | 'connecting' | 'connected' | 'busy';
@@ -17,6 +15,26 @@ export const DEFAULT_FIRMWARE_BASE =
   typeof location !== 'undefined' && location.protocol === 'https:' && location.hostname.endsWith('github.io')
     ? new URL('firmware/latest/', location.href).href
     : PAGES_FIRMWARE;
+
+// another source (a local build, a fork's site) is remembered once a list has loaded from it
+const SOURCE = 'tetherlrs.firmwareSource';
+
+function savedSource(): string {
+  try {
+    return localStorage.getItem(SOURCE) || DEFAULT_FIRMWARE_BASE;
+  } catch {
+    return DEFAULT_FIRMWARE_BASE;
+  }
+}
+
+function saveSource(base: string): void {
+  try {
+    if (base === DEFAULT_FIRMWARE_BASE) localStorage.removeItem(SOURCE);
+    else localStorage.setItem(SOURCE, base);
+  } catch {
+    // storage blocked: the default comes back next time
+  }
+}
 
 class App {
   page = $state<Page>('device');
@@ -34,18 +52,9 @@ class App {
   linkMetric = $state('lq'); // the measure the Link page shows large
   terminal = $state<string[]>([]); // the CLI conversation on the Terminal page
 
-  firmwareBase = $state(DEFAULT_FIRMWARE_BASE);
+  firmwareBase = $state(savedSource());
   manifest = $state<Manifest | undefined>();
-  firmwareEnv = $state('');
-  flashProgress = $state(0); // 0..1
-  flashLog = $state<string[]>([]);
-
-  // an ExpressLRS receiver on a USB serial adapter, for its first TetherLRS flash
-  rxTarget = $state(''); // what it printed before entering its ROM bootloader
-  rxInRom = $state(false); // in its ROM bootloader, by bl, the boot button or the USB reset
-  rxAsTx = $state(false); // every receiver can be the ground radio too
-  rxEnv = $state('');
-  rxBusy = $state(false);
+  manifestError = $state(''); // why the list did not load, shown where the source is
 
   private entry?: PortEntry;
   private link?: DeviceLink;
@@ -254,158 +263,28 @@ class App {
   }
 
   async loadFirmwareList(): Promise<void> {
-    this.error = '';
+    this.manifestError = '';
     try {
       this.manifest = await loadManifest(this.firmwareBase);
-      if (this.version) this.firmwareEnv = envForDevice(this.manifest, this.version.txName, true) ?? '';
+      saveSource(this.firmwareBase);
     } catch (e) {
       this.manifest = undefined;
-      this.fail(e);
+      this.manifestError = e instanceof Error ? e.message : String(e);
     }
   }
 
-  private flashCallbacks() {
-    return {
-      log: (l: string) => (this.flashLog = [...this.flashLog, l]),
-      progress: (w: number, t: number) => (this.flashProgress = w / t),
-    };
-  }
-
-  private async rxStep<T>(fn: () => Promise<T>): Promise<T | undefined> {
-    this.error = '';
-    this.rxBusy = true;
-    try {
-      return await fn();
-    } catch (e) {
-      this.fail(e);
-      return undefined;
-    } finally {
-      this.rxBusy = false;
-    }
-  }
-
-  async rxIdentify(entry: PortEntry): Promise<void> {
-    await this.rxStep(async () => {
-      if (entry.kind === 'esp') {
-        // its own USB: reset into the ROM, nothing to ask ExpressLRS
-        await usbJtagToBootloader(entry.port);
-        this.rxTarget = '';
-        this.rxInRom = await romAnswers(entry.port);
-      } else {
-        this.rxTarget = (await elrsToBootloader(entry.port)) ?? '';
-        this.rxInRom = this.rxTarget !== '' || (await romAnswers(entry.port));
-      }
-      if (!this.rxInRom) {
-        this.error =
-          'The receiver did not answer. Unplug it, plug it back in and press Identify again within a minute (ExpressLRS stops listening once its WiFi starts), and check that TX and RX are crossed. Some adapters cannot send 420000 baud: then hold the boot button while plugging the receiver in, and press Identify. ESP32 receivers on an adapter do not answer: upload <env>.bin on the ExpressLRS web page.';
-      } else {
-        this.pickRxEnv();
-      }
-    });
-  }
-
-  setRxRole(asTx: boolean): void {
-    this.rxAsTx = asTx;
-    this.pickRxEnv();
-  }
-
-  private pickRxEnv(): void {
-    if (!this.manifest) return;
-    const prefix = this.rxAsTx ? 'tx-' : 'rx-';
-    const same = prefix + this.rxEnv.slice(3); // the same receiver in the other role
-    this.rxEnv = (this.rxTarget && envForDevice(this.manifest, this.rxTarget, this.rxAsTx)) || (this.manifest[same] ? same : '');
-  }
-
-  // esptool-js wants the ROM: a native USB receiver is reset into it here, one on an adapter after rxIdentify
-  private async rxRom(entry: PortEntry): Promise<void> {
-    if (entry.kind === 'esp') {
-      await usbJtagToBootloader(entry.port);
-      if (!(await romAnswers(entry.port))) throw new Error('the receiver did not enter its bootloader');
-    } else if (!this.rxInRom) {
-      throw new Error('press Identify first');
-    }
-  }
-
-  async rxBackup(entry: PortEntry): Promise<Uint8Array | undefined> {
-    this.flashLog = [];
-    this.flashProgress = 0;
-    return this.rxStep(async () => {
-      await this.rxRom(entry);
-      const data = await readWholeFlash(entry.port, this.flashCallbacks());
-      // on an adapter esptool-js's stub is left at its flash baud rate, where the ROM handshake cannot reach it
-      this.rxInRom = false;
-      if (entry.kind !== 'esp') this.flashLog = [...this.flashLog, 'backup done: to flash, power the receiver off and on and press Identify again'];
-      return data;
-    });
-  }
-
-  async rxFlash(entry: PortEntry): Promise<void> {
-    const info = this.manifest?.[this.rxEnv];
-    if (!info) return;
-    this.flashLog = [`downloading ${info.env} ${info.version}`];
-    this.flashProgress = 0;
-    await this.rxStep(async () => {
-      const image = await loadImage(this.firmwareBase, info, true);
-      await this.rxRom(entry);
-      await flashImage(entry.port, image, 0, this.flashCallbacks());
-      this.flashLog = [...this.flashLog, 'done: power the receiver off and on to start TetherLRS'];
-      this.rxTarget = '';
-      this.rxInRom = false;
-    });
-  }
-
-  // the connected Tx goes to its ROM bootloader by command; then the port belongs to esptool-js
-  private async toBootloader(): Promise<PortEntry> {
-    if (!this.tx || !this.entry) throw new Error('connect to the Tx first');
-    const entry = this.entry;
+  // the connected Tx to its ROM bootloader by command, the port handed over to the Firmware page's esptool session
+  async handOverForFlash(): Promise<void> {
+    if (!this.tx) return;
+    await this.stopStats();
     await this.tx.systemBoot();
     await this.link?.close();
     this.link = undefined;
     this.tx = undefined;
     this.version = undefined;
     this.params = [];
-    return entry;
-  }
-
-  async backupFlash(): Promise<Uint8Array | undefined> {
-    this.flashLog = [];
-    this.flashProgress = 0;
-    this.state = 'busy';
-    try {
-      const entry = await this.toBootloader();
-      return await readWholeFlash(entry.port, {
-        log: (l) => (this.flashLog = [...this.flashLog, l]),
-        progress: (w, t) => (this.flashProgress = w / t),
-      });
-    } catch (e) {
-      this.fail(e);
-      return undefined;
-    } finally {
-      this.state = 'idle';
-    }
-  }
-
-  async flashFirmware(): Promise<void> {
-    if (!this.manifest || !this.firmwareEnv) return;
-    const info = this.manifest[this.firmwareEnv];
-    this.flashLog = [];
-    this.flashProgress = 0;
-    this.error = '';
-    this.state = 'busy';
-    try {
-      this.flashLog = [`downloading ${info.env} ${info.version}`];
-      const image = await loadImage(this.firmwareBase, info, true);
-      const entry = await this.toBootloader();
-      await flashImage(entry.port, image, 0, {
-        log: (l) => (this.flashLog = [...this.flashLog, l]),
-        progress: (w, t) => (this.flashProgress = w / t),
-      });
-      this.flashLog = [...this.flashLog, 'done, the Tx restarts with the new firmware'];
-    } catch (e) {
-      this.fail(e);
-    } finally {
-      this.state = 'idle';
-    }
+    this.state = 'idle';
+    this.status = '';
   }
 }
 

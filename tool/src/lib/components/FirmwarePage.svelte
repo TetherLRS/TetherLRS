@@ -1,35 +1,63 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import { app } from '$lib/app.svelte';
-  import { hasWebSerial, isDesktop, listPorts, requestPort, type PortEntry } from '$lib/serial/ports';
-  import PortList from './PortList.svelte';
+  import { byCommand, byMavlink, radios, type Found, type Radio } from '$lib/firmware/radios.svelte';
+  import { hasWebSerial, isDesktop, requestPort } from '$lib/serial/ports';
   import Icon from './Icon.svelte';
 
-  const txEnvs = $derived(app.manifest ? Object.values(app.manifest).filter((f) => f.env.startsWith('tx-')) : []);
-  const rxEnvs = $derived(app.manifest ? Object.values(app.manifest).filter((f) => f.env.startsWith(app.rxAsTx ? 'tx-' : 'rx-')) : []);
-  const info = $derived(app.manifest?.[app.firmwareEnv]);
-  const rxInfo = $derived(app.manifest?.[app.rxEnv]);
+  // the radios are looked at while the list loads, not after: an address that does not answer takes its time
+  onMount(() => {
+    if (!app.manifest) void app.loadFirmwareList().then(() => radios.pickEnv());
+    void radios.scan();
+  });
+  onDestroy(() => {
+    if (app.page !== 'firmware') void radios.release();
+  });
 
-  let rxPorts = $state<PortEntry[]>([]);
-  let rxPort = $state('');
-  const rxEntry = $derived(rxPorts.find((p) => p.key === rxPort));
+  const sel = $derived(radios.selected);
+  const f = $derived(sel?.found);
+  const envs = $derived(app.manifest ? Object.values(app.manifest).filter((x) => x.env.startsWith(radios.role === 'Tx' ? 'tx-' : 'rx-')) : []);
+  const info = $derived(app.manifest?.[radios.env]);
+  const update = $derived(f?.family === 'TetherLRS' && f.role === radios.role);
+  let editSource = $state(false);
+  let logBox = $state<HTMLPreElement>();
 
-  async function listRx() {
-    rxPorts = (await listPorts()).filter((p) => p.kind !== 'demo' && p.kind !== 'fc');
-    if (!rxPorts.some((p) => p.key === rxPort)) rxPort = rxPorts[0]?.key ?? '';
+  $effect(() => {
+    void radios.log.length;
+    if (logBox) logBox.scrollTop = logBox.scrollHeight;
+  });
+
+  function family(x: Found | undefined): string | undefined {
+    if (!x) return undefined;
+    if (x.family) return x.family;
+    if (x.how === 'mavlink') return 'TetherLRS or mLRS';
+    return undefined;
   }
-  onMount(listRx);
 
-  async function addRx() {
-    const port = await requestPort();
-    await listRx();
-    if (port) rxPort = rxPorts.find((p) => p.port === port)?.key ?? rxPort;
+  function describe(r: Radio): string {
+    if (r.checking) return 'Asking what it runs…';
+    const x = r.found;
+    if (!x) return r.entry.kind === 'esp' ? 'Its own USB: Identify reads what it runs' : 'Nothing answered: Identify to find out';
+    if (x.how === 'rom') return 'In its bootloader, firmware not recognised';
+    const role = x.role === 'Tx' ? 'ground radio' : x.role === 'Rx' ? 'receiver' : 'radio';
+    return [`${family(x)} ${role}`, x.version].filter(Boolean).join(' · ');
   }
 
-  async function rxBackup() {
-    if (!rxEntry) return;
-    const data = await app.rxBackup(rxEntry);
-    if (data) save(data, `${(app.rxTarget || 'elrs-rx').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-backup.bin`);
+  const how = $derived(
+    !sel
+      ? ''
+      : sel.entry.kind === 'esp'
+        ? 'It restarts into its bootloader over its own USB, nothing to press.'
+        : byCommand(f)
+          ? 'A TetherLRS ground radio goes to its bootloader by command.'
+          : byMavlink(f)
+            ? 'The receiver goes to its bootloader by a MAVLink command, through a flight controller too.'
+            : 'ExpressLRS answers in its first minute after power on. If nothing answers, hold its boot button while powering it, then Identify.',
+  );
+
+  async function add() {
+    await requestPort();
+    await radios.scan();
   }
 
   function save(data: Uint8Array, name: string) {
@@ -40,121 +68,253 @@
   }
 
   async function backup() {
-    const name = app.version?.txName.toLowerCase().replace(/[^a-z0-9]+/g, '-') ?? 'tx';
-    const data = await app.backupFlash();
-    if (data) save(data, `${name}-backup.bin`);
+    const data = await radios.backup();
+    const name = (f?.name ?? sel?.entry.label ?? 'radio').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    if (data) save(data, `${name}-${f?.family?.toLowerCase() ?? 'flash'}-backup.bin`);
+  }
+
+  async function loadList() {
+    await app.loadFirmwareList();
+    radios.pickEnv();
+    editSource = false;
   }
 </script>
 
-<section class="card">
-  <h2>Firmware source</h2>
-  <p class="caption">Builds made by the project's GitHub Actions. Any folder with a manifest.json from tools/tetherlrs_package.py works too.</p>
-  <div class="line">
-    <input type="url" bind:value={app.firmwareBase} spellcheck="false" aria-label="Firmware source" />
-    <button class="btn" onclick={() => app.loadFirmwareList()} disabled={app.state === 'busy'}>Load list</button>
-  </div>
-</section>
-
-<div class="pair">
-<section class="card">
-  <h2>Ground radio (Tx)</h2>
-  <p class="caption">The Tx goes to its bootloader by command, no button needed. Keep a backup of what it runs now before the first flash.</p>
-  <div class="line">
-    <select bind:value={app.firmwareEnv} disabled={!txEnvs.length || app.state === 'busy'} aria-label="Firmware target">
-      {#if !txEnvs.length}<option value="">Load the list first</option>{/if}
-      {#each txEnvs as f}
-        <option value={f.env}>{f.env}</option>
+<div class="fw">
+  <section class="card list">
+    <header>
+      <h2>Radios</h2>
+      <div class="actions">
+        {#if !isDesktop && hasWebSerial}
+          <button class="btn" onclick={add} disabled={radios.busy}><Icon name="usb" size={16} />Add port…</button>
+        {/if}
+        <button class="btn" onclick={() => radios.scan()} disabled={radios.busy} aria-label="Look again"><Icon name="refresh" size={16} /></button>
+      </div>
+    </header>
+    <div class="rows" role="radiogroup" aria-label="Radio">
+      {#each radios.list as r (r.entry.key)}
+        <label class="row" class:checked={r.entry.key === radios.key}>
+          <input type="radio" name="fw-radio" checked={r.entry.key === radios.key} onchange={() => radios.select(r.entry.key)} disabled={radios.busy} />
+          <span class="text">
+            <span class="title">
+              <span>{r.entry.label}</span>
+              {#if family(r.found)}<span class="badge" class:other={r.found?.family !== 'TetherLRS'}>{family(r.found)}</span>{/if}
+              {#if r.found?.name}<span class="kind">{r.found.name}</span>{/if}
+            </span>
+            <span class="caption">{describe(r)} · {r.entry.via}</span>
+          </span>
+        </label>
+      {:else}
+        <p class="caption empty">No radios found. Plug one in by its own USB, or on a USB serial adapter: TX to RX, RX to TX, 5 V and GND.</p>
       {/each}
-    </select>
-    {#if info}<span class="caption">{info.version} · {info.chip} · {(info['full.bin'].size / 1024).toFixed(0)} KB</span>{/if}
-  </div>
-  <div class="line">
-    <button class="btn" onclick={backup} disabled={!app.connected || app.state === 'busy'}>Back up current firmware</button>
-    <button class="btn accent" onclick={() => app.flashFirmware()} disabled={!app.connected || !info || app.state === 'busy'}>Flash</button>
-  </div>
-  {#if !app.connected}
-    <p class="caption">Connect to the Tx on the Device page first.</p>
-  {/if}
-</section>
-
-<section class="card">
-  <div class="head">
-    <div>
-      <h2>ExpressLRS receiver</h2>
-      <p class="caption">To put TetherLRS on a receiver that still runs ExpressLRS, on a USB serial adapter or on its own USB-C. Any receiver can be either radio.</p>
     </div>
-    <div class="actions">
-      {#if !isDesktop && hasWebSerial}
-        <button class="btn" onclick={addRx} disabled={app.rxBusy}><Icon name="usb" size={16} />Add port…</button>
+  </section>
+
+  <section class="card detail">
+    {#if sel}
+      <div class="head">
+        <h2>{f?.name ?? sel.entry.label}</h2>
+        <span class="caption">{describe(sel)}{radios.chip ? ` · ${radios.chip}` : ''}</span>
+      </div>
+
+      <div class="step">
+        <span class="n">1</span>
+        <div class="body">
+          <span class="step-title">Identify</span>
+          <span class="caption">{how}</span>
+          <div class="line">
+            <button class="btn" class:accent={!radios.inRom} onclick={() => radios.identify()} disabled={radios.busy || radios.inRom}>
+              {radios.inRom ? 'In its bootloader' : 'Identify'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="step" class:off={!radios.inRom}>
+        <span class="n">2</span>
+        <div class="body">
+          <span class="step-title">Back up</span>
+          <span class="caption">Everything on it now, to a file, to go back to it. Before the first TetherLRS; an update can skip it.</span>
+          <div class="line">
+            <button class="btn" onclick={backup} disabled={!radios.inRom || radios.busy}>Back up to a file</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="step" class:off={!radios.inRom}>
+        <span class="n">3</span>
+        <div class="body">
+          <span class="step-title">TetherLRS</span>
+          <div class="seg" role="group" aria-label="Use as">
+            <button class:on={radios.role === 'Rx'} aria-pressed={radios.role === 'Rx'} onclick={() => radios.setRole('Rx')} disabled={radios.busy}>Aircraft radio (Rx)</button>
+            <button class:on={radios.role === 'Tx'} aria-pressed={radios.role === 'Tx'} onclick={() => radios.setRole('Tx')} disabled={radios.busy}>Ground radio (Tx)</button>
+          </div>
+          <div class="line">
+            <select bind:value={radios.env} disabled={!envs.length || radios.busy} aria-label="Firmware">
+              {#if !envs.length}<option value="">{app.manifest ? 'No build for this role' : 'No firmware list'}</option>{/if}
+              {#if envs.length && !radios.env}<option value="">Pick the board</option>{/if}
+              {#each envs as x (x.env)}
+                <option value={x.env}>{x.device ?? x.env}</option>
+              {/each}
+            </select>
+            <button class="btn accent" onclick={() => radios.flash()} disabled={!radios.inRom || !info || radios.busy}>{update ? 'Update' : 'Flash'}</button>
+          </div>
+          <span class="caption">
+            {#if info}{info.env} · {info.version} · {Math.round(info['full.bin'].size / 1024)} KB{update ? ' · only the application: settings and bind stay' : ''}{:else}The board is chosen from what Identify finds.{/if}
+          </span>
+        </div>
+      </div>
+
+      {#if radios.log.length}
+        <div class="progress">
+          <progress value={radios.progress} max="1"></progress>
+          <pre class="log mono" bind:this={logBox}>{radios.log.join('\n')}</pre>
+        </div>
       {/if}
-      <button class="btn" onclick={listRx} disabled={app.rxBusy} aria-label="Refresh ports"><Icon name="refresh" size={16} /></button>
-    </div>
-  </div>
-  <PortList ports={rxPorts} bind:selected={rxPort} disabled={app.rxBusy} group="rx-port" />
-  <div class="line">
-    <button class="btn" onclick={() => rxEntry && app.rxIdentify(rxEntry)} disabled={!rxEntry || app.rxBusy}>Identify</button>
-    {#if app.rxTarget}<span class="caption">Answered as {app.rxTarget}, now in its bootloader</span>
-    {:else if app.rxInRom}<span class="caption">In its bootloader</span>{/if}
-  </div>
-  <div class="line">
-    <select class="role" value={app.rxAsTx ? 'tx' : 'rx'} onchange={(e) => app.setRxRole((e.target as HTMLSelectElement).value === 'tx')} disabled={app.rxBusy} aria-label="Use as">
-      <option value="rx">Aircraft radio (Rx)</option>
-      <option value="tx">Ground radio (Tx)</option>
-    </select>
-    <select bind:value={app.rxEnv} disabled={!rxEnvs.length || app.rxBusy} aria-label="Receiver firmware">
-      {#if !rxEnvs.length}<option value="">Load the list first</option>{/if}
-      {#each rxEnvs as f}
-        <option value={f.env}>{f.env}</option>
-      {/each}
-    </select>
-    <button class="btn" onclick={rxBackup} disabled={!app.rxInRom || app.rxBusy}>Back up</button>
-    <button class="btn accent" onclick={() => rxEntry && app.rxFlash(rxEntry)} disabled={!app.rxInRom || !rxInfo || app.rxBusy}>Flash</button>
-  </div>
-</section>
+    {:else}
+      <p class="caption">Pick a radio.</p>
+    {/if}
+  </section>
+
+  <section class="card source">
+    <span class="caption">Firmware from</span>
+    {#if editSource}
+      <input type="url" bind:value={app.firmwareBase} spellcheck="false" aria-label="Firmware source" />
+      <button class="btn" onclick={loadList}>Load</button>
+    {:else}
+      <span class="url">{app.firmwareBase}</span>
+      {#if app.manifest}<span class="caption">{Object.keys(app.manifest).length} builds</span>{/if}
+      <button class="btn" onclick={() => (editSource = true)}>Change</button>
+      {#if !app.manifest}<span class="caption note" class:err={app.manifestError}>{app.manifestError || 'Loading the list…'}</span>{/if}
+    {/if}
+  </section>
 </div>
 
-{#if app.flashLog.length}
-  <section class="card">
-    <h2>Progress</h2>
-    <progress value={app.flashProgress} max="1"></progress>
-    <pre class="log mono">{app.flashLog.join('\n')}</pre>
-  </section>
-{/if}
-
 <style>
-  /* the Tx and the receiver side by side when there is room */
-  .pair {
+  /* the radios beside the one being flashed when there is room, the firmware source under the radios */
+  .fw {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'list' 'detail' 'source';
     gap: var(--space-3);
     align-items: start;
   }
   @container content (min-width: 1000px) {
-    .pair {
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    .fw {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+      grid-template-areas: 'list detail' 'source detail';
+      grid-template-rows: auto 1fr;
     }
   }
+  .list {
+    grid-area: list;
+  }
   .card {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
     padding: var(--space-4) var(--space-5) var(--space-5);
   }
-  .card p {
-    margin: 0;
-  }
-  .head {
+  header {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
-    gap: var(--space-4);
-  }
-  .head p {
-    margin-top: var(--space-1);
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
   }
   .actions {
     display: flex;
     gap: var(--space-2);
+  }
+  .rows {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--r-control);
+  }
+  .row:hover {
+    background: var(--hover);
+  }
+  .row.checked {
+    background: var(--selected);
+  }
+  .row input {
+    accent-color: var(--accent);
+    margin: 0;
+  }
+  .text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+  .kind {
+    color: var(--text-2);
+  }
+  .badge {
+    padding: 0 6px;
+    border-radius: var(--r-control);
+    background: var(--accent);
+    color: var(--on-accent);
+    font-size: 12px;
+    line-height: 18px;
+    font-weight: 600;
+  }
+  .badge.other {
+    background: var(--surface-strong);
+    color: var(--text);
+    border: 1px solid var(--stroke-control);
+  }
+  .empty {
+    margin: 0;
+  }
+  .detail {
+    grid-area: detail;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+  .head {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .step {
+    display: flex;
+    gap: var(--space-3);
+  }
+  .step.off .body {
+    opacity: 0.6;
+  }
+  .n {
+    flex: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 1px solid var(--stroke-control);
+    display: grid;
+    place-items: center;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-2);
+  }
+  .body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-width: 0;
+    flex: 1;
+  }
+  .step-title {
+    font-weight: 600;
   }
   .line {
     display: flex;
@@ -162,15 +322,37 @@
     gap: var(--space-3);
     flex-wrap: wrap;
   }
-  input[type='url'] {
-    flex: 1;
-    min-width: 240px;
-  }
   select {
-    min-width: 260px;
+    min-width: 240px;
+    flex: 1;
+    max-width: 420px;
   }
-  select.role {
-    min-width: 0;
+  /* two choices side by side, as a Windows segmented control */
+  .seg {
+    display: inline-flex;
+    align-self: flex-start;
+    border: 1px solid var(--stroke-control);
+    border-radius: var(--r-control);
+    overflow: hidden;
+  }
+  .seg button {
+    font: inherit;
+    color: var(--text);
+    background: var(--surface-strong);
+    border: none;
+    padding: 5px 14px;
+  }
+  .seg button + button {
+    border-left: 1px solid var(--stroke-control);
+  }
+  .seg button.on {
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+  .progress {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
   }
   progress {
     width: 100%;
@@ -179,12 +361,41 @@
   }
   .log {
     margin: 0;
-    max-height: 200px;
+    font-size: 12px;
+    max-height: 180px;
     overflow: auto;
     padding: var(--space-3);
     border-radius: var(--r-control);
     background: var(--bg);
     border: 1px solid var(--stroke);
     white-space: pre-wrap;
+  }
+  .source {
+    grid-area: source;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-5);
+    flex-wrap: wrap;
+  }
+  .url {
+    font-family: var(--mono);
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    flex: 1;
+  }
+  /* on a line of its own, under the address it is about */
+  .note {
+    flex-basis: 100%;
+  }
+  .err {
+    color: var(--err);
+  }
+  .source input {
+    flex: 1;
+    min-width: 240px;
   }
 </style>
