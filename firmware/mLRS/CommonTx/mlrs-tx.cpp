@@ -142,6 +142,10 @@ tCrypto crypto;
 tChannelOrder channelOrder(tChannelOrder::DIRECTION_TX_TO_MLRS);
 tConfigId config_id;
 tTxInfo txinfo;
+
+// TetherLRS: what this image is, for the tool to read from a flash it reached through the ROM bootloader
+const char tlrs_marker[] = "TetherLRS:Tx:" DEVICE_NAME ":" VERSIONONLYSTR ":";
+const char* volatile tlrs_marker_ref = tlrs_marker; // read at startup: the linker must keep the text
 tTxCli cli;
 tTxTasks tasks;
 
@@ -755,6 +759,7 @@ RESTARTCONTROLLER
 
     // startup sign of life
     leds.Init();
+    (void)tlrs_marker_ref;
     txinfo.Init();
 
     // start up sx

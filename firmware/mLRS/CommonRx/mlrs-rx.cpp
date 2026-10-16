@@ -94,6 +94,10 @@
 #include "../Common/mavlink/fmav.h"
 #include "../Common/setup.h"
 #include "../Common/common.h"
+
+// TetherLRS: what this image is, for the tool to read from a flash it reached through the ROM bootloader
+const char tlrs_marker[] = "TetherLRS:Rx:" DEVICE_NAME ":" VERSIONONLYSTR ":";
+const char* volatile tlrs_marker_ref = tlrs_marker; // read at startup: the linker must keep the text
 #include "../Common/diversity.h"
 #ifdef DEVICE_HAS_ANTENNA_SWITCH
 #include "../Common/antenna_switch.h"
@@ -580,6 +584,7 @@ RESTARTCONTROLLER
 
     // startup sign of life
     leds.Init();
+    (void)tlrs_marker_ref;
 
     // start up sx
     if (!sx.isOk()) { FAILALWAYS(BLINK_RD_GR_OFF, "Sx not ok"); } // fail!
