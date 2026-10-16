@@ -83,6 +83,14 @@
 #include "rx-hal-bayck-ur1000-lr1121-esp32c3.h"
 #endif
 
+#ifdef RX_ELRS_DAKEFPV_900_MAX_1W_ESP32C3
+#include "rx-hal-dakefpv-900-max-1w-esp32c3.h"
+#endif
+
+#ifdef RX_ELRS_DAKEFPV_900_NANOPRO_ESP32C3
+#include "rx-hal-dakefpv-900-nanopro-esp32c3.h"
+#endif
+
 
 //-- ELRS Selected Devices
 
@@ -172,6 +180,10 @@
 
 #ifdef TX_ELRS_RADIOMASTER_NOMAD_ESP32
 #include "tx-hal-radiomaster-nomad-esp32.h"
+#endif
+
+#ifdef TX_ELRS_DAKEFPV_900_MAX_1W_ESP32C3
+#include "tx-hal-dakefpv-900-max-1w-esp32c3.h"
 #endif
 
 #ifdef TX_ELRS_FLYSKY_INTERNAL_PA01_2400_ESP32S3
