@@ -628,6 +628,17 @@ if (!only_rx) {
 
     SANITIZE(Rx.MavCoalesce, 2, 0, 0);
 
+#ifdef TLRS_NO_RC // their parameters are not in the list, so they stay off whatever an older setup held
+    if (!only_rx) {
+        Setup.Tx[config_id].ChannelsSource = CHANNEL_SOURCE_NONE;
+        Setup.Tx[config_id].PowerSwitchChannel = POWER_SWITCH_CHANNEL_OFF;
+    }
+    Setup.Rx.SendRcChannels = SEND_RC_CHANNELS_OFF;
+    Setup.Rx.OutRssiChannelMode = OUT_RSSI_LQ_CHANNEL_OFF;
+    Setup.Rx.OutLqChannelMode = OUT_RSSI_LQ_CHANNEL_OFF;
+    Setup.Rx.PowerSwitchChannel = POWER_SWITCH_CHANNEL_OFF;
+#endif
+
     //-- Spares and deprecated options:
     // should be 0xFF'ed
 

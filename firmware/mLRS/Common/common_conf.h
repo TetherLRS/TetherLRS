@@ -106,6 +106,8 @@
 #define SETUP_PRIVACY                   0 // 0: off, 1: lvl1, 2: lvl2, 3: lvl3
 #define SETUP_REGION                    0 // 0: free, 1: EU
 
+#define TLRS_NO_RC                      // TetherLRS: no RC channels, so no RC and failsafe parameters
+
 
 //-------------------------------------------------------
 // User-adjustable System Configs
