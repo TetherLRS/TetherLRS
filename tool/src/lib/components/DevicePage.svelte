@@ -9,6 +9,7 @@
   import { identifyTx } from '$lib/device/identify';
   import { TX_BAUDS } from '$lib/device/tx';
   import Icon from './Icon.svelte';
+  import PortList from './PortList.svelte';
 
   let ports = $state<PortEntry[]>([]);
   let selected = $state('');
@@ -89,24 +90,8 @@
     <p class="note">This browser has no Web Serial. Use Chrome or Edge, or the desktop app. The demo Tx works anyway.</p>
   {/if}
 
-  <div class="ports" role="radiogroup" aria-label="Serial port">
-    {#each ports as p (p.key)}
-      <label class="port" class:checked={selected === p.key}>
-        <input type="radio" name="port" value={p.key} bind:group={selected} disabled={app.state !== 'idle' || probing} />
-        <span class="port-text">
-          <span class="port-title">
-            <span>{p.label}</span>
-            {#if p.kind === 'tlrs'}<span class="badge">TetherLRS</span>{/if}
-            {#if p.kind === 'tlrs' || p.name}<span class="kind">{p.kind === 'tlrs' ? p.known?.txName : p.name}</span>{/if}
-          </span>
-          <span class="caption">
-            {checking === p.key ? 'Checking for a TetherLRS Tx… · ' : p.kind === 'tlrs' ? `${p.known?.baud} baud · ` : ''}{p.detail}
-          </span>
-        </span>
-      </label>
-    {:else}
-      <p class="caption">No ports found.</p>
-    {/each}
+  <div class="list">
+    <PortList {ports} bind:selected disabled={app.state !== 'idle' || probing} {checking} />
   </div>
 
   <footer>
@@ -176,50 +161,8 @@
     margin: var(--space-3) 0 0;
     color: var(--warn);
   }
-  .ports {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+  .list {
     margin: var(--space-4) 0;
-  }
-  .port {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    padding: var(--space-2) var(--space-3);
-    border-radius: var(--r-control);
-  }
-  .port:hover {
-    background: var(--hover);
-  }
-  .port.checked {
-    background: var(--selected);
-  }
-  .port input {
-    accent-color: var(--accent);
-    margin: 0;
-  }
-  .port-text {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-  }
-  .port-title {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
-  .kind {
-    color: var(--text-2);
-  }
-  .badge {
-    padding: 0 6px;
-    border-radius: var(--r-control);
-    background: var(--accent);
-    color: var(--on-accent);
-    font-size: 12px;
-    line-height: 18px;
-    font-weight: 600;
   }
   footer {
     display: flex;

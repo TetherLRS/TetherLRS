@@ -1,9 +1,36 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { app } from '$lib/app.svelte';
-  import InfoBar from './InfoBar.svelte';
+  import { hasWebSerial, isDesktop, listPorts, requestPort, type PortEntry } from '$lib/serial/ports';
+  import PortList from './PortList.svelte';
+  import Icon from './Icon.svelte';
 
   const txEnvs = $derived(app.manifest ? Object.values(app.manifest).filter((f) => f.env.startsWith('tx-')) : []);
+  const rxEnvs = $derived(app.manifest ? Object.values(app.manifest).filter((f) => f.env.startsWith('rx-')) : []);
   const info = $derived(app.manifest?.[app.firmwareEnv]);
+  const rxInfo = $derived(app.manifest?.[app.rxEnv]);
+
+  let rxPorts = $state<PortEntry[]>([]);
+  let rxPort = $state('');
+  const rxEntry = $derived(rxPorts.find((p) => p.key === rxPort));
+
+  async function listRx() {
+    rxPorts = (await listPorts()).filter((p) => p.kind !== 'demo' && p.kind !== 'fc');
+    if (!rxPorts.some((p) => p.key === rxPort)) rxPort = rxPorts[0]?.key ?? '';
+  }
+  onMount(listRx);
+
+  async function addRx() {
+    const port = await requestPort();
+    await listRx();
+    if (port) rxPort = rxPorts.find((p) => p.port === port)?.key ?? rxPort;
+  }
+
+  async function rxBackup() {
+    if (!rxEntry) return;
+    const data = await app.rxBackup(rxEntry);
+    if (data) save(data, `${(app.rxTarget || 'elrs-rx').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-backup.bin`);
+  }
 
   function save(data: Uint8Array, name: string) {
     const url = URL.createObjectURL(new Blob([data], { type: 'application/octet-stream' }));
@@ -47,13 +74,45 @@
   {#if !app.connected}
     <p class="caption">Connect to the Tx on the Device page first.</p>
   {/if}
-  {#if app.flashLog.length}
-    <progress value={app.flashProgress} max="1"></progress>
-    <pre class="log mono">{app.flashLog.join('\n')}</pre>
-  {/if}
 </section>
 
-<InfoBar kind="info" text="Receivers: the first time, upload <env>.bin on the ExpressLRS web page (WiFi). After that they follow the Tx." />
+<section class="card">
+  <div class="head">
+    <div>
+      <h2>Receiver with ExpressLRS on a USB serial adapter</h2>
+      <p class="caption">First TetherLRS flash of an ESP8285 receiver, wired RX to TX, TX to RX, 5 V and ground. Plug it in, then identify it within a minute: after that ExpressLRS starts its WiFi and stops listening. ESP32 receivers: upload &lt;env&gt;.bin on the ExpressLRS web page instead.</p>
+    </div>
+    <div class="actions">
+      {#if !isDesktop && hasWebSerial}
+        <button class="btn" onclick={addRx} disabled={app.rxBusy}><Icon name="usb" size={16} />Add port…</button>
+      {/if}
+      <button class="btn" onclick={listRx} disabled={app.rxBusy} aria-label="Refresh ports"><Icon name="refresh" size={16} /></button>
+    </div>
+  </div>
+  <PortList ports={rxPorts} bind:selected={rxPort} disabled={app.rxBusy} group="rx-port" />
+  <div class="line">
+    <button class="btn" onclick={() => rxEntry && app.rxIdentify(rxEntry)} disabled={!rxEntry || app.rxBusy}>Identify</button>
+    {#if app.rxTarget}<span class="caption">Answered as {app.rxTarget}, now in its bootloader</span>{/if}
+  </div>
+  <div class="line">
+    <select bind:value={app.rxEnv} disabled={!rxEnvs.length || app.rxBusy} aria-label="Receiver firmware">
+      {#if !rxEnvs.length}<option value="">Load the list first</option>{/if}
+      {#each rxEnvs as f}
+        <option value={f.env}>{f.env}</option>
+      {/each}
+    </select>
+    <button class="btn" onclick={rxBackup} disabled={!app.rxTarget || app.rxBusy}>Back up</button>
+    <button class="btn accent" onclick={() => rxEntry && app.rxFlash(rxEntry)} disabled={!app.rxTarget || !rxInfo || app.rxBusy}>Flash</button>
+  </div>
+</section>
+
+{#if app.flashLog.length}
+  <section class="card">
+    <h2>Progress</h2>
+    <progress value={app.flashProgress} max="1"></progress>
+    <pre class="log mono">{app.flashLog.join('\n')}</pre>
+  </section>
+{/if}
 
 <style>
   .card {
@@ -64,6 +123,19 @@
   }
   .card p {
     margin: 0;
+  }
+  .head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--space-4);
+  }
+  .head p {
+    margin-top: var(--space-1);
+  }
+  .actions {
+    display: flex;
+    gap: var(--space-2);
   }
   .line {
     display: flex;

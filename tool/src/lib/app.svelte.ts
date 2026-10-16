@@ -5,6 +5,7 @@ import { TX_BAUDS, TxSession } from './device/tx';
 import type { DeviceVersion, LinkStats, Param, ParamOptions } from './device/cli-parse';
 import { rememberTx, type PortEntry } from './serial/ports';
 import { flashImage, readWholeFlash } from './firmware/flash';
+import { elrsToBootloader } from './firmware/elrs';
 import { envForDevice, loadImage, loadManifest, type Manifest } from './firmware/manifest';
 
 export type Page = 'device' | 'params' | 'link' | 'firmware';
@@ -36,6 +37,11 @@ class App {
   firmwareEnv = $state('');
   flashProgress = $state(0); // 0..1
   flashLog = $state<string[]>([]);
+
+  // an ExpressLRS receiver on a USB serial adapter, for its first TetherLRS flash
+  rxTarget = $state(''); // what it printed before entering its ROM bootloader
+  rxEnv = $state('');
+  rxBusy = $state(false);
 
   private entry?: PortEntry;
   private link?: DeviceLink;
@@ -204,6 +210,57 @@ class App {
       this.manifest = undefined;
       this.fail(e);
     }
+  }
+
+  private flashCallbacks() {
+    return {
+      log: (l: string) => (this.flashLog = [...this.flashLog, l]),
+      progress: (w: number, t: number) => (this.flashProgress = w / t),
+    };
+  }
+
+  private async rxStep<T>(fn: () => Promise<T>): Promise<T | undefined> {
+    this.error = '';
+    this.rxBusy = true;
+    try {
+      return await fn();
+    } catch (e) {
+      this.fail(e);
+      return undefined;
+    } finally {
+      this.rxBusy = false;
+    }
+  }
+
+  async rxIdentify(entry: PortEntry): Promise<void> {
+    await this.rxStep(async () => {
+      this.rxTarget = (await elrsToBootloader(entry.port)) ?? '';
+      if (!this.rxTarget) {
+        this.error = 'The receiver did not answer. Unplug it, plug it back in and try again within a minute: ExpressLRS stops listening to its serial port when it starts its WiFi.';
+      } else if (this.manifest) {
+        this.rxEnv = envForDevice(this.manifest, this.rxTarget, false) ?? this.rxEnv;
+      }
+    });
+  }
+
+  // the receiver must be in its ROM bootloader, after rxIdentify
+  async rxBackup(entry: PortEntry): Promise<Uint8Array | undefined> {
+    this.flashLog = [];
+    this.flashProgress = 0;
+    return this.rxStep(() => readWholeFlash(entry.port, this.flashCallbacks()));
+  }
+
+  async rxFlash(entry: PortEntry): Promise<void> {
+    const info = this.manifest?.[this.rxEnv];
+    if (!info) return;
+    this.flashLog = [`downloading ${info.env} ${info.version}`];
+    this.flashProgress = 0;
+    await this.rxStep(async () => {
+      const image = await loadImage(this.firmwareBase, info, true);
+      await flashImage(entry.port, image, 0, this.flashCallbacks());
+      this.flashLog = [...this.flashLog, 'done: power the receiver off and on to start TetherLRS'];
+      this.rxTarget = '';
+    });
   }
 
   // the connected Tx goes to its ROM bootloader by command; then the port belongs to esptool-js
