@@ -361,11 +361,7 @@ void setup_default(uint8_t config_id)
     Setup.Tx[config_id].Diversity = SETUP_TX_DIVERSITY;
     Setup.Tx[config_id].SerialPort = SETUP_TX_SERIAL_PORT;
     Setup.Tx[config_id].SerialPort2 = SETUP_TX_SERIAL_PORT2;
-#ifdef DEVICE_HAS_SERIAL_ESCAPE
-    Setup.Tx[config_id].SerialBaudrate = SERIAL_BAUDRATE_57600; // SiK-style ground radio, as SiK
-#else
     Setup.Tx[config_id].SerialBaudrate = SETUP_TX_SERIAL_BAUDRATE;
-#endif
     Setup.Tx[config_id].SerialBaudrate2 = SERIAL_BAUDRATE_115200;
     Setup.Tx[config_id].ChannelsSource = SETUP_TX_CHANNELS_SOURCE;
     Setup.Tx[config_id].ChannelOrder = SETUP_TX_CHANNEL_ORDER;

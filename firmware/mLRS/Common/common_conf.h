@@ -77,7 +77,7 @@
 
 #define SETUP_RX_SERIAL_PORT            0 // 0: serial, 1: can, 2: canfd
 
-#define SETUP_RX_SERIAL_BAUDRATE        0 // 0: 57600, 1: 115200, 2: 230400
+#define SETUP_RX_SERIAL_BAUDRATE        1 // 0: 57600, 1: 115200, 2: 230400 (TetherLRS: 115200 carries every mode)
 
 #define SETUP_RX_POWER                  CPOWER
 
