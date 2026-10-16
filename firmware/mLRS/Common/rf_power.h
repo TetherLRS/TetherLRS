@@ -30,6 +30,7 @@ class tRfPower
     uint8_t rfpower_new_idx; // the configured power, the ceiling for the dynamic one
     uint8_t dyn_idx;
     tDynPower dynpower;
+    int8_t table_dbm[RFPOWER_LIST_NUM];
 };
 
 
@@ -38,7 +39,8 @@ void tRfPower::Init(void)
     rfpower_current_idx = UINT8_MAX;  // to initialize properly
     rfpower_new_idx = rfpower_current_idx; // to prevent update before first Set
     dyn_idx = UINT8_MAX;
-    dynpower.Init();
+    for (uint8_t i = 0; i < RFPOWER_LIST_NUM; i++) table_dbm[i] = rfpower_list[i].dbm;
+    dynpower.Init(table_dbm, RFPOWER_LIST_NUM);
 }
 
 
