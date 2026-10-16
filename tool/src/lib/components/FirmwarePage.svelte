@@ -227,7 +227,7 @@
             <button class="btn accent" onclick={() => radios.flash()} disabled={!radios.inRom || !info || radios.busy || !phraseOk}>{update ? 'Update' : 'Flash'}</button>
           </div>
           <span class="caption">
-            {#if info}{info.env} · {info.version} · {Math.round(info['full.bin'].size / 1024)} KB{update ? ` · only the application: settings stay${radios.phrase ? ', the bind phrase changes' : ', the bind phrase too'}` : ''}{#if f?.family === 'ExpressLRS' && f.name}<br />the hardware ExpressLRS calls {f.name}{/if}{:else}The board is chosen from what Identify finds.{/if}
+            {#if info}{info.env} · {info.version} · {Math.round(info['full.bin'].size / 1024)} KB{update ? ` · only the application: settings stay${radios.phrase ? ', the bind phrase changes' : ', the bind phrase too'}` : ''}{#if f?.family === 'ExpressLRS' && f.name}<br />the hardware ExpressLRS calls {f.name}{/if}{#if f?.family === 'TetherLRS' && /^GENERIC/i.test(f.name ?? '')}<br />it runs a build for its chip, not for its board: if its board is in the list, pick that one, with the bands it really has{/if}{:else}The board is chosen from what Identify finds.{/if}
           </span>
         </div>
       </div>
