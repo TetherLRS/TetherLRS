@@ -116,6 +116,9 @@ export class RomSession {
     };
     try {
       const chip = await loader.main(nativeUsb ? 'default_reset' : 'no_reset');
+      // a stub left running by an earlier session: esptool-js skips its upload but never says it talks to a stub, so
+      // its soft reset sent the ROM's sequence and the ESP8266 never left the stub (Restart did nothing)
+      if ((loader as unknown as { syncStubDetected: boolean }).syncStubDetected) loader.IS_STUB = true;
       const flashId = (await loader.readFlashId()) >>> 0;
       const capacity = (flashId >> 16) & 0xff; // JEDEC: log2 of the size in bytes
       const flashSize = capacity >= 0x12 && capacity <= 0x18 ? 1 << capacity : 0x100000;
