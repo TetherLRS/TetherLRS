@@ -5,12 +5,13 @@ TetherLRS: packages the PlatformIO build of one environment for the release and 
 writes <out dir>/<env>/:
     firmware.bin   the application, for the ELRS web page and for the tool's update over a running TetherLRS
     full.bin       bootloader, partitions, boot_app0 and application in one image at 0x0, for the ROM bootloader
-    info.json      env, chip, version, offsets, sizes and sha256 of both
+    info.json      env, role and device (from the image's marker), chip, version, offsets, sizes and sha256 of both
 ESP8266 builds have no separate bootloader, there full.bin is firmware.bin.
 '''
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -39,6 +40,12 @@ bootloader = os.path.join(BUILD, 'bootloader.bin')
 shutil.copy(firmware, os.path.join(OUT, 'firmware.bin'))
 
 info = {'env': ENV, 'version': VERSION}
+# the device name and role, as the marker in the image says them: the tool matches a running radio to its env by them
+with open(firmware, 'rb') as f:
+    marker = re.search(rb'TetherLRS:(Tx|Rx):([^:\x00]*):(v[0-9.]+):', f.read())
+if marker:
+    info['role'] = marker.group(1).decode()
+    info['device'] = marker.group(2).decode()
 if os.path.exists(bootloader):
     with open(bootloader, 'rb') as f:
         header = f.read(16)
