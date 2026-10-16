@@ -487,11 +487,7 @@ void tMBridge::send_ParamItem(void)
             strbufstrcpy(item2.unit_6, SetupParameter[param_idx].unit, 6);
             break;
         case SETUP_PARAM_TYPE_LIST:
-            if (SetupParameter[param_idx].allowed_mask_ptr != nullptr) {
-                item2.allowed_mask = *SetupParameter[param_idx].allowed_mask_ptr;
-            } else {
-                item2.allowed_mask = UINT16_MAX;
-            }
+            item2.allowed_mask = param_get_allowed_mask(param_idx); // TetherLRS: with the receiver's limits
             strbufstrcpy(item2.options_21, param_optstr, 21);
             if (strlen(param_optstr) >= 21) param_itemtype_to_send = MB_PARAM_ITEM3; // we need to send a 3rd ParamItem
             break;

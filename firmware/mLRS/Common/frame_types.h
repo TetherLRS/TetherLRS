@@ -316,8 +316,8 @@ typedef struct
     tCmdFrameRxParameters RxParams; // 24 bytes
 
     // rx setup meta data 2, parameter metadata
-    uint16_t FrequencyBand_allowed_mask_XXX; // TODO
-    uint8_t Mode_allowed_mask_XXX; // TODO
+    uint16_t FrequencyBand_allowed_mask; // TetherLRS fills these two, mLRS sends 0
+    uint8_t Mode_allowed_mask;
     uint8_t Ortho_allowed_mask_XXX; // TODO
     uint8_t Privacy_allowed_mask_XXX; // TODO
 

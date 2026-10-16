@@ -107,7 +107,20 @@ uint8_t nr, n;
 // helper, returns allowed mask for LIST
 uint16_t param_get_allowed_mask(uint8_t param_idx)
 {
-    return (SetupParameter[param_idx].allowed_mask_ptr) ? *(SetupParameter[param_idx].allowed_mask_ptr) : UINT16_MAX;
+    uint16_t* ptr = SetupParameter[param_idx].allowed_mask_ptr;
+    uint16_t mask = (ptr) ? *ptr : UINT16_MAX;
+
+    // TetherLRS: with a receiver connected, only the bands and modes it can take as well; anything else would be
+    // sent to it, refused, and the link lost until a bind. Without a receiver the Tx cannot know which one comes
+    if (SetupMetaData.rx_available) {
+        if (ptr == &SetupMetaData.FrequencyBand_allowed_mask && SetupMetaData.rx_FrequencyBand_allowed_mask) {
+            mask &= SetupMetaData.rx_FrequencyBand_allowed_mask;
+        }
+        if (ptr == &SetupMetaData.Mode_allowed_mask && SetupMetaData.rx_Mode_allowed_mask) {
+            mask &= SetupMetaData.rx_Mode_allowed_mask;
+        }
+    }
+    return mask;
 }
 
 

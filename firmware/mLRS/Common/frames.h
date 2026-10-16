@@ -618,12 +618,9 @@ tRxCmdFrameRxSetupData* rx_setupdata = (tRxCmdFrameRxSetupData*)frame->payload;
 
     _copy_cmdframerxparameters_to_rxsetup(&(rx_setupdata->RxParams));
 
-    // TODO
-    // These are for common parameters. It should work such, that the Tx only provides options also allowed by the Rx.
-    //SetupMetaData.FrequencyBand_allowed_mask = rx_setupdata->FrequencyBand_allowed_mask;
-    //SetupMetaData.Mode_allowed_mask = rx_setupdata->Mode_allowed_mask;
-    //SetupMetaData.Ortho_allowed_mask = rx_setupdata->Ortho_allowed_mask;
-    //SetupMetaData.Privacy_allowed_mask = rx_setupdata->Privacy_allowed_mask;
+    // TetherLRS: the Tx offers only the bands and modes the receiver can take too, see param_get_allowed_mask()
+    SetupMetaData.rx_FrequencyBand_allowed_mask = rx_setupdata->FrequencyBand_allowed_mask;
+    SetupMetaData.rx_Mode_allowed_mask = rx_setupdata->Mode_allowed_mask;
 
     int16_t power_list[8];
     for (uint8_t i = 0; i < 8; i++) power_list[i] = rx_setupdata->Power_list[i]; // to avoid unaligned warning
@@ -690,12 +687,9 @@ tRxCmdFrameRxSetupData rx_setupdata = {};
 
     _copy_rxsetup_to_cmdframerxparameters(&(rx_setupdata.RxParams));
 
-    // TODO
-    // These are for common parameters. It should work such, that the Tx only provides options also allowed by the Rx.
-    //rx_setupdata.FrequencyBand_allowed_mask = SetupMetaData.FrequencyBand_allowed_mask;
-    //rx_setupdata.Mode_allowed_mask = SetupMetaData.Mode_allowed_mask;
-    //rx_setupdata.Ortho_allowed_mask = SetupMetaData.Ortho_allowed_mask;
-    //rx_setupdata.Privacy_allowed_mask = SetupMetaData.Privacy_allowed_mask;
+    // TetherLRS: the modes are those of the band it is in
+    rx_setupdata.FrequencyBand_allowed_mask = SetupMetaData.FrequencyBand_allowed_mask;
+    rx_setupdata.Mode_allowed_mask = SetupMetaData.Mode_allowed_mask;
 
     for (uint8_t i = 0; i < 8; i++) {
         rx_setupdata.Power_list[i] = (i < RFPOWER_LIST_NUM) ? rfpower_list[i].mW : INT16_MAX;

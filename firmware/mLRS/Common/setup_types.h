@@ -534,6 +534,8 @@ typedef struct
     char rx_device_name[20+1];
     int8_t rx_actual_power_dbm;
     uint8_t rx_actual_diversity;
+    uint16_t rx_FrequencyBand_allowed_mask; // TetherLRS: what the connected receiver can take, 0 = it did not say (mLRS)
+    uint16_t rx_Mode_allowed_mask;
 } tSetupMetaData;
 
 

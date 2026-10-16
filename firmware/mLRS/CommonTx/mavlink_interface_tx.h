@@ -745,7 +745,15 @@ void tTxMavlink::component_handle_msg(fmav_message_t* const msg)
             fmav_msg_param_set_decode(&payload, msg);
             uint16_t param_idx;
             if (fmav_param_do_param_set(&param_idx, &payload)) { // search list for param idx
+                // TetherLRS: a value the CLI would refuse (a band or mode the connected receiver cannot take) is undone
+                uint8_t sp = param_idx - MAV_PARAM_BINDPHRASE_IDX; // the same parameter in SetupParameter[]
+                bool is_list = (param_idx > MAV_PARAM_BINDPHRASE_IDX && SetupParameter[sp].type == SETUP_PARAM_TYPE_LIST);
+                uint8_t* list_value = (uint8_t*)fmav_param_list[param_idx].ptr;
+                uint8_t was = (is_list) ? *list_value : 0;
                 fmav_param_set_value(param_idx, payload.param_value); // set value
+                if (is_list && (*list_value >= 16 || !(param_get_allowed_mask(sp) & (1 << *list_value)))) {
+                    *list_value = was;
+                }
                 // sanitize settings
                 setup_sanitize_config(Config.ConfigId);
                 // don't allow setting TX_MAV_PARAMS

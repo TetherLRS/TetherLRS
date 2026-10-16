@@ -290,6 +290,8 @@ void setup_configure_metadata(void)
 
     SetupMetaData.rx_firmware_version = 0;
     SetupMetaData.rx_setup_layout = 0;
+    SetupMetaData.rx_FrequencyBand_allowed_mask = 0;
+    SetupMetaData.rx_Mode_allowed_mask = 0;
     strcpy(SetupMetaData.rx_device_name, "");
     SetupMetaData.rx_actual_power_dbm = INT8_MAX;
     SetupMetaData.rx_actual_diversity = DIVERSITY_NUM;
