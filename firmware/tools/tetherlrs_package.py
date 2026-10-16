@@ -40,12 +40,15 @@ bootloader = os.path.join(BUILD, 'bootloader.bin')
 shutil.copy(firmware, os.path.join(OUT, 'firmware.bin'))
 
 info = {'env': ENV, 'version': VERSION}
-# the device name and role, as the marker in the image says them: the tool matches a running radio to its env by them
+# the device name, role and bands, as the marker in the image says them: the tool matches a running radio to its env
+# by them and shows the bands with the board
 with open(firmware, 'rb') as f:
-    marker = re.search(rb'TetherLRS:(Tx|Rx):([^:\x00]*):(v[0-9.]+):', f.read())
+    marker = re.search(rb'TetherLRS:(Tx|Rx):([^:\x00]*):(v[0-9.]+):(?:([^:\x00]*):)?', f.read())
 if marker:
     info['role'] = marker.group(1).decode()
     info['device'] = marker.group(2).decode()
+    if marker.group(4):
+        info['bands'] = [b for b in marker.group(4).decode().split(',') if b]
 if os.path.exists(bootloader):
     with open(bootloader, 'rb') as f:
         header = f.read(16)

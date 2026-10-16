@@ -12,6 +12,7 @@ export interface FirmwareInfo {
   version: string;
   role?: 'Tx' | 'Rx'; // from the marker in the image
   device?: string; // its DEVICE_NAME, as a running TetherLRS or mLRS radio reports it
+  bands?: string[]; // the board's, e.g. ["2.4 GHz", "915 MHz", "868 MHz"]
   chip: string; // esp32, esp32c3, esp32s3, esp8266
   app_offset: number;
   'firmware.bin': FirmwareFile;

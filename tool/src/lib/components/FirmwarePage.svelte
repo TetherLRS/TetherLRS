@@ -196,7 +196,7 @@
               {#if !envs.length}<option value="">{app.manifest ? 'No build for this role' : 'No firmware list'}</option>{/if}
               {#if envs.length && !radios.env}<option value="">Pick the board</option>{/if}
               {#each envs as x (x.env)}
-                <option value={x.env}>{x.device ?? x.env}</option>
+                <option value={x.env}>{x.device ?? x.env}{x.bands?.length ? ` (${x.bands.join(', ')})` : ''}</option>
               {/each}
             </select>
             <button class="btn accent" onclick={() => radios.flash()} disabled={!radios.inRom || !info || radios.busy}>{update ? 'Update' : 'Flash'}</button>

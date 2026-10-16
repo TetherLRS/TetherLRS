@@ -96,7 +96,8 @@
 #include "../Common/common.h"
 
 // TetherLRS: what this image is, for the tool to read from a flash it reached through the ROM bootloader
-const char tlrs_marker[] = "TetherLRS:Rx:" DEVICE_NAME ":" VERSIONONLYSTR ":";
+#include "../Common/tlrs_marker.h"
+const char tlrs_marker[] = TLRS_MARKER("Rx");
 const char* volatile tlrs_marker_ref = tlrs_marker; // read at startup: the linker must keep the text
 #include "../Common/diversity.h"
 #ifdef DEVICE_HAS_ANTENNA_SWITCH
