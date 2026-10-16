@@ -14,7 +14,7 @@ import {
   type ParamOptions,
 } from './cli-parse';
 
-export const TX_BAUDS = [57600, 115200, 230400]; // 57600 first, the SiK-style Tx default
+export const TX_BAUDS = [115200, 57600, 230400]; // the default first, then SiK's 57600
 const GUARD_MS = 1100; // the firmware wants 1 s of silence before and after "+++"
 
 export interface SetResult {

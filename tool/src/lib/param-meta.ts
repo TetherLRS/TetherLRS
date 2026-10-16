@@ -28,16 +28,20 @@ const META: Record<string, ParamMeta> = {
   'Tx Power': { label: 'Transmit power' },
   'Tx Diversity': { label: 'Antennas' },
   'Tx Ser Port': { label: 'Serial port' },
-  'Tx Ser Baudrate': { label: 'Serial baud rate', help: 'Towards the ground station program. 57600 is the SiK default.' },
+  'Tx Ser Baudrate': { label: 'Serial baud rate', help: 'Towards the ground station program. 115200 carries every air mode.' },
   'Tx Snd RadioStat': { label: 'RADIO_STATUS to the GCS' },
   'Tx Mav Component': { label: 'MAVLink component' },
   'Rx Power': { label: 'Transmit power' },
   'Rx Diversity': { label: 'Antennas' },
   'Rx Ser Port': { label: 'Serial port' },
-  'Rx Ser Baudrate': { label: 'Serial baud rate', help: 'Towards the flight controller.' },
+  'Rx Ser Baudrate': { label: 'Serial baud rate', help: 'Towards the flight controller. 115200 carries every air mode.' },
   'Rx Ser Link Mode': { label: 'Serial protocol', help: 'Transparent passes any data. MAVLink modes add flow control towards the autopilot; mavlinkX also compresses.' },
   'Rx Mav System ID': { label: 'MAVLink system ID' },
   'Rx Snd RadioStat': { label: 'RADIO_STATUS to the autopilot', help: 'ardu_1 for ArduPilot and PX4.' },
+  'Rx Mav Coalesce': {
+    label: 'Freshest telemetry',
+    help: 'MAVLink modes: when the link falls behind, an older copy of attitude, position and other state messages still waiting is dropped for the newer one. Parameters, missions and messages are never dropped. GCS link statistics count the dropped copies as lost.',
+  },
 };
 
 const RC = /^(Tx Ch |Tx In Mode|Tx Power Sw Ch|Tx Buzzer|Tx Ser Port2|Tx Ser Baudrate2|Rx Ch Order|Rx Out |Rx FailSafe|Rx FS Ch|Rx Power Sw Ch|Rx Snd RcChannel)/;

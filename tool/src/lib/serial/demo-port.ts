@@ -56,7 +56,7 @@ export class DemoSerialPort {
       { name: 'Tx Ch Order', kind: 'list', options: ['AETR', 'TAER', 'ETAR'], value: 0 },
       { name: 'Tx In Mode', kind: 'list', options: ['sbus', 'sbus inv'], value: 0, allowed: () => [] },
       { name: 'Tx Ser Port', kind: 'list', options: ['serial', 'wbridge', 'serial2', 'com', 'crsfbridge'], value: 0, allowed: () => [0] },
-      { name: 'Tx Ser Baudrate', kind: 'list', options: ['57600', '115200', '230400'], value: 0 },
+      { name: 'Tx Ser Baudrate', kind: 'list', options: ['57600', '115200', '230400'], value: 1 },
       { name: 'Tx Ser Port2', kind: 'list', options: ['none', 'serial', 'wbridge', 'serial2', 'crsfbridge'], value: 0, allowed: () => [] },
       { name: 'Tx Ser Baudrate2', kind: 'list', options: ['57600', '115200', '230400'], value: 1, allowed: () => [] },
       { name: 'Tx Snd RadioStat', kind: 'list', options: ['off', '1 Hz'], value: 0 },
@@ -69,7 +69,7 @@ export class DemoSerialPort {
       { name: 'Rx Out Mode', kind: 'list', options: ['sbus', 'crsf', 'sbus inv'], value: 0, allowed: () => [] },
       { name: 'Rx FailSafe Mode', kind: 'list', options: ['no sig', 'low thr', 'by cnf', 'low thr cnt', 'ch1ch4 cnt'], value: 0 },
       { name: 'Rx Ser Port', kind: 'list', options: ['serial', 'can', 'canfd'], value: 0, allowed: () => [0] },
-      { name: 'Rx Ser Baudrate', kind: 'list', options: ['57600', '115200', '230400'], value: 0 },
+      { name: 'Rx Ser Baudrate', kind: 'list', options: ['57600', '115200', '230400'], value: 1 },
       { name: 'Rx Ser Link Mode', kind: 'list', options: ['transp.', 'mavlink', 'mavlinkX', 'mspX'], value: 0 },
       { name: 'Rx Mav System ID', kind: 'list', options: ['51', '52', '53', '54', '55'], value: 0 },
       { name: 'Rx Snd RadioStat', kind: 'list', options: ['off', 'ardu_1', 'meth_b'], value: 0 },
@@ -77,6 +77,7 @@ export class DemoSerialPort {
       { name: 'Rx Out Rssi Ch', kind: 'list', options: CH, value: 0 },
       { name: 'Rx Out LQ Ch', kind: 'list', options: CH, value: 0 },
       { name: 'Rx Power Sw Ch', kind: 'list', options: CH, value: 0 },
+      { name: 'Rx Mav Coalesce', kind: 'list', options: ['off', 'on'], value: 0 },
       ...Array.from({ length: 12 }, (_, i): DemoParam => ({ name: `Rx FS Ch${i + 1}`, kind: 'value', value: 0, min: -120, max: 120, unit: '%' })),
       ...Array.from({ length: 4 }, (_, i): DemoParam => ({ name: `Rx FS Ch${i + 13}`, kind: 'list', options: ['-120 %', '0 %', '120 %'], value: 1 })),
     ];
@@ -168,7 +169,7 @@ export class DemoSerialPort {
 
   // a few of cli.h's SiK answers (CommonTx/sik_at.h), enough to try the Terminal page
   private sikAt(cmd: string) {
-    const regs = ['FORMAT=26', 'SERIAL_SPEED=57', 'AIR_SPEED=19', 'NETID=137', 'TXPOWER=14', 'ECC=0', 'MAVLINK=0', 'OPPRESEND=0',
+    const regs = ['FORMAT=26', 'SERIAL_SPEED=115', 'AIR_SPEED=19', 'NETID=137', 'TXPOWER=14', 'ECC=0', 'MAVLINK=0', 'OPPRESEND=0',
       'MIN_FREQ=863275', 'MAX_FREQ=868000', 'NUM_CHANNELS=6', 'DUTY_CYCLE=100', 'LBT_RSSI=0', 'MANCHESTER=0', 'RTSCTS=0', 'MAX_WINDOW=32'];
     if (cmd === 'ATO') this.command = false;
     else if (cmd === 'AT' || cmd === 'AT&W' || /^ATS\d+=\d+$/.test(cmd)) this.putsn('OK');
