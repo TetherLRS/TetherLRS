@@ -104,6 +104,7 @@
 
 #define SETUP_RF_ORTHO                  0 // 0: off, 1: 1/3, 2: 2/3, 3: 3/3
 #define SETUP_PRIVACY                   0 // 0: off, 1: lvl1, 2: lvl2, 3: lvl3
+#define SETUP_REGION                    0 // 0: free, 1: EU
 
 
 //-------------------------------------------------------
@@ -126,6 +127,8 @@
 #define MODE_19HZ_SEND_FRAME_TMO_MS           25 // just needs to be larger than toa, not critical
 #define MODE_FLRC_111HZ_SEND_FRAME_TMO_MS     7  // just needs to be larger than toa, not critical
 #define MODE_FSK_50HZ_SEND_FRAME_TMO_MS       10 // just needs to be larger than toa, not critical
+#define MODE_18HZ_SEND_FRAME_TMO_MS           15 // just needs to be larger than toa, not critical
+#define MODE_LR_SEND_FRAME_TMO_MS             60 // just needs to be larger than toa, not critical
 
 
 #define FHSS_NUM_433_MHZ                2  // 2 since 1 is needed for bind
@@ -137,6 +140,9 @@
 #define FHSS_NUM_2P4_GHZ                24
 #define FHSS_NUM_2P4_GHZ_31HZ           18
 #define FHSS_NUM_2P4_GHZ_19HZ           12 // was 24, but a cycle takes then 1.3 sec! would need long disconnect
+#define FHSS_NUM_868_EU_LORA            9  // all channels of the plan, see fhss.h
+#define FHSS_NUM_868_EU_FSK             21
+#define FHSS_NUM_869_LR                 1
 
 #define FRAME_TX_RX_LEN                 91 // we currently only support equal len
 

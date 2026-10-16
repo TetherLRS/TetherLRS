@@ -320,6 +320,14 @@ class Sx126xDriverCommon : public Sx126xDriverBase
         *RssiSync = rssi;
     }
 
+    // channel energy for listen before talk, valid only in RX
+    int8_t GetRssiInst_dbm(void)
+    {
+        uint8_t rssi;
+        ReadCommand(SX126X_CMD_GET_RSSI_INST, &rssi, 1);
+        return -(int8_t)(rssi / 2);
+    }
+
     void HandleAFC(void) {}
 
     //-- RF power interface

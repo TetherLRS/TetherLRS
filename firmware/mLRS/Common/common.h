@@ -386,6 +386,11 @@ void sxGetPacketStatus(uint8_t antenna, tStats* const stats)
 }
 
 
+#include "regulatory.h"
+
+tRegulatory regulatory;
+
+
 //-------------------------------------------------------
 //-- FAIL
 //-------------------------------------------------------

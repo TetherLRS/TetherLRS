@@ -299,6 +299,7 @@ void tBindBase::do_transmit(uint8_t antenna)
     txBindFrame.Mode = Setup.Common[Config.ConfigId].Mode;
     txBindFrame.Ortho = Setup.Common[Config.ConfigId].Ortho;
     txBindFrame.Privacy = Setup.Common[Config.ConfigId].Privacy;
+    txBindFrame.Region = Setup.Common[Config.ConfigId].Region;
 
     memcpy(txBindFrame.tx_uid, Config.Uid, 12); // send own uid to receiver // must both be 12 bytes
     txBindFrame.tx_random = Config.BindRandom;  // send own random to receiver
@@ -337,6 +338,8 @@ void tBindBase::handle_receive(uint8_t antenna, uint8_t rx_status)
     Setup.Common[0].Mode = txBindFrame.Mode;
     Setup.Common[0].Ortho = txBindFrame.Ortho;
     Setup.Common[0].Privacy = txBindFrame.Privacy;
+    Setup.Common[0].Region = txBindFrame.Region;
+    Config.Region = txBindFrame.Region; // the replies already follow the Tx's region
 
     memcpy(Setup.peer_uid[0], txBindFrame.tx_uid, 12); // store transmitter uid // must both be 12 bytes
     Setup.tx_random[0] = txBindFrame.tx_random; // store transmitter random

@@ -665,7 +665,18 @@ void tTxCli::stream(void)
             puts(u16toBCD_s(stats.bytes_transmitted.GetBytesPerSec()));
             puts(", ");
             puts(u16toBCD_s(stats.bytes_received.GetBytesPerSec()));
-            putsn(";");
+            puts(";");
+            if (Config.Region == REGION_EU) { // Tx frames the region held back: channel busy, time limits
+                char s[16];
+                puts(" cca ");
+                u32toBCDstr(regulatory.cca_busy_cnt, s);
+                puts(s);
+                puts(", lim ");
+                u32toBCDstr(regulatory.blocked_cnt, s);
+                puts(s);
+                puts(";");
+            }
+            putsn("");
         }
     }
 }

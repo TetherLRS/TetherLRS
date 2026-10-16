@@ -49,6 +49,16 @@ typedef enum : uint8_t {
 } SX_FHSS_FREQUENCY_BAND_ENUM;
 
 
+// channel plans replacing the band's default list, see fhss.h
+typedef enum : uint8_t {
+    FHSS_PLAN_DEFAULT = 0,
+    FHSS_PLAN_868_EU_LORA,
+    FHSS_PLAN_868_EU_FSK,
+    FHSS_PLAN_869_LR,
+    FHSS_PLAN_NUM,
+} FHSS_PLAN_ENUM;
+
+
 // used by setup
 SX_FHSS_FREQUENCY_BAND_ENUM cvt_to_sx_fhss_frequency_band(uint8_t setup_frequency_band);
 
@@ -63,8 +73,18 @@ typedef enum {
     MODE_FLRC_111HZ,
     MODE_FSK_50HZ,
     MODE_19HZ_7X,
+    MODE_18HZ, // 31 Hz radio settings at 55 ms, fits the EU 868 MHz on-time limits
+    MODE_LR, // one 125 kHz channel at 869.525 MHz, slow, 500 mW allowed in the EU
     MODE_NUM,
 } MODE_ENUM;
+
+
+// regulatory rules applied at runtime, see regulatory.h
+typedef enum {
+    REGION_FREE = 0, // as mLRS, compliance left to the user
+    REGION_EU,
+    REGION_NUM,
+} REGION_ENUM;
 
 
 typedef enum {
@@ -353,6 +373,7 @@ typedef enum {
     LR11xx_LORA_CONFIG_BW800_SF5_CR4_5, // 2.4 GHz
     LR11xx_LORA_CONFIG_BW800_SF6_CR4_5,
     LR11xx_LORA_CONFIG_BW800_SF7_CR4_5,
+    LR11xx_LORA_CONFIG_BW125_SF5_CR4_5, // 900 MHz LR
     LR11xx_LORA_CONFIG_NUM,
 } LR11xx_LORA_CONFIG_ENUM;
 
@@ -379,8 +400,9 @@ typedef struct
     uint8_t Mode;
     uint8_t Ortho;
     uint8_t Privacy;
+    uint8_t Region;
 
-    uint8_t spare[5];
+    uint8_t spare[4];
 } tCommonSetup; // 16 bytes
 
 
@@ -485,6 +507,7 @@ typedef struct
     uint16_t Mode_allowed_mask;
     uint16_t Ortho_allowed_mask;
     uint16_t Privacy_allowed_mask;
+    uint16_t Region_allowed_mask;
 
     char Tx_Power_optstr[67+1];
     uint16_t Tx_Diversity_allowed_mask;
@@ -534,6 +557,7 @@ typedef struct
     uint8_t Ortho;
     uint8_t Except;
     uint16_t BindScan_mask;
+    uint8_t Plan; // FHSS_PLAN_ENUM, regional channel plans
 } tFhssGlobalConfig;
 
 
@@ -543,6 +567,8 @@ typedef struct
 
     uint8_t FrequencyBand;
     uint8_t Mode;
+    uint8_t Region;
+    uint8_t PowerIdxMax; // highest rfpower_list index the region allows
 
     tSxGlobalConfig Sx;
     tSxGlobalConfig Sx2;

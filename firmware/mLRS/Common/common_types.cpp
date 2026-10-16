@@ -187,6 +187,8 @@ uint8_t crsf_cvt_mode(uint8_t mode)
     case MODE_FLRC_111HZ: return 111;
     case MODE_FSK_50HZ: return CRSF_RFMODE_50_HZ;
     case MODE_19HZ_7X: return 19;
+    case MODE_18HZ: return 18;
+    case MODE_LR: return 2;
     }
     return UINT8_MAX;
 }
@@ -201,6 +203,8 @@ uint8_t crsf_cvt_fps(uint8_t mode)
     case MODE_FLRC_111HZ: return 11;
     case MODE_FSK_50HZ: return 5;
     case MODE_19HZ_7X: return 2;
+    case MODE_18HZ: return 2;
+    case MODE_LR: return 0;
     }
     return UINT8_MAX;
 }
@@ -420,6 +424,8 @@ void mode_str_to_strbuf(char* const s, uint8_t mode, uint8_t len)
         case MODE_FLRC_111HZ: strbufstrcpy(s, "FLRC", len); break;
         case MODE_FSK_50HZ: strbufstrcpy(s, "FSK", len); break;
         case MODE_19HZ_7X: strbufstrcpy(s, "19Hz7x", len); break;
+        case MODE_18HZ: strbufstrcpy(s, "18Hz", len); break;
+        case MODE_LR: strbufstrcpy(s, "LR", len); break;
         default: strbufstrcpy(s, "?", len);
     }
 }

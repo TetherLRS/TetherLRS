@@ -100,6 +100,31 @@ void tFhssBase::generate(uint32_t seed)
 }
 
 
+// all channels in a random order; each channel then comes back every cnt frames
+void tFhssBase::generate_plan(uint32_t seed)
+{
+    _seed = seed;
+    _ortho = ORTHO_NONE;
+    _except = EXCEPT_NONE;
+
+    for (uint8_t k = 0; k < cnt; k++) ch_list[k] = k;
+
+    for (uint8_t k = cnt - 1; k > 0; k--) { // Fisher-Yates
+        uint8_t j = prng() % (k + 1);
+        uint8_t ch = ch_list[k];
+        ch_list[k] = ch_list[j];
+        ch_list[j] = ch;
+    }
+
+    for (uint8_t k = 0; k < cnt; k++) {
+        fhss_list[k] = fhss_freq_list[ch_list[k]];
+        fhss_last_rssi[k] = INT8_MIN;
+    }
+
+    curr_i = 0;
+}
+
+
 void tFhssBase::generate_ortho_except(uint32_t seed, uint8_t ortho, uint8_t except)
 {
     _seed = seed;

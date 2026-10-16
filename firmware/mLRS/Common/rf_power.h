@@ -56,12 +56,14 @@ void tRfPower::Update(void)
 
 void tRfPower::Set(uint8_t power)
 {
-    rfpower_new_idx = power;
+    rfpower_new_idx = (power > Config.PowerIdxMax) ? Config.PowerIdxMax : power; // the region caps it
 }
 
 
 void tRfPower::Set(tRcData* const rc, uint8_t power_switch_channel, uint8_t power)
 {
+    if (power > Config.PowerIdxMax) power = Config.PowerIdxMax; // the region caps it
+
     if (power_switch_channel == POWER_SWITCH_CHANNEL_OFF) { // disabled
         rfpower_new_idx = power;
         return;

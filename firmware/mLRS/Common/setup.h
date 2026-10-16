@@ -20,6 +20,13 @@ tSetup Setup;
 tGlobalConfig Config;
 
 
+// the EU region needs an instantaneous RSSI read for listen before talk, and one band at a time
+#if (defined DEVICE_HAS_LR11xx || defined DEVICE_HAS_SX126x || defined DEVICE_HAS_SX128x) && \
+    !defined DEVICE_HAS_DUAL_SX126x_SX128x && !defined DEVICE_HAS_DUAL_SX126x_SX126x
+  #define USE_REGION_EU
+#endif
+
+
 //-------------------------------------------------------
 // Configure Setup MetaData
 //-------------------------------------------------------
@@ -140,6 +147,13 @@ void setup_configure_metadata(void)
     SetupMetaData.Privacy_allowed_mask = 0; // not available, do not display
 #else
     SetupMetaData.Privacy_allowed_mask = 0b1111; // all
+#endif
+
+    //-- Region: "free,EU"
+#ifdef USE_REGION_EU
+    SetupMetaData.Region_allowed_mask = 0b11; // all
+#else
+    SetupMetaData.Region_allowed_mask = 0b01; // free, not editable
 #endif
 
     //-- Tx:
@@ -341,6 +355,7 @@ void setup_default(uint8_t config_id)
     Setup.Common[config_id].Mode = SETUP_MODE;
     Setup.Common[config_id].Ortho = SETUP_RF_ORTHO;
     Setup.Common[config_id].Privacy = SETUP_PRIVACY;
+    Setup.Common[config_id].Region = SETUP_REGION;
 
     Setup.Tx[config_id].Power = SETUP_TX_POWER;
     Setup.Tx[config_id].Diversity = SETUP_TX_DIVERSITY;
@@ -406,6 +421,13 @@ void _setup_sanitize_config(uint8_t config_id, bool only_rx)
     setup_default_bindphrase(bind_phrase, config_id, BIND_PHRASE);
     sanitize_bindphrase(Setup.Common[config_id].BindPhrase, bind_phrase);
 
+    // the region limits the bands, so it comes first
+    SANITIZE(Common[config_id].Region, REGION_NUM, SETUP_REGION, REGION_FREE);
+    TST_NOTALLOWED(Region_allowed_mask, Common[config_id].Region, REGION_FREE);
+    if (Setup.Common[config_id].Region == REGION_EU) {
+        SetupMetaData.FrequencyBand_allowed_mask &= (1 << SETUP_FREQUENCY_BAND_2P4_GHZ) | (1 << SETUP_FREQUENCY_BAND_868_MHZ);
+    }
+
     if (Setup.Common[config_id].FrequencyBand >= SETUP_FREQUENCY_BAND_NUM) {
         Setup.Common[config_id].FrequencyBand = FREQUENCY_BAND_DEFAULT;
     }
@@ -468,6 +490,18 @@ void _setup_sanitize_config(uint8_t config_id, bool only_rx)
         while(1){} // must not happen, should have been resolved in setup_sanitize()
     }
 #endif
+
+    // 18 Hz and LR are 868 MHz channel plans; in the EU the 868 MHz on-time limits leave only these and FSK
+    if (Setup.Common[config_id].FrequencyBand == SETUP_FREQUENCY_BAND_868_MHZ) {
+#if defined DEVICE_HAS_LR11xx
+        SetupMetaData.Mode_allowed_mask |= (1 << MODE_18HZ) | (1 << MODE_LR);
+#elif defined DEVICE_HAS_SX126x && !defined DEVICE_HAS_DUAL_SX126x_SX126x
+        SetupMetaData.Mode_allowed_mask |= (1 << MODE_18HZ);
+#endif
+        if (Setup.Common[config_id].Region == REGION_EU) {
+            SetupMetaData.Mode_allowed_mask &= (1 << MODE_FSK_50HZ) | (1 << MODE_18HZ) | (1 << MODE_LR);
+        }
+    }
 
     SANITIZE(Common[config_id].Mode, MODE_NUM, SETUP_MODE, MODE_DEFAULT);
     TST_NOTALLOWED(Mode_allowed_mask, Common[config_id].Mode, MODE_DEFAULT);
@@ -644,6 +678,16 @@ void configure_mode(uint8_t mode, uint8_t frequencyband)
         Config.frame_rate_hz = 50;
         Config.send_frame_tmo_ms = MODE_FSK_50HZ_SEND_FRAME_TMO_MS; // 10;
         break;
+    case MODE_18HZ:
+        Config.frame_rate_ms = 55; // 55 ms = 18.2 Hz
+        Config.frame_rate_hz = 18;
+        Config.send_frame_tmo_ms = MODE_18HZ_SEND_FRAME_TMO_MS; // 15
+        break;
+    case MODE_LR:
+        Config.frame_rate_ms = 560; // 560 ms = 1.8 Hz, 52.8 ms in air each side is 9.4 %
+        Config.frame_rate_hz = 2;
+        Config.send_frame_tmo_ms = MODE_LR_SEND_FRAME_TMO_MS; // 60
+        break;
     default:
         while(1){} // must not happen, should have been resolved in setup_sanitize_config()
     }
@@ -761,6 +805,28 @@ void configure_mode(uint8_t mode, uint8_t frequencyband)
         Config.Sx.is_lora = Config.Sx2.is_lora = false;
         break;
 
+    case MODE_18HZ: // has hopefully been correctly sanitized in setup_sanitize_config(), only 868 MHz
+#if defined DEVICE_HAS_DUAL_SX126x_SX128x || defined DEVICE_HAS_DUAL_SX126x_SX126x
+        while(1){} // not possible
+#elif defined DEVICE_HAS_SX126x
+        Config.Sx.LoraConfigIndex = SX126x_LORA_CONFIG_BW500_SF5_CR4_5;
+#elif defined DEVICE_HAS_LR11xx
+        Config.Sx.LoraConfigIndex = LR11xx_LORA_CONFIG_BW500_SF5_CR4_5;
+#else
+        while(1){} // not possible
+#endif
+        Config.Sx2.LoraConfigIndex = Config.Sx.LoraConfigIndex;
+        break;
+
+    case MODE_LR: // has hopefully been correctly sanitized in setup_sanitize_config(), only 868 MHz
+#if defined DEVICE_HAS_LR11xx
+        Config.Sx.LoraConfigIndex = LR11xx_LORA_CONFIG_BW125_SF5_CR4_5;
+#else
+        while(1){} // not possible
+#endif
+        Config.Sx2.LoraConfigIndex = Config.Sx.LoraConfigIndex;
+        break;
+
     case MODE_FSK_50HZ:
 #if defined DEVICE_HAS_DUAL_SX126x_SX128x
         // has hopefully been correctly sanitized in setup_sanitize_config(), not for 2.4 GHz frequency band
@@ -838,6 +904,32 @@ void configure_diversity(uint8_t diversity)
 }
 
 
+// highest power the region allows; if the list has nothing that low, its lowest entry
+uint8_t region_power_idx_max(uint8_t region, uint8_t frequency_band, uint8_t mode)
+{
+    if (region != REGION_EU) return RFPOWER_LIST_NUM - 1;
+
+    int8_t limit_dbm = 14; // 863-868.6 MHz: 25 mW e.r.p., with a dipole
+    if (frequency_band == SETUP_FREQUENCY_BAND_2P4_GHZ) limit_dbm = 18; // 100 mW e.i.r.p. with a 2 dBi antenna
+    if (mode == MODE_LR) limit_dbm = 27; // 869.4-869.65 MHz: 500 mW e.r.p.
+
+    uint8_t idx = 0;
+    for (uint8_t i = 0; i < RFPOWER_LIST_NUM; i++) {
+        if (rfpower_list[i].dbm <= limit_dbm) idx = i;
+    }
+    return idx;
+}
+
+
+uint8_t region_fhss_plan(uint8_t region, uint8_t sx_frequency_band, uint8_t mode)
+{
+    if (sx_frequency_band != SX_FHSS_FREQUENCY_BAND_868_MHZ) return FHSS_PLAN_DEFAULT;
+    if (mode == MODE_LR) return FHSS_PLAN_869_LR;
+    if (region != REGION_EU) return FHSS_PLAN_DEFAULT;
+    return (mode == MODE_FSK_50HZ) ? FHSS_PLAN_868_EU_FSK : FHSS_PLAN_868_EU_LORA;
+}
+
+
 void setup_configure_config(uint8_t config_id)
 {
     //-- SyncWord
@@ -865,6 +957,11 @@ void setup_configure_config(uint8_t config_id)
         Config.FrameSyncWord += 0x1212 * Setup.Common[config_id].Privacy;
     }
 
+    // EU and free radios must not connect to each other, free stays as mLRS
+    if (Setup.Common[config_id].Region == REGION_EU) {
+        Config.FrameSyncWord += 0x3C3C;
+    }
+
     //-- Diversity
     // Config.Diversity is not actually used for anything besides reporting to disp, cli, etc.
 
@@ -877,6 +974,7 @@ void setup_configure_config(uint8_t config_id)
     //-- FrequencyBand
 
     Config.FrequencyBand = Setup.Common[config_id].FrequencyBand; // has hopefully been correctly sanitized in setup_sanitize_config()
+    Config.Region = Setup.Common[config_id].Region;
 
     Config.IsDualBand = (Config.FrequencyBand == SETUP_FREQUENCY_DUAL_BAND_915_MHZ_2P4_GHZ ||
                          Config.FrequencyBand == SETUP_FREQUENCY_DUAL_BAND_868_MHZ_2P4_GHZ);
@@ -907,11 +1005,14 @@ void setup_configure_config(uint8_t config_id)
     }
 
     // note: the actually used power will be determined later when the SX are set up
+    Config.PowerIdxMax = region_power_idx_max(Config.Region, Config.FrequencyBand, Config.Mode);
 #ifdef DEVICE_IS_TRANSMITTER
-    Config.Sx.Power_dbm = rfpower_list[Setup.Tx[config_id].Power].dbm;
+    uint8_t power_idx = Setup.Tx[config_id].Power;
 #else // DEVICE_IS_RECEIVER
-    Config.Sx.Power_dbm = rfpower_list[Setup.Rx.Power].dbm;
+    uint8_t power_idx = Setup.Rx.Power;
 #endif
+    if (power_idx > Config.PowerIdxMax) power_idx = Config.PowerIdxMax;
+    Config.Sx.Power_dbm = rfpower_list[power_idx].dbm;
     Config.Sx2.Power_dbm = Config.Sx.Power_dbm;
 
     //-- Fhss
@@ -960,21 +1061,29 @@ void setup_configure_config(uint8_t config_id)
     }
 
     uint8_t fhss_num_list[SX_FHSS_FREQUENCY_BAND_NUM][MODE_NUM] = {
-// MODE_50HZ,         MODE_31HZ,              MODE_19HZ,                MODE_FLRC_111HZ,   MODE_FSK_50HZ,         MODE_19HZ_7X
+// MODE_50HZ,         MODE_31HZ,              MODE_19HZ,                MODE_FLRC_111HZ,   MODE_FSK_50HZ,         MODE_19HZ_7X,            MODE_18HZ,         MODE_LR
 // SX_FHSS_FREQUENCY_BAND_2P4_GHZ
-{  FHSS_NUM_2P4_GHZ,  FHSS_NUM_2P4_GHZ_31HZ,  FHSS_NUM_2P4_GHZ_19HZ,    FHSS_NUM_2P4_GHZ,  1,                     1},
+{  FHSS_NUM_2P4_GHZ,  FHSS_NUM_2P4_GHZ_31HZ,  FHSS_NUM_2P4_GHZ_19HZ,    FHSS_NUM_2P4_GHZ,  1,                     1,                       1,                 1},
 // SX_FHSS_FREQUENCY_BAND_915_MHZ_FCC
-{  1,                 FHSS_NUM_915_MHZ_FCC,   FHSS_NUM_915_MHZ_FCC,     1,                 FHSS_NUM_915_MHZ_FCC,  FHSS_NUM_915_MHZ_FCC},
+{  1,                 FHSS_NUM_915_MHZ_FCC,   FHSS_NUM_915_MHZ_FCC,     1,                 FHSS_NUM_915_MHZ_FCC,  FHSS_NUM_915_MHZ_FCC,    1,                 1},
 // SX_FHSS_FREQUENCY_BAND_868_MHZ
-{  1,                 FHSS_NUM_868_MHZ,       FHSS_NUM_868_MHZ,         1,                 FHSS_NUM_868_MHZ,      FHSS_NUM_868_MHZ},
+{  1,                 FHSS_NUM_868_MHZ,       FHSS_NUM_868_MHZ,         1,                 FHSS_NUM_868_MHZ,      FHSS_NUM_868_MHZ,        FHSS_NUM_868_MHZ,  FHSS_NUM_869_LR},
 // SX_FHSS_FREQUENCY_BAND_866_MHZ_IN
-{  1,                 FHSS_NUM_866_MHZ_IN,    FHSS_NUM_866_MHZ_IN,      1,                 FHSS_NUM_866_MHZ_IN,   FHSS_NUM_866_MHZ_IN},
+{  1,                 FHSS_NUM_866_MHZ_IN,    FHSS_NUM_866_MHZ_IN,      1,                 FHSS_NUM_866_MHZ_IN,   FHSS_NUM_866_MHZ_IN,     1,                 1},
 // SX_FHSS_FREQUENCY_BAND_433_MHZ
-{  1,                 FHSS_NUM_433_MHZ,       FHSS_NUM_433_MHZ,         1,                 FHSS_NUM_433_MHZ,      FHSS_NUM_433_MHZ},
+{  1,                 FHSS_NUM_433_MHZ,       FHSS_NUM_433_MHZ,         1,                 FHSS_NUM_433_MHZ,      FHSS_NUM_433_MHZ,        1,                 1},
 // SX_FHSS_FREQUENCY_BAND_70_CM_HAM
-{  1,                 FHSS_NUM_70_CM_HAM,     FHSS_NUM_70_CM_HAM_19HZ,  1,                 FHSS_NUM_70_CM_HAM,    FHSS_NUM_70_CM_HAM_19HZ}
+{  1,                 FHSS_NUM_70_CM_HAM,     FHSS_NUM_70_CM_HAM_19HZ,  1,                 FHSS_NUM_70_CM_HAM,    FHSS_NUM_70_CM_HAM_19HZ, 1,                 1}
     };
     Config.Fhss.Num = fhss_num_list[Config.Fhss.FrequencyBand][Config.Mode];
+
+    // regional and LR channel plans replace the band's list, and use all of their channels
+    Config.Fhss.Plan = region_fhss_plan(Config.Region, Config.Fhss.FrequencyBand, Config.Mode);
+    switch (Config.Fhss.Plan) {
+    case FHSS_PLAN_868_EU_LORA: Config.Fhss.Num = FHSS_NUM_868_EU_LORA; break;
+    case FHSS_PLAN_868_EU_FSK: Config.Fhss.Num = FHSS_NUM_868_EU_FSK; break;
+    case FHSS_PLAN_869_LR: Config.Fhss.Num = FHSS_NUM_869_LR; break;
+    }
 
     // ensure equal fhss1, fhss2, is required in single band mode
     Config.Fhss2 = Config.Fhss;
@@ -992,7 +1101,9 @@ void setup_configure_config(uint8_t config_id)
 
     //-- More Config, may depend on above config settings
 
-    Config.connect_tmo_systicks = SYSTICK_DELAY_MS(CONNECT_TMO_MS);
+    uint16_t connect_tmo_ms = CONNECT_TMO_MS;
+    if (connect_tmo_ms < 5 * Config.frame_rate_ms) connect_tmo_ms = 5 * Config.frame_rate_ms; // LR needs a few frames
+    Config.connect_tmo_systicks = SYSTICK_DELAY_MS(connect_tmo_ms);
     if (Config.Fhss.Num >= Config.Fhss2.Num) {
         Config.connect_sync_cnt_max = Config.Fhss.Num / 2;
         Config.connect_listen_hop_cnt = (uint8_t)(1.5f * Config.Fhss.Num);

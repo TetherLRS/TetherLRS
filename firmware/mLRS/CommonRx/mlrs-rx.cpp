@@ -590,6 +590,7 @@ RESTARTCONTROLLER
     fhss.Init(&Config.Fhss, &Config.Fhss2);
     fhss.Start();
     rfpower.Init();
+    regulatory.Init();
 
     sx.SetRfFrequency(fhss.GetCurrFreq());
     sx2.SetRfFrequency(fhss.GetCurrFreq2());
@@ -690,6 +691,10 @@ INITCONTROLLER_END
 
     case LINK_STATE_TRANSMIT:
         rfpower.Update();
+        if (!regulatory.TxGo(tdiversity.Antenna(), fhss.GetCurrFreq())) { // not this frame, the ARQ resends its data
+            link_state = LINK_STATE_RECEIVE;
+            break;
+        }
         do_transmit(tdiversity.Antenna());
         link_state = LINK_STATE_TRANSMIT_WAIT;
         link_tx_status = TX_STATUS_NONE;

@@ -48,6 +48,8 @@
 
 #define SX_USE_REGULATOR_MODE_DCDC
 
+#define SX_LNA_GAIN_DB            16 // ELRS power_lna_gain, for the EU listen before talk thresholds
+
 // Antenna switch, driven by Common/antenna_switch.h (ELRS's single-radio diversity); antenna 0 is low, as in ELRS
 #define DEVICE_HAS_ANTENNA_SWITCH
 #define SX_ANT_CTRL               IO_P10

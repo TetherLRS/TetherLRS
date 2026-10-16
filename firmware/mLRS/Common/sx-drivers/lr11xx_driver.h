@@ -23,7 +23,7 @@
 // SX Driver
 //-------------------------------------------------------
 
-// the first two are for 900 MHz and the last three are for 2.4 GHz
+// the first two are for 900 MHz, the next three are for 2.4 GHz, the last is 900 MHz LR
 const tSxLoraConfiguration Lr11xxLoraConfiguration[] = {
     { .SpreadingFactor = LR11XX_LORA_SF5, // 900 MHz, 31 Hz
       .Bandwidth = LR11XX_LORA_BW_500,
@@ -79,6 +79,17 @@ const tSxLoraConfiguration Lr11xxLoraConfiguration[] = {
       .InvertIQ = LR11XX_LORA_IQ_NORMAL,
       .TimeOverAir = 23527,
       .ReceiverSensitivity = -112,
+    },
+    { .SpreadingFactor = LR11XX_LORA_SF5, // 900 MHz, LR (869.525 MHz, inside the 250 kHz of band O)
+      .Bandwidth = LR11XX_LORA_BW_125,
+      .CodingRate = LR11XX_LORA_CR_4_5,
+      .PreambleLength = 12,
+      .HeaderType = LR11XX_LORA_HEADER_DISABLE,
+      .PayloadLength = FRAME_TX_RX_LEN,
+      .CrcEnabled = LR11XX_LORA_CRC_DISABLE,
+      .InvertIQ = LR11XX_LORA_IQ_NORMAL,
+      .TimeOverAir = 52800, // the 900 MHz 31 Hz frame at a quarter of the bandwidth
+      .ReceiverSensitivity = -117,
     }
 };
 
@@ -339,6 +350,14 @@ class Lr11xxDriverCommon : public Lr11xxDriverBase
         if (rssi < -127) rssi = -127; // we do not support values lower than this
 
         *RssiSync = rssi;
+    }
+
+    // channel energy for listen before talk, valid only in RX
+    int8_t GetRssiInst_dbm(void)
+    {
+        uint8_t status[2];
+        ReadCommand(LR11XX_CMD_GET_RSSI_INT, status, 2); // position 0 is status1, again
+        return -(int8_t)(status[1] / 2);
     }
 
     void HandleAFC(void) {}

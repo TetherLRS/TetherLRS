@@ -483,25 +483,31 @@ void pack_txcmdframe(tTxFrame* const frame, tFrameStats* const frame_stats, tRcD
 //                               -> decrypt_rxframe(frame)
 //                                  process_received_rxcmdframe(frame)
 
+uint8_t tx_payload[FRAME_TX_PAYLOAD_LEN];
+uint8_t tx_payload_len = 0;
+bool tx_payload_held = false; // the frame with it was not sent (region rules), so it goes in the next one
+
 void prepare_transmit_frame(uint8_t antenna, uint8_t fhss1_curr_i, uint8_t fhss2_curr_i)
 {
-uint8_t payload[FRAME_TX_PAYLOAD_LEN];
-uint8_t payload_len = 0;
-
     if (transmit_frame_type == TRANSMIT_FRAME_TYPE_NORMAL) {
         // read data from serial port
         if (connected()) {
-            for (uint8_t i = 0; i < FRAME_TX_PAYLOAD_LEN - crypto.NonceLen(); i++) {
-                if (!sx_serial.available()) break;
-                uint8_t c = sx_serial.getc();
-                payload[payload_len++] = c;
-            }
+            if (!tx_payload_held) {
+                tx_payload_len = 0;
+                for (uint8_t i = 0; i < FRAME_TX_PAYLOAD_LEN - crypto.NonceLen(); i++) {
+                    if (!sx_serial.available()) break;
+                    uint8_t c = sx_serial.getc();
+                    tx_payload[tx_payload_len++] = c;
+                }
 
-            stats.bytes_transmitted.Add(payload_len);
-            stats.serial_data_transmitted.Inc();
+                stats.bytes_transmitted.Add(tx_payload_len);
+                stats.serial_data_transmitted.Inc();
+            }
         } else {
             sx_serial.flush();
+            tx_payload_len = 0;
         }
+        tx_payload_held = false;
     }
 
     stats.last_transmit_antenna = antenna;
@@ -526,7 +532,7 @@ if (!Config.IsDualBand && (fhss1_curr_i != fhss2_curr_i)) while(1){} // must not
     frame_stats.LQ_serial = stats.GetLQ_serial();
 
     if (transmit_frame_type == TRANSMIT_FRAME_TYPE_NORMAL) {
-        pack_txframe(&txFrame, &frame_stats, &rcData, payload, payload_len);
+        pack_txframe(&txFrame, &frame_stats, &rcData, tx_payload, tx_payload_len);
     } else {
         pack_txcmdframe(&txFrame, &frame_stats, &rcData);
     }
@@ -760,6 +766,7 @@ RESTARTCONTROLLER
     fhss.Init(&Config.Fhss, &Config.Fhss2);
     fhss.Start();
     rfpower.Init();
+    regulatory.Init();
 
     sx.SetRfFrequency(fhss.GetCurrFreq());
     sx2.SetRfFrequency(fhss.GetCurrFreq2());
@@ -887,11 +894,17 @@ INITCONTROLLER_END
 
     case LINK_STATE_TRANSMIT_SEND: {
         uint16_t dt = micros16() - pretransmit_tstamp_us;
-        if (dt < 750) break;
+        bool cca = regulatory.CcaNeeded(tdiversity.Antenna(), fhss.GetCurrFreq());
+        if (dt + ((cca) ? REGULATORY_CCA_TIME_US : 0) < 750) break; // listening ends about when the frame would go
         isInTimeGuard = false;
         rfpower.Update();
         sx.SetRfFrequency(fhss.GetCurrFreq());
         sx2.SetRfFrequency(fhss.GetCurrFreq2());
+        if (!regulatory.TxGo(tdiversity.Antenna(), fhss.GetCurrFreq())) { // not this frame, the Rx sees it as lost
+            if (transmit_frame_type == TRANSMIT_FRAME_TYPE_NORMAL) tx_payload_held = true;
+            link_state = LINK_STATE_RECEIVE;
+            break;
+        }
         do_transmit_send(tdiversity.Antenna());
         link_state = LINK_STATE_TRANSMIT_WAIT;
         link_tx_status = TX_STATUS_NONE;

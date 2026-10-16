@@ -208,7 +208,8 @@ void tTxMavlink::Init(tSerialBase* const _crsfbridge)
     fifo_link_in.Init();
 
     fmavX_init();
-    fmavX_config_compression((Config.Mode == MODE_19HZ || Config.Mode == MODE_19HZ_7X) ? 1 : 0); // use compression only in 19 Hz mode
+    fmavX_config_compression((Config.Mode == MODE_19HZ || Config.Mode == MODE_19HZ_7X ||
+                              Config.Mode == MODE_18HZ || Config.Mode == MODE_LR) ? 1 : 0); // use compression only in the slow modes
 
     status_ser_in = {};
     status_ser2_in = {};

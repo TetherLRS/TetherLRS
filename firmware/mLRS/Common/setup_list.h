@@ -29,6 +29,7 @@
 #define SETUP_MSK_RFBAND              &SetupMetaData.FrequencyBand_allowed_mask // inferred from the hal
 #define SETUP_MSK_RFORTHO             &SetupMetaData.Ortho_allowed_mask // inferred from the hal
 #define SETUP_MSK_PRIVACY             &SetupMetaData.Privacy_allowed_mask // inferred from the hal
+#define SETUP_MSK_REGION              &SetupMetaData.Region_allowed_mask // inferred from the hal
 
 // for Tx,Rx, options limited depending on hardware, implementation
 #define SETUP_MSK_TX_DIVERSITY        &SetupMetaData.Tx_Diversity_allowed_mask // generated from the hal
@@ -62,8 +63,8 @@
 #define SETUP_OPT_SERIAL_LINK_MODE       "transp.,mavlink,mavlinkX,mspX"
 #define SETUP_OPT_SERIAL_LINK_MODE_DISP  "transp.,mavlink,mavlnkX,mspX"
 
-#define SETUP_OPT_MODE                "50 Hz,31 Hz,19 Hz,FLRC,FSK,19 Hz 7x" // used below in LIST_COMMON, also in cli
-#define SETUP_OPT_MODE_DISP           "50 Hz,31 Hz,19 Hz,FLRC,FSK,19Hz7x" // used in display, 7 chars max, better 6 chars
+#define SETUP_OPT_MODE                "50 Hz,31 Hz,19 Hz,FLRC,FSK,19 Hz 7x,18 Hz,LR" // used below in LIST_COMMON, also in cli
+#define SETUP_OPT_MODE_DISP           "50 Hz,31 Hz,19 Hz,FLRC,FSK,19Hz7x,18 Hz,LR" // used in display, 7 chars max, better 6 chars
 
 #define SETUP_OPT_RFBAND              "2.4,915 FCC,868,433,70,866 IN,915+2.4,868+2.4" // used below in LIST_COMMON
 #define SETUP_OPT_RF_BAND_CLI         "2.4 GHz,915 MHz FCC,868 MHz,433 MHz,70 cm HAM,866 MHz IN,915 MHz + 2.4 GHz,868 MHz + 2.4 GHz" // used in cli
@@ -93,7 +94,8 @@
   X( Setup.Common[0].Mode,          LIST, "Mode",             "MODE",             0,0,0,"", SETUP_OPT_MODE, SETUP_MSK_MODE )\
   X( Setup.Common[0].FrequencyBand, LIST, "RF Band",          "RF_BAND",          0,0,0,"", SETUP_OPT_RFBAND, SETUP_MSK_RFBAND )\
   X( Setup.Common[0].Ortho,         LIST, "RF Ortho",         "RF_ORTHO",         0,0,0,"", "off,1/3,2/3,3/3", SETUP_MSK_RFORTHO ) \
-  X( Setup.Common[0].Privacy,       LIST, "Privacy",          "PRIVACY",          0,0,0,"", "off,lvl 1,lvl 2,lvl 3", SETUP_MSK_PRIVACY )
+  X( Setup.Common[0].Privacy,       LIST, "Privacy",          "PRIVACY",          0,0,0,"", "off,lvl 1,lvl 2,lvl 3", SETUP_MSK_PRIVACY )\
+  X( Setup.Common[0].Region,        LIST, "Region",           "REGION",           0,0,0,"", "free,EU", SETUP_MSK_REGION )
 
 #define SETUP_PARAMETER_LIST_TX_MAIN \
   X( Setup.Tx[0].Power,             LIST, "Tx Power",         "TX_POWER",         0,0,0,"", SETUP_OPT_TX_POWER, MSK_ALL )\

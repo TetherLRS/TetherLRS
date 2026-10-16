@@ -145,6 +145,55 @@ const uint32_t fhss_freq_list_868[] = {
 
 const uint8_t fhss_bind_channel_868 = 0; // just pick some
 
+// EU plans (EN 300 220-2 bands K 863-865, L 865-868, M 868-868.6, N 868.7-869.2, all 25 mW e.r.p.)
+// polite spectrum access allows 100 s per hour on each channel, so all channels are used evenly
+// no channel crosses a band edge, and none touches the alarm bands
+
+const uint32_t fhss_freq_list_868_eu_lora[] = { // 500 kHz wide
+    SX12XX_FREQ_MHZ_TO_REG(863.375), // K
+    SX12XX_FREQ_MHZ_TO_REG(864.000),
+    SX12XX_FREQ_MHZ_TO_REG(864.625),
+    SX12XX_FREQ_MHZ_TO_REG(865.333), // L
+    SX12XX_FREQ_MHZ_TO_REG(865.917),
+    SX12XX_FREQ_MHZ_TO_REG(866.500),
+    SX12XX_FREQ_MHZ_TO_REG(867.083),
+    SX12XX_FREQ_MHZ_TO_REG(867.667),
+    SX12XX_FREQ_MHZ_TO_REG(868.300), // M
+};
+
+const uint32_t fhss_freq_list_868_eu_fsk[] = { // 250 kHz apart
+    SX12XX_FREQ_MHZ_TO_REG(863.250), // K
+    SX12XX_FREQ_MHZ_TO_REG(863.500),
+    SX12XX_FREQ_MHZ_TO_REG(863.750),
+    SX12XX_FREQ_MHZ_TO_REG(864.000),
+    SX12XX_FREQ_MHZ_TO_REG(864.250),
+    SX12XX_FREQ_MHZ_TO_REG(864.500),
+    SX12XX_FREQ_MHZ_TO_REG(864.750),
+    SX12XX_FREQ_MHZ_TO_REG(865.250), // L
+    SX12XX_FREQ_MHZ_TO_REG(865.500),
+    SX12XX_FREQ_MHZ_TO_REG(865.750),
+    SX12XX_FREQ_MHZ_TO_REG(866.000),
+    SX12XX_FREQ_MHZ_TO_REG(866.250),
+    SX12XX_FREQ_MHZ_TO_REG(866.500),
+    SX12XX_FREQ_MHZ_TO_REG(866.750),
+    SX12XX_FREQ_MHZ_TO_REG(867.000),
+    SX12XX_FREQ_MHZ_TO_REG(867.250),
+    SX12XX_FREQ_MHZ_TO_REG(867.500),
+    SX12XX_FREQ_MHZ_TO_REG(867.750),
+    SX12XX_FREQ_MHZ_TO_REG(868.175), // M
+    SX12XX_FREQ_MHZ_TO_REG(868.425),
+    SX12XX_FREQ_MHZ_TO_REG(868.950), // N
+};
+
+// band O 869.4-869.65 MHz, 500 mW e.r.p. at 10 % duty
+const uint32_t fhss_freq_list_869_lr[] = {
+    SX12XX_FREQ_MHZ_TO_REG(869.525),
+};
+
+static_assert(sizeof(fhss_freq_list_868_eu_lora)/sizeof(uint32_t) == FHSS_NUM_868_EU_LORA, "FHSS_NUM_868_EU_LORA");
+static_assert(sizeof(fhss_freq_list_868_eu_fsk)/sizeof(uint32_t) == FHSS_NUM_868_EU_FSK, "FHSS_NUM_868_EU_FSK");
+static_assert(sizeof(fhss_freq_list_869_lr)/sizeof(uint32_t) == FHSS_NUM_869_LR, "FHSS_NUM_869_LR");
+
 #endif
 #ifdef FHSS_HAS_CONFIG_915_MHZ_FCC
 // 902-928Mhz w/ 0.6MHz spacing means 26 / 0.6 = 43(.3) channels
@@ -390,10 +439,32 @@ const tFhssConfig fhss_config[] = {
 };
 
 
+typedef struct
+{
+    const uint32_t* freq_list;
+    uint8_t freq_list_len;
+} tFhssPlan;
+
+
+// ATTENTION: this must be in exactly the same order as FHSS_PLAN_ENUM
+const tFhssPlan fhss_plan[] = {
+    { .freq_list = nullptr, .freq_list_len = 0 }, // FHSS_PLAN_DEFAULT, the band's list
+#ifdef FHSS_HAS_CONFIG_868_MHZ
+    { .freq_list = fhss_freq_list_868_eu_lora, .freq_list_len = FHSS_NUM_868_EU_LORA },
+    { .freq_list = fhss_freq_list_868_eu_fsk, .freq_list_len = FHSS_NUM_868_EU_FSK },
+    { .freq_list = fhss_freq_list_869_lr, .freq_list_len = FHSS_NUM_869_LR },
+#else
+    { .freq_list = nullptr, .freq_list_len = 0 },
+    { .freq_list = nullptr, .freq_list_len = 0 },
+    { .freq_list = nullptr, .freq_list_len = 0 },
+#endif
+};
+
+
 class tFhssBase
 {
   public:
-    void Init(uint8_t fhss_num, uint32_t seed, SX_FHSS_FREQUENCY_BAND_ENUM frequency_band, uint16_t bind_mask, uint8_t ortho, uint8_t except)
+    void Init(uint8_t fhss_num, uint32_t seed, SX_FHSS_FREQUENCY_BAND_ENUM frequency_band, uint16_t bind_mask, uint8_t ortho, uint8_t except, uint8_t plan)
     {
         if (fhss_num > FHSS_MAX_NUM) while(1){} // should not happen, but play it safe
 
@@ -412,6 +483,16 @@ class tFhssBase
         is_in_binding = false;
 
         if (bind_scan_mask == 0) while(1){} // should not happen, but play it safe
+
+        if (plan != FHSS_PLAN_DEFAULT) { // bind stays on the band's bind channel
+            if (sizeof(fhss_plan)/sizeof(tFhssPlan) != FHSS_PLAN_NUM) while(1){} // should not happen, but play it safe
+            if (plan >= FHSS_PLAN_NUM || fhss_plan[plan].freq_list == nullptr) while(1){} // should not happen, but play it safe
+            fhss_freq_list = fhss_plan[plan].freq_list;
+            FREQ_LIST_LEN = fhss_plan[plan].freq_list_len;
+            cnt = FREQ_LIST_LEN;
+            generate_plan(seed);
+            return;
+        }
 
         if (fhss_num > (FREQ_LIST_LEN - 1)) fhss_num = (FREQ_LIST_LEN - 1);
         cnt = fhss_num;
@@ -625,6 +706,7 @@ class tFhssBase
 
     uint16_t prng(void);
     void generate(uint32_t seed);
+    void generate_plan(uint32_t seed);
     void generate_ortho_except(uint32_t seed, uint8_t ortho, uint8_t except);
 };
 
@@ -639,7 +721,7 @@ class tFhss : public tFhssBase
     {
         tFhssBase::Init(fhss->Num, fhss->Seed,
                           fhss->FrequencyBand, fhss->BindScan_mask,
-                          fhss->Ortho, fhss->Except);
+                          fhss->Ortho, fhss->Except, fhss->Plan);
     }
 
     uint8_t GetCurrI2(void) { return GetCurrI(); }
@@ -668,10 +750,10 @@ class tFhss
     {
         fhss1stBand.Init(fhss->Num, fhss->Seed,
                           fhss->FrequencyBand, fhss->BindScan_mask,
-                          fhss->Ortho, fhss->Except);
+                          fhss->Ortho, fhss->Except, fhss->Plan);
         fhss2ndBand.Init(fhss2->Num, fhss2->Seed,
                           fhss2->FrequencyBand, fhss2->BindScan_mask,
-                          fhss2->Ortho, fhss2->Except);
+                          fhss2->Ortho, fhss2->Except, fhss2->Plan);
     }
 
     void Start(void)

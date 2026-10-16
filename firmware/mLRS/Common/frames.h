@@ -654,6 +654,7 @@ tTxCmdFrameRxParams rx_params = {};
     rx_params.Mode = Setup.Common[Config.ConfigId].Mode;
     rx_params.Ortho = Setup.Common[Config.ConfigId].Ortho;
     rx_params.Privacy = Setup.Common[Config.ConfigId].Privacy;
+    rx_params.Region = Setup.Common[Config.ConfigId].Region;
 
     _copy_rxsetup_to_cmdframerxparameters(&(rx_params.RxParams));
 
@@ -712,6 +713,7 @@ tTxCmdFrameRxParams* rx_params = (tTxCmdFrameRxParams*)frame->payload;
     Setup.Common[0].Mode = rx_params->Mode;
     Setup.Common[0].Ortho = rx_params->Ortho;
     Setup.Common[0].Privacy = rx_params->Privacy;
+    Setup.Common[0].Region = rx_params->Region;
 
     if (!crypto.PrivacyLevel()) {
         // frame could come from an old transmitter, so take values at old location

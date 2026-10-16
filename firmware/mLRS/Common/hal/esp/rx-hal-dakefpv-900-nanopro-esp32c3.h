@@ -46,6 +46,8 @@
 
 #define SX_USE_REGULATOR_MODE_DCDC
 
+#define SX_LNA_GAIN_DB            17 // ELRS power_lna_gain, for the EU listen before talk thresholds
+
 IRQHANDLER(void SX_DIO_EXTI_IRQHandler(void);)
 
 void sx_init_gpio(void)
