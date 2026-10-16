@@ -36,6 +36,8 @@ extern tStats stats;
 //#define GCS_SYSTEM_ID                 255 // default of MissionPlanner, QGC
 //#define RADIO_LINK_SYSTEM_ID          RX_RADIO_LINK_SYSTEM_ID // moved to common_conf.h
 #define RADIO_LINK_SYSTEM_ID          (51 + Setup.Rx.MavlinkSystemID)
+
+void rxcli_handle_cmd_long(fmav_message_t* const msg); // TetherLRS, rx_cli.h
 #define GCS_SYSTEM_ID                 RX_GCS_SYSTEM_ID // moved to common_conf.h
 #define REBOOT_SHUTDOWN_MAGIC         1234321
 #if defined ESP8266 || defined ESP32
@@ -1170,6 +1172,7 @@ void tRxMavlink::handle_msg(fmav_message_t* const msg)
 
     case FASTMAVLINK_MSG_ID_COMMAND_LONG:
         handle_cmd(msg);
+        rxcli_handle_cmd_long(msg); // TetherLRS: the unlock of the settings session, looked at only with no Tx heard
         break;
     }
 }

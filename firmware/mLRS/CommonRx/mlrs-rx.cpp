@@ -142,6 +142,12 @@ tRxMsp msp;
 
 tRxSxSerial sx_serial;
 
+#include "rx_cli.h"
+
+tRxCli rxcli;
+
+void rxcli_handle_cmd_long(fmav_message_t* const msg) { rxcli.HandleCmdLong(msg); }
+
 #include "dronecan_interface_rx.h"
 
 tRxDroneCan dronecan;
@@ -630,6 +636,7 @@ RESTARTCONTROLLER
     rcData.Init();
     out.Configure(Setup.Rx.OutMode);
     mavlink.Init();
+    rxcli.Init();
     msp.Init();
     sx_serial.Init();
     fan.SetPower(SX_OR_SX2(sx.RfPower_dbm(),sx2.RfPower_dbm()));
@@ -1018,14 +1025,22 @@ dbg.puts(s8toBCD_s(stats.last_rssi2));*/
 
     out.Do();
 
-    //-- Do MAVLink & MSP & DroneCAN
+    //-- Do MAVLink & MSP & DroneCAN, or the settings session, which has the serial to itself
 
-    mavlink.Do();
-    msp.Do();
+    rxcli.Do(connect_state == CONNECT_STATE_LISTEN && !bind.IsInBind());
+    if (!rxcli.Active()) {
+        mavlink.Do();
+        msp.Do();
+    }
     dronecan.Do();
 
     //-- Store parameters
 
+    if (rxcli.StoreRequested()) { // the session's copy becomes the setup, and the receiver restarts with it
+        delay_ms(50); // its "parameters stored" leaves first
+        memcpy(&Setup, rxcli.Copy(), sizeof(tSetup));
+        doParamsStore = true;
+    }
     if (doParamsStore) {
         sx.SetToIdle();
         sx2.SetToIdle();
