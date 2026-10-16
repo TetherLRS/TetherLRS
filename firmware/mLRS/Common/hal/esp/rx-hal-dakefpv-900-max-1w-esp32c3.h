@@ -48,7 +48,8 @@
 
 #define SX_USE_REGULATOR_MODE_DCDC
 
-// Antenna switch; ELRS starts on antenna 0 (low). mLRS has no antenna switching with one radio, so it stays there
+// Antenna switch, driven by Common/antenna_switch.h (ELRS's single-radio diversity); antenna 0 is low, as in ELRS
+#define DEVICE_HAS_ANTENNA_SWITCH
 #define SX_ANT_CTRL               IO_P10
 
 IRQHANDLER(void SX_DIO_EXTI_IRQHandler(void);)
@@ -62,6 +63,8 @@ void sx_init_gpio(void)
 }
 
 IRAM_ATTR bool sx_busy_read(void) { return (gpio_read_activehigh(SX_BUSY)) ? true : false; }
+
+IRAM_ATTR void sx_antenna_switch_set(uint8_t antenna) { if (antenna) { gpio_high(SX_ANT_CTRL); } else { gpio_low(SX_ANT_CTRL); } }
 
 IRAM_ATTR void sx_amp_transmit(void) {}
 IRAM_ATTR void sx_amp_receive(void) {}

@@ -95,6 +95,9 @@
 #include "../Common/setup.h"
 #include "../Common/common.h"
 #include "../Common/diversity.h"
+#ifdef DEVICE_HAS_ANTENNA_SWITCH
+#include "../Common/antenna_switch.h"
+#endif
 #include "../Common/arq.h"
 #include "../Common/crypto.h"
 //#include "../Common/time_stats.h" // un-comment if you want to use
@@ -107,6 +110,9 @@ tRxClock rxclock;
 tPowerupCounter powerup;
 tRDiversity rdiversity;
 tTDiversity tdiversity;
+#ifdef DEVICE_HAS_ANTENNA_SWITCH
+tAntennaSwitch antsw;
+#endif
 tTransmitArq tarq;
 tCrypto crypto;
 
@@ -605,6 +611,9 @@ RESTARTCONTROLLER
     stats.Init(Config.LQAveragingPeriod, Config.frame_rate_hz, Config.frame_rate_ms);
     rdiversity.Init();
     tdiversity.Init(Config.frame_rate_ms);
+#ifdef DEVICE_HAS_ANTENNA_SWITCH
+    antsw.Init();
+#endif
     tarq.Init();
     crypto.Init(tCrypto::RX,
         Setup.Common[0].BindPhrase, Setup.peer_uid[0], Config.Uid, Setup.tx_random[0],
@@ -803,6 +812,10 @@ dbg.puts(s8toBCD_s(stats.last_rssi2));*/
         } else {
             handle_receive_none();
         }
+
+#ifdef DEVICE_HAS_ANTENNA_SWITCH
+        antsw.Update(valid_frame_received, stats.last_rssi1);
+#endif
 
         if (TRANSMIT_USE_ANTENNA1 && TRANSMIT_USE_ANTENNA2) {
             tdiversity.DoEstimate(link_rx1_status, link_rx2_status, stats.last_rssi1, stats.last_rssi2);

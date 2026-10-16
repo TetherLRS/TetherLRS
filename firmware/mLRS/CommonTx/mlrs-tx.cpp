@@ -115,6 +115,9 @@
 #include "../Common/common.h"
 #include "../Common/channel_order.h"
 #include "../Common/diversity.h"
+#ifdef DEVICE_HAS_ANTENNA_SWITCH
+#include "../Common/antenna_switch.h"
+#endif
 #include "../Common/arq.h"
 #include "../Common/crypto.h"
 //#include "../Common/time_stats.h" // un-comment if you want to use
@@ -131,6 +134,9 @@
 
 tRDiversity rdiversity;
 tTDiversity tdiversity;
+#ifdef DEVICE_HAS_ANTENNA_SWITCH
+tAntennaSwitch antsw;
+#endif
 tReceiveArq rarq;
 tCrypto crypto;
 tChannelOrder channelOrder(tChannelOrder::DIRECTION_TX_TO_MLRS);
@@ -775,6 +781,9 @@ RESTARTCONTROLLER
     stats.Init(Config.LQAveragingPeriod, Config.frame_rate_hz, Config.frame_rate_ms);
     rdiversity.Init();
     tdiversity.Init(Config.frame_rate_ms);
+#ifdef DEVICE_HAS_ANTENNA_SWITCH
+    antsw.Init();
+#endif
     rarq.Init();
     crypto.Init(tCrypto::TX,
         Setup.Common[Config.ConfigId].BindPhrase,
@@ -1005,6 +1014,10 @@ IF_SX2(
         } else {
             handle_receive_none();
         }
+
+#ifdef DEVICE_HAS_ANTENNA_SWITCH
+        antsw.Update(valid_frame_received, stats.last_rssi1);
+#endif
 
         if (TRANSMIT_USE_ANTENNA1 && TRANSMIT_USE_ANTENNA2) {
             tdiversity.DoEstimate(link_rx1_status, link_rx2_status, stats.last_rssi1, stats.last_rssi2);
