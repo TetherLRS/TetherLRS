@@ -21,6 +21,7 @@
   --text-3: rgba(0, 0, 0, 0.446);
   --accent: #005fb8;
   --accent-hover: #1a6fc0;
+  --series-2: #c25700; /* the second line of a graph, beside the accent */
   --on-accent: #ffffff;
   --ok: #0f7b0f;
   --ok-bg: #dff6dd;
@@ -59,6 +60,7 @@
     --text-3: rgba(255, 255, 255, 0.544);
     --accent: #60cdff;
     --accent-hover: #5abce9;
+    --series-2: #ffb46b;
     --on-accent: #000000;
     --ok: #6ccb5f;
     --ok-bg: #393d1b;

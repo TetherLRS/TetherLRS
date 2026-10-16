@@ -55,6 +55,7 @@
   </div>
 </section>
 
+<div class="pair">
 <section class="card">
   <h2>Ground radio (Tx)</h2>
   <p class="caption">The Tx goes to its bootloader by command, no button needed. Keep a backup of what it runs now before the first flash.</p>
@@ -110,6 +111,7 @@
     <button class="btn accent" onclick={() => rxEntry && app.rxFlash(rxEntry)} disabled={!app.rxInRom || !rxInfo || app.rxBusy}>Flash</button>
   </div>
 </section>
+</div>
 
 {#if app.flashLog.length}
   <section class="card">
@@ -120,6 +122,18 @@
 {/if}
 
 <style>
+  /* the Tx and the receiver side by side when there is room */
+  .pair {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3);
+    align-items: start;
+  }
+  @container content (min-width: 1000px) {
+    .pair {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+  }
   .card {
     display: flex;
     flex-direction: column;

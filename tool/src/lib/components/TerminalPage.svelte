@@ -65,7 +65,7 @@
   }
   .out {
     margin: 0;
-    height: 420px;
+    height: max(260px, calc(100vh - 300px)); /* as tall as the window allows */
     overflow: auto;
     padding: var(--space-3);
     border-radius: var(--r-control);

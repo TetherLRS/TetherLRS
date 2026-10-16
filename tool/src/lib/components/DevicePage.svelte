@@ -3,10 +3,14 @@
 </script>
 
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import { app } from '$lib/app.svelte';
   import { forgetTx, hasWebSerial, isDesktop, listPorts, probeable, rememberTx, requestPort, type PortEntry } from '$lib/serial/ports';
   import { identifyTx } from '$lib/device/identify';
+  import { sleep } from '$lib/device/link';
+  import { linkMetrics } from '$lib/link-metrics';
+  import LinkGraph from './LinkGraph.svelte';
+  import LinkTiles from './LinkTiles.svelte';
   import { TX_BAUDS } from '$lib/device/tx';
   import Icon from './Icon.svelte';
   import PortList from './PortList.svelte';
@@ -29,10 +33,12 @@
     for (const p of ports.filter(probeable)) {
       if (app.state !== 'idle') break;
       checking = p.key;
-      const id = await identifyTx(p.port, p.known?.baud);
+      // a port that never answers must not hold up the others
+      const id = await Promise.race([identifyTx(p.port, p.known?.baud).catch(() => undefined), sleep(15000).then(() => undefined)]);
       if (id) {
         rememberTx(p, id.txName, id.baud);
         found ??= p.key;
+        await list(); // shown at once, not after the last port
       } else {
         forgetTx(p);
       }
@@ -70,14 +76,23 @@
   });
 
   const region = $derived(app.param('Region')?.text);
+
+  // the link at a glance, live while this page is open; a measure opens large on the Link page
+  const live = $derived(app.connected && app.state === 'connected');
+  $effect(() => {
+    if (live && !app.streaming) void app.startStats();
+  });
+  onDestroy(() => {
+    if (app.page !== 'device') void app.stopStats();
+  });
+  const metrics = $derived(linkMetrics(app.stats));
+  const shown = $derived(metrics.find((m) => m.key === app.linkMetric) ?? metrics[0]);
 </script>
 
+<div class="device">
 <section class="card">
   <header>
-    <div>
-      <h2>Connection</h2>
-      <p class="caption">The ground radio on a USB serial adapter. The tool talks to it through its CLI, as SiK programs do with +++.</p>
-    </div>
+    <h2>Connection</h2>
     <div class="actions">
       {#if !isDesktop && hasWebSerial}
         <button class="btn" onclick={add} disabled={app.state !== 'idle'}><Icon name="usb" size={16} />Add port…</button>
@@ -115,28 +130,44 @@
   </footer>
 </section>
 
-{#if app.connected && app.version}
-  <section class="radios">
-    <div class="card radio">
-      <span class="caption">Ground radio (Tx)</span>
+<section class="radios">
+  <div class="card radio">
+    <span class="caption">Ground radio (Tx)</span>
+    {#if app.connected && app.version}
       <span class="name">{app.version.txName}</span>
       <span class="caption">{app.version.txVersion}</span>
-    </div>
-    <div class="card radio">
-      <span class="caption">Aircraft radio (Rx)</span>
-      {#if app.version.rxConnected}
-        <span class="name">{app.version.rxName}</span>
-        <span class="caption">{app.version.rxVersion}</span>
-      {:else}
-        <span class="name muted">Not connected</span>
-        <span class="caption">Power the receiver to read and set its parameters.</span>
-      {/if}
-    </div>
-    <div class="card radio">
-      <span class="caption">Link</span>
+    {:else}
+      <span class="name muted">Not connected</span>
+      <span class="caption">Pick its port and press Connect.</span>
+    {/if}
+  </div>
+  <div class="card radio">
+    <span class="caption">Aircraft radio (Rx)</span>
+    {#if app.version?.rxConnected}
+      <span class="name">{app.version.rxName}</span>
+      <span class="caption">{app.version.rxVersion}</span>
+    {:else}
+      <span class="name muted">Not connected</span>
+      <span class="caption">{app.connected ? 'Power the receiver to read and set its parameters.' : 'Read through the ground radio.'}</span>
+    {/if}
+  </div>
+  <div class="card radio">
+    <span class="caption">Link</span>
+    {#if app.connected}
       <span class="name">{app.param('Mode')?.text ?? '–'} · {app.param('RF Band')?.text ?? '–'}</span>
       <span class="caption">Region {region ?? '–'}{region === 'EU' ? ': European rules apply' : ''}</span>
-    </div>
+    {:else}
+      <span class="name muted">–</span>
+      <span class="caption">Mode, band and region of the link.</span>
+    {/if}
+  </div>
+</section>
+</div>
+
+{#if live}
+  <section class="glance">
+    <LinkTiles {metrics} selected={shown.key} grid onselect={(k) => (app.linkMetric = k)} />
+    <LinkGraph metric={shown} />
   </section>
 {/if}
 
@@ -144,14 +175,18 @@
   .card {
     padding: var(--space-4) var(--space-5) var(--space-5);
   }
+  .device > .card {
+    display: flex;
+    flex-direction: column;
+  }
+  .device > .card footer {
+    margin-top: auto; /* the buttons at the bottom when the card is stretched */
+  }
   header {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
     gap: var(--space-4);
-  }
-  header p {
-    margin: var(--space-1) 0 0;
   }
   .actions {
     display: flex;
@@ -178,10 +213,35 @@
     flex: 1;
     padding-bottom: 6px;
   }
+  /* the link at a glance fills what is left of the window */
+  .glance {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    min-height: max(420px, calc(100vh - 470px));
+  }
+  .glance :global(.graph) {
+    flex: 1;
+  }
+  .device {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3);
+    align-items: stretch; /* the connection as tall as the radios beside it */
+  }
   .radios {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: var(--space-3);
+  }
+  /* wide: the radios in a column beside the connection */
+  @container content (min-width: 1000px) {
+    .device {
+      grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+    }
+    .radios {
+      grid-template-columns: minmax(0, 1fr);
+    }
   }
   .radio {
     display: flex;

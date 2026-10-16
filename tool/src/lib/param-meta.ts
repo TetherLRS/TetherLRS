@@ -27,7 +27,7 @@ const META: Record<string, ParamMeta> = {
   },
   'Dyn Power': {
     label: 'Dynamic power',
-    help: 'Both radios turn their power down while the link is strong, never above the transmit power set below, and back up at once when it weakens.',
+    help: 'Both radios turn their power down while the link is strong, never above the transmit power set for each, and back up at once when it weakens.',
   },
   'Tx Power': { label: 'Transmit power' },
   'Tx Diversity': { label: 'Antennas' },

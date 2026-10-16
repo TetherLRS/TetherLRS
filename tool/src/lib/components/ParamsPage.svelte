@@ -24,19 +24,21 @@
   <InfoBar kind="warning" text="Changes are active but not stored. Saving restarts the radios if a link setting changed." />
 {/if}
 
-{#each SECTIONS as s}
-  {#if bySection[s.id]?.length}
-    <section class="card section">
-      <div class="head">
-        <h2>{s.title}</h2>
-        {#if 'help' in s}<span class="caption">{s.help}</span>{/if}
-      </div>
-      {#each bySection[s.id] as p (p.name)}
-        <ParamRow param={p} />
-      {/each}
-    </section>
-  {/if}
-{/each}
+<div class="sections">
+  {#each SECTIONS as s}
+    {#if bySection[s.id]?.length}
+      <section class="card section">
+        <div class="head">
+          <h2>{s.title}</h2>
+          {#if 'help' in s}<span class="caption">{s.help}</span>{/if}
+        </div>
+        {#each bySection[s.id] as p (p.name)}
+          <ParamRow param={p} />
+        {/each}
+      </section>
+    {/if}
+  {/each}
+</div>
 
 {#if app.version && !app.version.rxConnected}
   <p class="caption">Receiver parameters appear when the receiver is connected.</p>
@@ -48,7 +50,15 @@
 </div>
 
 <style>
+  /* side by side as the width allows, one to three columns; columns, not a grid, so a short section and the next
+     one stack without a hole under the short one */
+  .sections {
+    columns: 460px;
+    column-gap: var(--space-3);
+  }
   .section {
+    break-inside: avoid;
+    margin-bottom: var(--space-3);
     padding: var(--space-1) 0;
   }
   .head {

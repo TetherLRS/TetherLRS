@@ -266,7 +266,7 @@ export class DemoSerialPort {
     const lq = r(92, 100);
     let line = `${p3(lq)}(${p3(Math.min(100, lq + r(0, 4)))}),${p3(r(90, 100))}, ${s8(r(-75, -60))}/${s8(-127)},${s8(r(-78, -62))}, ${s8(r(5, 9))}/${s8(0)}; ${p5(r(80, 400))}, ${p5(r(900, 1450))};`;
     if (this.find('REGION')!.value === 1) line += ` cca ${p10(r(0, 3))}, lim ${p10(0)};`;
-    line += ` pwr ${s8(this.find('DYN_POWER')!.value === 1 ? r(10, 14) : 14)};`;
+    line += ` pwr ${s8(this.find('DYN_POWER')!.value === 1 ? r(10, 14) : 14)}; rxp ${this.find('RX_POWER')!.options![this.find('RX_POWER')!.value as number]};`;
     this.putsn(line);
   }
 }

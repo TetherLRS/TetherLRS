@@ -41,6 +41,7 @@ export interface LinkStats {
   ccaBusy?: number; // EU region: frames held back, channel busy
   limited?: number; // EU region: frames held back, time limits
   txPower?: number; // dBm the Tx transmits with now, lower than set with Dyn Power
+  rxPower?: string; // the receiver's power now, as its Rx Power option names it; missing from an mLRS receiver
 }
 
 // the CLI prints list indices as '0' + index, so 10 and above come out as ':' ';' '<' ...
@@ -120,7 +121,7 @@ export function parseVersion(text: string): DeviceVersion | undefined {
 
 // one line of the "stats" stream, e.g. " 98(100), 97,-61/-127,-63, 8/ 0; 120, 410; cca 0, lim 2;"
 export function parseStatsLine(line: string): LinkStats | undefined {
-  const m = /^\s*(-?\d+)\(\s*(-?\d+)\),\s*(-?\d+),\s*(-?\d+)\/\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)\/\s*(-?\d+);\s*(\d+),\s*(\d+);(?:\s*cca\s*(\d+),\s*lim\s*(\d+);)?(?:\s*pwr\s*(-?\d+);)?/.exec(line);
+  const m = /^\s*(-?\d+)\(\s*(-?\d+)\),\s*(-?\d+),\s*(-?\d+)\/\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)\/\s*(-?\d+);\s*(\d+),\s*(\d+);(?:\s*cca\s*(\d+),\s*lim\s*(\d+);)?(?:\s*pwr\s*(-?\d+);)?(?:\s*rxp\s*([^;]*);)?/.exec(line);
   if (!m) return undefined;
   const n = (i: number) => parseInt(m[i], 10);
   const s: LinkStats = {
@@ -132,5 +133,6 @@ export function parseStatsLine(line: string): LinkStats | undefined {
     s.limited = n(12);
   }
   if (m[13] !== undefined) s.txPower = n(13);
+  if (m[14] !== undefined && m[14].trim() !== '-') s.rxPower = m[14].trim();
   return s;
 }

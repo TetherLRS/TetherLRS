@@ -53,8 +53,8 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
-    max-width: 1000px;
     padding: var(--space-5) var(--space-6) 0;
+    container: content / inline-size; /* the pages lay out by the width they get, not the window's */
   }
   h1 {
     margin-bottom: var(--space-2);

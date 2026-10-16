@@ -31,6 +31,7 @@ class App {
   unsaved = $state(false);
   stats = $state<LinkStats[]>([]);
   streaming = $state(false);
+  linkMetric = $state('lq'); // the measure the Link page shows large
   terminal = $state<string[]>([]); // the CLI conversation on the Terminal page
 
   firmwareBase = $state(DEFAULT_FIRMWARE_BASE);
@@ -93,9 +94,13 @@ class App {
       if (await tx.enterCommandMode()) {
         this.link = link;
         this.tx = tx;
-        this.state = 'connected';
+        this.state = 'busy'; // connected only once version and parameters are read: nothing else may use the CLI before
         this.status = `Connected to ${entry.label} at ${baud} baud`;
-        await this.refresh();
+        try {
+          await this.refresh();
+        } finally {
+          this.state = 'connected';
+        }
         if (this.version) rememberTx(entry, this.version.txName, baud);
         return;
       }
@@ -217,19 +222,35 @@ class App {
     }
   }
 
-  async startStats(): Promise<void> {
-    if (!this.tx || this.streaming) return;
-    this.stats = [];
-    this.streaming = true;
-    await this.tx.startStats((s) => {
-      this.stats = [...this.stats.slice(-119), s]; // one minute at 2 per second
-    });
+  // start and stop come from pages opening and closing in any order: one step at a time, towards the last request
+  private statsWanted = false;
+  private statsMoving?: Promise<void>;
+
+  startStats(): Promise<void> {
+    return this.wantStats(true);
   }
 
-  async stopStats(): Promise<void> {
-    if (!this.tx || !this.streaming) return;
-    this.streaming = false;
-    await this.tx.stopStats();
+  stopStats(): Promise<void> {
+    return this.wantStats(false);
+  }
+
+  private wantStats(on: boolean): Promise<void> {
+    this.statsWanted = on;
+    this.statsMoving ??= (async () => {
+      while (this.tx && this.streaming !== this.statsWanted) {
+        if (this.statsWanted) {
+          this.stats = [];
+          this.streaming = true;
+          await this.tx.startStats((s) => {
+            this.stats = [...this.stats.slice(-119), s]; // one minute at 2 per second
+          });
+        } else {
+          this.streaming = false;
+          await this.tx.stopStats();
+        }
+      }
+    })().finally(() => (this.statsMoving = undefined));
+    return this.statsMoving;
   }
 
   async loadFirmwareList(): Promise<void> {

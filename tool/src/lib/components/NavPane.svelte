@@ -1,6 +1,7 @@
 <script lang="ts">
   import { app, type Page } from '$lib/app.svelte';
   import Icon from './Icon.svelte';
+  import logo from '$lib/assets/logo.png';
 
   const items: { page: Page; label: string; icon: string; needsDevice: boolean }[] = [
     { page: 'device', label: 'Device', icon: 'device', needsDevice: false },
@@ -11,27 +12,28 @@
   ];
 
   async function go(page: Page) {
-    if (app.streaming && page !== 'link') await app.stopStats();
+    if (page === app.page) return;
+    await app.stopStats(); // the page that wants the stats starts them again
     app.page = page;
   }
 </script>
 
 <nav class="pane">
   <div class="brand">
-    <span class="logo" aria-hidden="true"></span>
-    <span>TetherLRS</span>
+    <img class="logo" src={logo} alt="" />
+    <span class="label">TetherLRS</span>
   </div>
   <ul>
     {#each items as item}
       <li>
-        <button class="item" class:selected={app.page === item.page} disabled={item.needsDevice && !app.connected} onclick={() => go(item.page)}>
+        <button class="item" class:selected={app.page === item.page} disabled={item.needsDevice && !app.connected} onclick={() => go(item.page)} title={item.label}>
           <Icon name={item.icon} />
-          <span>{item.label}</span>
+          <span class="label">{item.label}</span>
         </button>
       </li>
     {/each}
   </ul>
-  <div class="conn">
+  <div class="conn" title={app.connected && app.version ? app.version.txName : 'Not connected'}>
     <span class="dot" class:on={app.connected} class:pending={app.state === 'connecting'}></span>
     <div class="conn-text">
       {#if app.connected && app.version}
@@ -51,6 +53,7 @@
     display: flex;
     flex-direction: column;
     width: 240px;
+    transition: width 0.15s;
     flex: none;
     padding: var(--space-2) var(--space-1) var(--space-3);
     background: var(--pane);
@@ -64,10 +67,8 @@
     font-weight: 600;
   }
   .logo {
-    width: 18px;
-    height: 18px;
-    border-radius: 5px;
-    background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #7a3cff));
+    width: 20px;
+    height: 20px;
   }
   ul {
     list-style: none;
@@ -138,5 +139,21 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  /* a narrow window: icons only, as the Windows 11 navigation pane does in compact mode */
+  @media (max-width: 1000px) {
+    .pane {
+      width: 56px;
+    }
+    .label,
+    .conn-text {
+      display: none;
+    }
+    .brand,
+    .item,
+    .conn {
+      justify-content: center;
+      padding: 0;
+    }
   }
 </style>
