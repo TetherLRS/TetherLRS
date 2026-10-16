@@ -87,7 +87,7 @@ void systick_millis_init(void)
 #elif defined ESP8266
     timer1_attachInterrupt(CLOCK_IRQHandler); 
     timer1_enable(TIM_DIV16, TIM_EDGE, TIM_LOOP);
-    timer1_write(50); // 5 MHz (5 ticks/us - 1677721.4 us max), 50 ticks = 10us
+    timer1_write(5000); // 5 MHz (5 ticks/us - 1677721.4 us max), 5000 ticks = 1 ms, one HAL_IncTick each as on ESP32
 #endif
 }
 
