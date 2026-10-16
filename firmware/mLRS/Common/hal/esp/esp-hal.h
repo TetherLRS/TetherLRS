@@ -25,11 +25,11 @@
 #include "rx-hal-generic-900-td-pa-esp32.h"
 #endif
 
-#ifdef RX_ELRS_GENERIC_LR1121_TD_ESP32
+#if defined RX_ELRS_GENERIC_LR1121_TD_ESP32 || defined RX_ELRS_GENERIC_LR1121_TD_2400_ESP32 || defined RX_ELRS_GENERIC_LR1121_TD_900_ESP32
 #include "rx-hal-generic-lr1121-td-esp32.h"
 #endif
 
-#ifdef RX_ELRS_GENERIC_C3_LR1121_ESP32C3
+#if defined RX_ELRS_GENERIC_C3_LR1121_ESP32C3 || defined RX_ELRS_GENERIC_C3_LR1121_2400_ESP32C3 || defined RX_ELRS_GENERIC_C3_LR1121_900_ESP32C3
 #include "rx-hal-generic-c3-lr1121-esp32c3.h"
 #endif
 

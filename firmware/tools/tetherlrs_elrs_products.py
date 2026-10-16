@@ -41,11 +41,26 @@ def slug(layout):
     return s
 
 
+# generic LR1121 builds that also come for one band: a board with one front end gets the build of its band, which
+# starts there (the multi-band one starts at 868 MHz); ELRS's power_values are the 900 MHz ones, power_values_dual 2.4 GHz
+BAND_SPLIT = ('generic-c3-lr1121', 'generic-lr1121-td')
+
+
+def band_suffix(o):
+    kind = 'TX' if o.get('firmware', '').endswith('_TX') else 'RX'
+    with open(os.path.join(os.path.dirname(SRC), kind, o['layout_file']), encoding='utf-8') as f:
+        hw = {**json.load(f), **o.get('overlay', {})}
+    has900, has24 = hw.get('power_values') is not None, hw.get('power_values_dual') is not None
+    return '-2400' if has24 and not has900 else '-900' if has900 and not has24 else ''
+
+
 def walk(o, out):
     if isinstance(o, dict):
         if 'product_name' in o and 'layout_file' in o:
             name = o['product_name']
-            out[name] = [OWN_HAL.get(name, slug(o['layout_file'])), o.get('platform', '')]
+            env = OWN_HAL.get(name, slug(o['layout_file']))
+            if env in BAND_SPLIT: env += band_suffix(o)
+            out[name] = [env, o.get('platform', '')]
             return
         for v in o.values():
             walk(v, out)
