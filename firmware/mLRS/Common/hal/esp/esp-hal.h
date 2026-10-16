@@ -91,6 +91,10 @@
 #include "rx-hal-dakefpv-900-max-1w-esp32c3.h"
 #endif
 
+#ifdef RX_ELRS_DAKEFPV_2400_NANO_ESP32C3
+#include "rx-hal-dakefpv-2400-nano-esp32c3.h"
+#endif
+
 #ifdef RX_ELRS_DAKEFPV_900_NANOPRO_ESP32C3
 #include "rx-hal-dakefpv-900-nanopro-esp32c3.h"
 #endif

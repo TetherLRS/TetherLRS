@@ -19,6 +19,7 @@ OWN_HAL = {
     'BAYCKRC UR1000 Dual Band RX': 'bayck-ur1000',
     'DAKEFPV 900MHz MAX 1000mW Diversity RX': 'dakefpv-900-max-1w',
     'DAKEFPV 900MHz NANOPRO MAX 500mW RX': 'dakefpv-900-nanopro',
+    'DAKEFPV Nano 2.4GHz RX': 'dakefpv-2400-nano',
     'RadioMaster BR3 Diversity 900Mz RX': 'radiomaster-br3-900',
     'SpeedyBee Nano 2.4GHz RX': 'speedybee-nano-2400',
     'BETAFPV SuperD 2.4GHz RX': 'betafpv-superd-2400',
