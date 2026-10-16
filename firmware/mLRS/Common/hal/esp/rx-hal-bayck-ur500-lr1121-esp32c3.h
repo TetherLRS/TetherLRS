@@ -14,7 +14,7 @@
 //-------------------------------------------------------
 
 #define DEVICE_HAS_SINGLE_LED_RGB
-#define DEVICE_HAS_NO_DEBUG
+//#define DEVICE_HAS_NO_DEBUG // the debug port has its own UART here
 //#define DEVICE_HAS_NO_SERIAL
 
 
@@ -30,8 +30,11 @@
 #define UARTB_TXBUFSIZE           RX_SERIAL_TXBUFSIZE
 #define UARTB_RXBUFSIZE           RX_SERIAL_RXBUFSIZE
 
-#define UARTF_USE_SERIAL
+// the second UART, ELRS's serial1 on GPIO18/19, is the debug port: messages without touching the FC's serial
+#define UARTF_USE_SERIAL1
 #define UARTF_BAUD                115200
+#define UARTF_USE_TX_IO           IO_P19
+#define UARTF_USE_RX_IO           IO_P18
 
 
 //-- SX1: LR11xx & SPI
