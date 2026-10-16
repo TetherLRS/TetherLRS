@@ -190,6 +190,14 @@
 #include "tx-hal-dakefpv-900-max-1w-esp32c3.h"
 #endif
 
+#ifdef TX_ELRS_DAKEFPV_900_NANOPRO_ESP32C3
+#include "tx-hal-dakefpv-900-nanopro-esp32c3.h"
+#endif
+
+#ifdef TX_ELRS_BAYCK_UR500_LR1121_ESP32C3
+#include "tx-hal-bayck-ur500-lr1121-esp32c3.h"
+#endif
+
 #ifdef TX_ELRS_FLYSKY_INTERNAL_PA01_2400_ESP32S3
 #include "tx-hal-flysky-int-pa01-2400-esp32s3.h"
 #endif
