@@ -1,0 +1,207 @@
+/* TetherLRS tool: design tokens after Windows 11 / Fluent, light and dark */
+
+:root {
+  color-scheme: light dark;
+  --font: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "Cascadia Mono", Consolas, ui-monospace, monospace;
+
+  --bg: #f3f3f3;
+  --pane: #ebebeb;
+  --surface: #fbfbfb;
+  --surface-strong: #ffffff;
+  --hover: rgba(0, 0, 0, 0.037);
+  --pressed: rgba(0, 0, 0, 0.024);
+  --selected: rgba(0, 0, 0, 0.061);
+  --stroke: rgba(0, 0, 0, 0.0578);
+  --stroke-control: rgba(0, 0, 0, 0.1);
+  --stroke-control-bottom: rgba(0, 0, 0, 0.32);
+  --text: rgba(0, 0, 0, 0.896);
+  --text-2: rgba(0, 0, 0, 0.606);
+  --text-3: rgba(0, 0, 0, 0.446);
+  --accent: #005fb8;
+  --accent-hover: #1a6fc0;
+  --on-accent: #ffffff;
+  --ok: #0f7b0f;
+  --ok-bg: #dff6dd;
+  --warn: #9d5d00;
+  --warn-bg: #fff4ce;
+  --err: #c42b1c;
+  --err-bg: #fde7e9;
+  --info-bg: #f6f6f6;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-flyout: 0 8px 16px rgba(0, 0, 0, 0.14);
+
+  --r-control: 4px;
+  --r-card: 8px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #202020;
+    --pane: #1c1c1c;
+    --surface: #2b2b2b;
+    --surface-strong: #323232;
+    --hover: rgba(255, 255, 255, 0.061);
+    --pressed: rgba(255, 255, 255, 0.04);
+    --selected: rgba(255, 255, 255, 0.084);
+    --stroke: rgba(255, 255, 255, 0.0698);
+    --stroke-control: rgba(255, 255, 255, 0.07);
+    --stroke-control-bottom: rgba(255, 255, 255, 0.16);
+    --text: #ffffff;
+    --text-2: rgba(255, 255, 255, 0.786);
+    --text-3: rgba(255, 255, 255, 0.544);
+    --accent: #60cdff;
+    --accent-hover: #5abce9;
+    --on-accent: #000000;
+    --ok: #6ccb5f;
+    --ok-bg: #393d1b;
+    --warn: #fce100;
+    --warn-bg: #433519;
+    --err: #ff99a4;
+    --err-bg: #442726;
+    --info-bg: #2b2b2b;
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2);
+    --shadow-flyout: 0 8px 16px rgba(0, 0, 0, 0.36);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 20px;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1 {
+  font-family: var(--font-display);
+  font-size: 28px;
+  line-height: 36px;
+  font-weight: 600;
+  margin: 0;
+}
+
+h2 {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.caption {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-2);
+}
+
+.mono {
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--stroke);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-card);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--text-3) transparent;
+}
+
+button,
+select,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 32px;
+  padding: 5px 12px;
+  border-radius: var(--r-control);
+  border: 1px solid var(--stroke-control);
+  border-bottom-color: var(--stroke-control-bottom);
+  background: var(--surface-strong);
+  cursor: default;
+  white-space: nowrap;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--surface);
+}
+
+.btn:active:not(:disabled) {
+  background: var(--pressed);
+  color: var(--text-2);
+}
+
+.btn:disabled {
+  color: var(--text-3);
+}
+
+.btn.accent {
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--on-accent);
+}
+
+.btn.accent:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.btn.accent:disabled {
+  background: var(--stroke-control);
+  color: var(--text-3);
+}
+
+select,
+input[type="text"],
+input[type="number"],
+input[type="url"] {
+  min-height: 32px;
+  padding: 5px 10px;
+  border-radius: var(--r-control);
+  border: 1px solid var(--stroke-control);
+  border-bottom-color: var(--stroke-control-bottom);
+  background: var(--surface-strong);
+  outline: none;
+}
+
+select:focus-visible,
+input:focus-visible,
+.btn:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+
+input:focus {
+  border-bottom: 2px solid var(--accent);
+  padding-bottom: 4px;
+}
+
+select option {
+  background: var(--surface-strong);
+  color: var(--text);
+}
