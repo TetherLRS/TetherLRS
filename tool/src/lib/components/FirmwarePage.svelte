@@ -18,6 +18,9 @@
   });
 
   const sel = $derived(radios.selected);
+  // identified on a click, or the Tx this app is connected to; every other port waits below until Identify
+  const known = $derived(radios.list.filter((r) => r.found));
+  const others = $derived(radios.list.filter((r) => !r.found));
   const f = $derived(sel?.found);
   const envs = $derived(app.manifest ? Object.values(app.manifest).filter((x) => x.env.startsWith(radios.role === 'Tx' ? 'tx-' : 'rx-')) : []);
   const info = $derived(app.manifest?.[radios.env]);
@@ -40,7 +43,7 @@
   function describe(r: Radio): string {
     if (r.checking) return 'Asking what it runs…';
     const x = r.found;
-    if (!x) return r.entry.kind === 'esp' ? 'Its own USB: Identify reads what it runs' : 'Nothing answered: Identify to find out';
+    if (!x) return r.entry.kind === 'esp' ? 'Its own USB: Identify reads what it runs' : 'Identify finds out what it runs';
     if (x.how === 'rom') return 'In its bootloader, firmware not recognised';
     const role = x.role === 'Tx' ? 'ground radio' : x.role === 'Rx' ? 'receiver' : 'radio';
     return [`${family(x)} ${role}`, x.version].filter(Boolean).join(' · ');
@@ -55,7 +58,7 @@
           ? 'A TetherLRS ground radio goes to its bootloader by command.'
           : byMavlink(f)
             ? 'The receiver goes to its bootloader by a MAVLink command, through a flight controller too.'
-            : 'ExpressLRS answers in its first minute after power on. If nothing answers, hold its boot button while powering it, then Identify.',
+            : 'Identify asks it what it runs and takes it to its bootloader: TetherLRS by command, a receiver by MAVLink, ExpressLRS by its own request. If nothing answers, hold its boot button while powering it, then Identify.',
   );
 
   async function add() {
@@ -94,22 +97,39 @@
         <button class="btn" onclick={() => radios.scan()} disabled={radios.busy} aria-label="Look again"><Icon name="refresh" size={16} /></button>
       </div>
     </header>
-    <div class="rows" role="radiogroup" aria-label="Radio">
-      {#each radios.list as r (r.entry.key)}
-        <label class="row" class:checked={r.entry.key === radios.key}>
-          <input type="radio" name="fw-radio" checked={r.entry.key === radios.key} onchange={() => radios.select(r.entry.key)} disabled={radios.busy} />
-          <span class="text">
-            <span class="title">
-              <span>{r.entry.label}</span>
-              {#if family(r.found)}<span class="badge" class:other={r.found?.family !== 'TetherLRS'}>{family(r.found)}</span>{/if}
-              {#if r.found?.name}<span class="kind">{r.found.name}</span>{/if}
-            </span>
-            <span class="caption">{describe(r)} · {r.entry.via}</span>
+    {#snippet row(r: Radio)}
+      <label class="row" class:checked={r.entry.key === radios.key}>
+        <input type="radio" name="fw-radio" checked={r.entry.key === radios.key} onchange={() => radios.select(r.entry.key)} disabled={radios.busy} />
+        <span class="text">
+          <span class="title">
+            <span>{r.entry.label}</span>
+            {#if family(r.found)}<span class="badge" class:other={r.found?.family !== 'TetherLRS'}>{family(r.found)}</span>{/if}
+            {#if r.found?.name}<span class="kind">{r.found.name}</span>{/if}
           </span>
-        </label>
+          <span class="caption">{describe(r)} · {r.entry.via}</span>
+        </span>
+      </label>
+    {/snippet}
+    {#if radios.busy && sel}
+      <p class="caption busy-note">Working on {sel.entry.label}: another radio can be picked when it is done.</p>
+    {/if}
+    <div class="rows" role="radiogroup" aria-label="Radio">
+      {#each known as r (r.entry.key)}
+        {@render row(r)}
       {:else}
-        <p class="caption empty">No radios found. Plug one in by its own USB, or on a USB serial adapter: TX to RX, RX to TX, 5 V and GND.</p>
+        <p class="caption empty">
+          {others.length ? 'None identified yet: pick a port below and Identify.' : 'No ports. Plug a radio in by its own USB, or on a USB serial adapter: TX to RX, RX to TX, 5 V and GND.'}
+        </p>
       {/each}
+      {#if others.length}
+        <div class="group">
+          <span class="group-title">Other ports</span>
+          <span class="caption">Not identified yet: TetherLRS, mLRS or ExpressLRS shows up above once Identify reads it.</span>
+        </div>
+        {#each others as r (r.entry.key)}
+          {@render row(r)}
+        {/each}
+      {/if}
     </div>
   </section>
 
@@ -278,6 +298,22 @@
   }
   .empty {
     margin: 0;
+    padding: var(--space-2) var(--space-3);
+  }
+  .group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: var(--space-4);
+    padding: 0 var(--space-3) var(--space-1);
+    border-top: 1px solid var(--stroke);
+    padding-top: var(--space-3);
+  }
+  .group-title {
+    font-weight: 600;
+  }
+  .busy-note {
+    margin: 0 0 var(--space-2);
   }
   .detail {
     grid-area: detail;

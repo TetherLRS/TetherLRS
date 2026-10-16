@@ -42,7 +42,7 @@ class Radios {
   key = $state('');
   role = $state<'Tx' | 'Rx'>('Rx');
   env = $state('');
-  busy = $state(false);
+  busy = $state(false); // a job on the selected radio (identify, back up, flash): the others wait
   inRom = $state(false); // the selected radio sits in its ROM bootloader, the session open
   chip = $state('');
   log = $state<string[]>([]);
@@ -79,24 +79,31 @@ class Radios {
 
   private ports = async () => (await listPorts()).filter((p) => p.kind !== 'fc' && p.kind !== 'demo');
 
-  // the ports and what answers on them, without changing anything on the radios
+  // the ports, nothing asked: what each one runs comes out of Identify, on the user's click
   async scan(): Promise<void> {
-    await this.run(async () => {
-      await this.release();
-      this.log = [];
-      this.progress = 0;
-      this.stale = false;
-      this.list = (await this.ports()).map((entry) => ({ entry }));
-      if (!this.list.some((r) => r.entry.key === this.key)) this.key = this.list[0]?.entry.key ?? '';
-      for (const r of this.list) await this.probe(r);
-      this.pick();
-    });
+    if (this.busy) return;
+    await this.release();
+    app.error = '';
+    this.log = [];
+    this.progress = 0;
+    this.stale = false;
+    this.list = (await this.ports()).map((entry) => this.seed({ entry }));
+    if (!this.list.some((r) => r.entry.key === this.key)) this.key = this.list[0]?.entry.key ?? '';
+    this.pick();
   }
 
-  // a radio plugged in or pulled out: the ones still there keep what is known of them, new ones are asked
+  // the Tx this app is connected to is known already
+  private seed(r: Radio): Radio {
+    if (app.connected && app.portKey === r.entry.key && app.version) {
+      r.found = { family: 'TetherLRS', role: 'Tx', name: app.version.txName.replace(/ TX$/i, ''), version: app.version.txVersion, how: 'connected' };
+    }
+    return r;
+  }
+
+  // a radio plugged in or pulled out: the ones still there keep what is known of them
   async portsChanged(): Promise<void> {
     if (this.busy) {
-      this.stale = true;
+      this.stale = true; // after the job
       return;
     }
     this.stale = false;
@@ -107,33 +114,11 @@ class Radios {
       await this.release();
     }
     const known = new Map(this.list.map((r) => [r.entry.key, r]));
-    this.list = ports.map((entry) => known.get(entry.key) ?? { entry });
+    this.list = ports.map((entry) => known.get(entry.key) ?? this.seed({ entry }));
     if (!there.has(this.key)) {
       this.key = this.list[0]?.entry.key ?? '';
       this.pick();
     }
-    const fresh = this.list.filter((r) => !known.has(r.entry.key));
-    if (fresh.length) {
-      await this.run(async () => {
-        for (const r of fresh) await this.probe(r);
-        this.pick();
-      });
-    }
-  }
-
-  private async probe(r: Radio): Promise<void> {
-    if (app.connected && app.portKey === r.entry.key && app.version) {
-      r.found = { family: 'TetherLRS', role: 'Tx', name: app.version.txName.replace(/ TX$/i, ''), version: app.version.txVersion, how: 'connected' };
-      return;
-    }
-    r.checking = true;
-    const tx = await within(identifyTx(r.entry.port, r.entry.known?.baud), 12000);
-    if (tx) {
-      r.found = { family: 'TetherLRS', role: 'Tx', name: tx.txName.replace(/ TX$/i, ''), how: 'cli' };
-    } else if (await within(probeReceiver(r.entry.port, RX_BAUD), 5000)) {
-      r.found = { role: 'Rx', how: 'mavlink' }; // TetherLRS or mLRS: Identify tells which
-    }
-    r.checking = false;
   }
 
   select(key: string): void {
@@ -164,20 +149,8 @@ class Radios {
         } else if (byMavlink(r.found)) {
           if (!(await receiverToBootloader(e.port, RX_BAUD))) throw new Error('The receiver stopped answering. Power it off and on, then Refresh.');
         } else {
-          // one already in its ROM by its button keeps the rate it hears first, so the ROM is asked before any "bl"
-          let found = await this.romRate(e.port);
-          if (!found) {
-            elrsName = (await within(elrsToBootloader(e.port), 4000)) ?? undefined;
-            found = await this.romRate(e.port);
-          }
-          if (!found) {
-            throw new Error(
-              elrsName
-                ? `It says it is ${elrsName}, but its bootloader did not answer: power it off, hold its boot button while powering it on, then Identify.`
-                : 'Nothing answered. Hold its boot button while powering it on, then Identify. Check that the adapter\'s TX goes to its RX and RX to its TX.',
-            );
-          }
-          romBaud = found;
+          romBaud = await this.discover(r);
+          elrsName = r.found?.how === 'bl' ? r.found.name : undefined;
         }
       }
       this.cb().log(native ? 'resetting it into its bootloader over USB' : `in its bootloader at ${romBaud} baud, connecting`);
@@ -206,6 +179,43 @@ class Radios {
   private logRetries(s: RomSession): void {
     if (s.retries) this.cb().log(`${s.retries} time${s.retries > 1 ? 's' : ''} it arrived spoiled and was done again: the adapter or its wires lose bytes`);
     s.retries = 0;
+  }
+
+  // what a port nothing is known of runs, asked on Identify, to its ROM: in it already by its boot button (asked
+  // first, as the ROM keeps the rate of the first bytes it hears), a TetherLRS Tx (+++, then systemboot), a TetherLRS or
+  // mLRS receiver (MAVLink), ExpressLRS ("bl"). Returns the rate the ROM answers at.
+  private async discover(r: Radio): Promise<number> {
+    const e = r.entry;
+    r.checking = true;
+    try {
+      const rom = await this.romRate(e.port);
+      if (rom) return rom;
+      this.cb().log('asking what it runs');
+      const tx = await within(identifyTx(e.port, e.known?.baud), 12000);
+      if (tx) {
+        r.found = { family: 'TetherLRS', role: 'Tx', name: tx.txName.replace(/ TX$/i, ''), how: 'cli' };
+        this.cb().log(`a TetherLRS Tx, ${r.found.name}: to its bootloader by command`);
+        await this.txToBootloader(e);
+        return 115200;
+      }
+      if (await within(probeReceiver(e.port, RX_BAUD), 5000)) {
+        r.found = { role: 'Rx', how: 'mavlink' };
+        this.cb().log('a TetherLRS or mLRS receiver: to its bootloader by MAVLink');
+        if (!(await receiverToBootloader(e.port, RX_BAUD))) throw new Error('The receiver stopped answering. Power it off and on, then Identify.');
+        return 115200;
+      }
+      const name = (await within(elrsToBootloader(e.port), 4000)) ?? undefined;
+      if (name) r.found = { family: 'ExpressLRS', role: 'Rx', name, how: 'bl' };
+      const after = await this.romRate(e.port);
+      if (after) return after;
+      throw new Error(
+        name
+          ? `It says it is ${name}, but its bootloader did not answer: power it off, hold its boot button while powering it on, then Identify.`
+          : "Nothing answered. Hold its boot button while powering it on, then Identify. Check that the adapter's TX goes to its RX and RX to its TX.",
+      );
+    } finally {
+      r.checking = false;
+    }
   }
 
   // the rate its ROM answers at: 115200, or 420000 when an ExpressLRS "bl" reached it first
