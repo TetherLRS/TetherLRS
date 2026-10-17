@@ -1,0 +1,529 @@
+//*******************************************************
+// Copyright (c) MLRS project
+// GPL3
+// https://www.gnu.org/licenses/gpl-3.0.de.html
+// OlliW @ www.olliw.eu
+//*******************************************************
+// rx hal splicer
+//*******************************************************
+#ifndef HAL_H
+#define HAL_H
+#pragma once
+
+// enter define for the board (RX_xxx, TX_xxx) into "MCU G++ Compiler"->"Preprocessor" !!!
+
+/* Documentation
+
+The availability of the many features are handled via #define declarations. In order to keep somewhat track,
+this naming convention is used (with few exceptions):
+
+- MLRS_FEATURE_XXXX: For setting different features for a target; should ONLY be set globally/externally
+  by the build system! Must NOT be defined in code, only globally/externally.
+  Note: There can be MLRS_DEV_FEATURE_XXXX flags also, but these are for dev only.
+
+- DEVICE_HAS_XXXX: Are set in a device's hal file to indicate the availability/non-availability of a feature.
+  May be defined by user in the hal file as needed. May also be made dependent on MLRS_FEATURE_XXXX flags
+  in hal file.
+
+- USE_XXXX: These are determined through some processing, which can involve the DEVICE_HAS_XXXX flags. Must
+  NEVER be modified or set by user.
+
+For devs: In follow-up code therefore the USE_XXXX flags should be used (if available) to enable/disable code
+for a feature. If a USE_XXXX flag is not available (example: DEVICE_HAS_DIVERSITY) then of course the respective
+DEVICE_HAS_XXXX flag needs to be used. Also, DEVICE_HAS_XXXX flags may have to be used to distinguish the "flavor"
+of the feature (example: IN feature with normal or inverted UART levels).
+
+Many DEVICE_XXXX feature flags are available, which can be set in the device hal files. They are listed in the
+following for the tx-hal and rx-hal files.
+
+In tx-hal files:
+
+#define DEVICE_HAS_DIVERSITY        // board supports diversity
+#define DEVICE_HAS_JRPIN5           // board has a pin for JR bay Pin5/SPort
+#define DEVICE_HAS_IN               // board has an IN port, which supports both normal and inverted UART signals
+#define DEVICE_HAS_IN_NORMAL        // board has an IN port, which supports only normal UART signals
+#define DEVICE_HAS_IN_INVERTED      // board has an IN port, which supports only inverted UART signals
+#define DEVICE_HAS_IN_ON_JRPIN5_RX  // board shares IN with JRPin5 on RX pin, implies support of normal and inverted UART signals
+#define DEVICE_HAS_IN_ON_JRPIN5_TX  // board shares IN with JRPin5 on TX pin, implies support of normal and inverted UART signals
+#define DEVICE_HAS_SERIAL_OR_COM    // board has a button or similar to force Com on power up
+#define DEVICE_HAS_NO_SERIAL        // board has no Serial port
+#define DEVICE_HAS_NO_COM           // board has no Com port
+#define DEVICE_HAS_COM_ON_USB       // board has a native USB port // TODO: rename to DEVICE_HAS_USB ??
+#define DEVICE_HAS_COM_ON_SERIAL    // board has a UART or USB which is shared between Serial and Com, implies HAS_SERIAL_OR_COM
+#define DEVICE_HAS_NO_DEBUG         // board has no Debug port
+#define DEVICE_HAS_DEBUG_SWUART     // implement Debug as software UART
+#define DEVICE_HAS_SERIAL2          // board has a Serial2 port
+#define DEVICE_HAS_ESP_WIFI_BRIDGE_ESP32      // board has ESP32 with RESET,GPIO support
+#define DEVICE_HAS_ESP_WIFI_BRIDGE_ESP8266    // board has ESP82xx with RESET,GPIO support
+#define DEVICE_HAS_ESP_WIFI_BRIDGE_ESP32C3    // board has ESP32-C3 with RESET,GPIO support
+#define DEVICE_HAS_ESP_WIFI_BRIDGE_CONFIGURE  // board has ESPxx which allows configuration
+#define DEVICE_HAS_ESP_WIFI_BRIDGE_W_PASSTHRU_VIA_JRPIN5  // board has ESPxx with its passthrough via JRPin5 port
+#define DEVICE_HAS_ESP_WIFI_BRIDGE_W_PASSTHRU_VIA_SERIAL  // board has ESPxx with its passthrough via Serial port
+#define DEVICE_HAS_ESP_WIFI_BRIDGE_BUTTON2_FLASH    // board has button used to enter ESP flash mode
+#define DEVICE_HAS_HC04_MODULE      // board has HC04 module
+#define DEVICE_HAS_I2C_DISPLAY          // board has a DISPLAY on I2C, and 5-way switch
+#define DEVICE_HAS_I2C_DISPLAY_ROT180   // board has a DISPLAY on I2C, rotated 180 degree, and 5-way switch
+#define DEVICE_HAS_FIVEWAY          // board has 5-way switch (without display)
+#define DEVICE_HAS_SINGLE_LED       // board has only one LED
+#define DEVICE_HAS_SINGLE_LED_RGB   // board has only one LED which is RGB WS2812, and thus can do more colors
+#define DEVICE_HAS_NO_LED           // board has no LEDs at all
+#define DEVICE_HAS_BUZZER           // board has a Buzzer
+#define DEVICE_HAS_FAN_ONOFF        // board has a Fan, which can be set on or off
+#define DEVICE_HAS_SYSTEMBOOT       // board has a means to invoke the system bootloader on startup
+#define DEVICE_HAS_I2C_DAC          // board has a DAC for power control on I2C
+
+In rx-hal files:
+
+#define DEVICE_HAS_DIVERSITY        // board supports diversity
+#define DEVICE_HAS_DIVERSITY_SINGLE_SPI // board supports diversity on a single SPI bus
+#define DEVICE_HAS_OUT              // board has an OUT port, which supports both normal and inverted UART signals
+#define DEVICE_HAS_OUT_NORMAL       // board has an OUT port, which supports only normal UART signals
+#define DEVICE_HAS_OUT_INVERTED     // board has an OUT port, which supports only inverted UART signals
+#define DEVICE_HAS_NO_SERIAL        // board has no Serial port
+#define DEVICE_HAS_NO_DEBUG         // board has no Debug port
+#define DEVICE_HAS_DEBUG_SWUART     // implement Debug as software UART
+#define DEVICE_HAS_DRONECAN         // board has a DroneCAN port, supporting only classic CAN
+#define DEVICE_HAS_DRONECAN_FD      // board has a DroneCAN port, supporting CAN FD
+#define DEVICE_HAS_SINGLE_LED       // board has only one LED
+#define DEVICE_HAS_SINGLE_LED_RGB   // board has only one LED which is RGB WS2812
+#define DEVICE_HAS_FAN_ONOFF        // board has a Fan, which can be set on or off
+#define DEVICE_HAS_I2C_DAC          // board has a DAC for power control on I2C
+#define DEVICE_HAS_SYSTEMBOOT       // board has a means to invoke the system bootloader on startup
+
+Note: Some "high-level" features are set for each device in the device_conf.h file, and not in the device's hal file.
+*/
+
+
+#include "device_conf.h"
+
+
+// these are frequently needed in the hal
+#if !(defined ESP8266 || defined ESP32)
+extern "C" { void delay_us(uint32_t us); }
+extern "C" { void delay_ms(uint16_t ms); }
+#endif
+
+
+//-- MATEKSYS mLRS devices
+
+#ifdef RX_MATEK_MR24_30_G431KB
+#include "matek/rx-hal-matek-mr24-30-g431kb.h"
+#endif
+
+#ifdef TX_MATEK_MR24_30_G431KB
+#include "matek/tx-hal-matek-mr24-30-g431kb.h"
+#endif
+
+#ifdef RX_MATEK_MR900_30_G431KB
+#include "matek/rx-hal-matek-mr900-30-g431kb.h"
+#endif
+
+#ifdef TX_MATEK_MR900_30_G431KB
+#include "matek/tx-hal-matek-mr900-30-g431kb.h"
+#endif
+
+#ifdef RX_MATEK_MR900_22_WLE5CC
+#include "matek/rx-hal-matek-mr900-22-wle5cc.h"
+#endif
+
+#ifdef RX_MATEK_MR24_30C_G431KB
+#include "matek/rx-hal-matek-mr24-30c-g431kb.h"
+#endif
+
+#ifdef RX_MATEK_MR900_30C_G431KB
+#include "matek/rx-hal-matek-mr900-30c-g431kb.h"
+#endif
+
+
+//-- FrsKy R9 system
+
+#ifdef RX_R9MX_868_L433CB
+#include "stm32/rx-hal-R9MX-868-l433cb.h"
+#endif
+#ifdef RX_R9M_868_F103C8
+#include "stm32/rx-hal-R9M-868-f103c8.h"
+#endif
+#ifdef RX_R9MM_868_F103RB
+#include "stm32/rx-hal-R9MM-868-f103rb.h"
+#endif
+#ifdef RX_R9MLITEPRO_F303CC
+#include "stm32/rx-hal-R9MLitePro-v15-f303cc.h"
+#endif
+
+#ifdef TX_R9M_868_F103C8
+#include "stm32/tx-hal-R9M-868-f103c8.h"
+#endif
+
+
+//-- SeeedStudio WioE5 boards
+
+#ifdef RX_WIO_E5_GROVE_WLE5JC
+#include "stm32/rx-hal-WioE5-Grove-wle5jc.h"
+#endif
+#ifdef RX_WIO_E5_MINI_WLE5JC
+#include "stm32/rx-hal-WioE5-Mini-wle5jc.h"
+#endif
+
+#ifdef TX_WIO_E5_MINI_WLE5JC
+#include "stm32/tx-hal-WioE5-Mini-wle5jc.h"
+#endif
+
+
+//-- EByte MBL Evaluation Kits
+
+#ifdef RX_E77_MBLKIT_WLE5CC
+#include "stm32/rx-hal-E77-MBLKit-wle5cc.h"
+#endif
+
+#ifdef TX_E77_MBLKIT_WLE5CC
+#include "stm32/tx-hal-E77-MBLKit-wle5cc.h"
+#endif
+
+
+//-- DIY Boards, 2.4 GHz Devices
+
+#ifdef RX_DIY_E28DUAL_BOARD02_F103CB
+#include "stm32/rx-hal-diy-e28dual-board02-f103cb.h"
+#endif
+#ifdef RX_DIY_E28_G441KB
+#include "stm32/rx-hal-diy-e28-g441kb.h"
+#endif
+
+#ifdef TX_DIY_E28DUAL_BOARD02_F103CB
+#include "stm32/tx-hal-diy-e28dual-board02-f103cb.h"
+#endif
+#ifdef TX_DIY_E28_G431KB
+#include "stm32/tx-hal-diy-e28-g431kb.h"
+#endif
+#ifdef TX_DIY_E28DUAL_MODULE02_G491RE
+#include "stm32/tx-hal-diy-e28dual-module02-g491re.h"
+#endif
+
+
+//-- DIY Boards, 868/915 MHz Devices
+
+#ifdef RX_DIY_E22_G441KB
+#include "stm32/rx-hal-diy-e22-g441kb.h"
+#endif
+
+#ifdef TX_DIY_E22_G431KB
+#include "stm32/tx-hal-diy-e22-g431kb.h"
+#endif
+
+#ifdef TX_DIY_E22DUAL_MODULE02_G491RE
+#include "stm32/tx-hal-diy-e22dual-module02-g491re.h"
+#endif
+
+#ifdef RX_DIY_WIOE5_E22_WLE5JC
+#include "stm32/rx-hal-diy-wioe5-e22-wle5jc.h"
+#endif
+
+#ifdef TX_DIY_WIOE5_E22_WLE5JC
+#include "stm32/tx-hal-diy-wioe5-e22-wle5jc.h"
+#endif
+
+
+//-- DIY "easy-to-solder" Boards
+
+#if defined RX_DIY_E77_E22_WLE5CC || defined RX_DIY_E77_E22_DUALBAND_WLE5CC
+#include "stm32/rx-hal-easysolder-e77-e22-wle5cc.h"
+#endif
+
+#if defined TX_DIY_E77_E22_WLE5CC || defined TX_DIY_E77_E22_DUALBAND_WLE5CC
+#include "stm32/tx-hal-easysolder-e77-e22-wle5cc.h"
+#endif
+
+#ifdef RX_DIY_E77_E28_DUALBAND_WLE5CC
+#include "stm32/rx-hal-easysolder-e77-e28-dualband-wle5cc.h"
+#endif
+
+#ifdef TX_DIY_E77_E28_DUALBAND_WLE5CC
+#include "stm32/tx-hal-easysolder-e77-e28-dualband-wle5cc.h"
+#endif
+
+
+//-- DIY Boards, LR2021 Devices
+
+#if defined RX_DIY_NICERF_LR2021_G431KB
+#include "stm32/rx-hal-diy-NiceRF-LR2021-g431kb.h"
+#endif
+
+#if defined TX_DIY_NICERF_LR2021_G431KB
+#include "stm32/tx-hal-diy-NiceRF-LR2021-g431kb.h"
+#endif
+
+
+//-------------------------------------------------------
+// ESP Boards
+//-------------------------------------------------------
+
+#if defined ESP8266 || defined ESP32
+#include "esp/esp-hal.h"
+#endif
+
+
+//-------------------------------------------------------
+// Derived Defines
+// The "derived" defines digest DEVICE_HAS_XXX defines and set USE_XXX defines based on them.
+//-------------------------------------------------------
+// should go somewhere else !?
+
+#define RFPOWER_LIST_NUM  sizeof(rfpower_list)/sizeof(rfpower_t)
+
+
+#ifdef DEVICE_IS_RECEIVER
+#if !defined DEVICE_HAS_NO_SERIAL
+  #define USE_SERIAL
+#endif
+#endif // DEVICE_IS_RECEIVER
+
+#ifdef DEVICE_IS_TRANSMITTER
+#ifdef DEVICE_HAS_COM_ON_SERIAL // some devices have device dependent ways to select serial or com
+  #define USE_SERIAL
+  #define USE_COM_ON_SERIAL
+#else
+  #if !defined DEVICE_HAS_NO_SERIAL
+    #define USE_SERIAL
+  #endif
+  #if !defined DEVICE_HAS_NO_COM
+    #define USE_COM
+  #endif
+  #if defined DEVICE_HAS_COM_ON_USB
+    #define USE_USB
+  #endif
+#endif
+
+#if defined DEVICE_HAS_ESP_WIFI_BRIDGE_ESP32 || defined DEVICE_HAS_ESP_WIFI_BRIDGE_ESP8266 || \
+    defined DEVICE_HAS_ESP_WIFI_BRIDGE_ESP32C3 || defined DEVICE_HAS_HC04_MODULE
+  #define USE_WIRELESS_BRIDGE
+#endif
+#if defined DEVICE_HAS_SERIAL2 || defined USE_WIRELESS_BRIDGE
+  #define USE_SERIAL2
+#endif
+#endif // DEVICE_IS_TRANSMITTER
+
+#if defined DEBUG_ENABLED && !defined DEVICE_HAS_NO_DEBUG
+  #define USE_DEBUG
+#endif
+
+
+#if defined DEVICE_HAS_IN || defined DEVICE_HAS_IN_NORMAL || defined DEVICE_HAS_IN_INVERTED || \
+    defined DEVICE_HAS_IN_ON_JRPIN5_RX || defined DEVICE_HAS_IN_ON_JRPIN5_TX
+  #define USE_IN
+#endif
+
+
+#if defined DEVICE_HAS_OUT || defined DEVICE_HAS_OUT_NORMAL || defined DEVICE_HAS_OUT_INVERTED
+  #define USE_OUT
+#endif
+
+#if defined DEVICE_HAS_DRONECAN || defined DEVICE_HAS_DRONECAN_FD
+  #define USE_DRONECAN
+#endif
+
+
+#if defined DEVICE_HAS_I2C_DISPLAY || defined DEVICE_HAS_I2C_DISPLAY_ROT180
+  #define USE_DISPLAY
+#endif
+
+
+#if defined DEVICE_HAS_I2C_DAC || defined DEVICE_HAS_I2C_DISPLAY || defined DEVICE_HAS_I2C_DISPLAY_ROT180
+  #define USE_I2C
+  #ifndef HAL_I2C_MODULE_ENABLED
+    #error HAL_I2C_MODULE_ENABLED is not defined, but I2C is used!
+  #endif
+#endif
+
+
+#if defined DEVICE_HAS_FAN_ONOFF || defined DEVICE_HAS_FAN_TEMPCONTROLLED_ONOFF
+  #define USE_FAN
+#endif
+
+
+#if defined DEVICE_HAS_ESP_WIFI_BRIDGE_ESP32 || defined DEVICE_HAS_ESP_WIFI_BRIDGE_ESP8266 || \
+    defined DEVICE_HAS_ESP_WIFI_BRIDGE_ESP32C3
+  #define USE_ESP_WIFI_BRIDGE
+  #if !(defined ESP_RESET && defined ESP_GPIO0)
+    #error ESP_RESET and ESP_GPIO0 must be defined!
+  #endif
+  #define USE_ESP_WIFI_BRIDGE_RST_GPIO0
+  #if defined DEVICE_HAS_ESP_WIFI_BRIDGE_CONFIGURE
+    #define USE_ESP_WIFI_BRIDGE_CONFIGURE
+  #endif
+  #if (defined ESP_DTR && defined ESP_RTS) || defined ESP_DTR_RTS_USB
+    #define USE_ESP_WIFI_BRIDGE_DTR_RTS
+  #endif
+  #if defined ESP_BOOTPIN
+    #define USE_ESP_WIFI_BRIDGE_BOOTPIN
+  #endif
+#endif
+
+#if defined DEVICE_HAS_HC04_MODULE
+  #define USE_HC04_MODULE
+#endif
+
+
+#if defined DEVICE_HAS_SX126x || defined DEVICE_HAS_DUAL_SX126x_SX128x || defined DEVICE_HAS_DUAL_SX126x_SX126x
+  #define SX_DRIVER Sx126xDriver
+#elif defined DEVICE_HAS_SX127x
+  #define SX_DRIVER Sx127xDriver
+#elif defined DEVICE_HAS_LR11xx
+  #define SX_DRIVER Lr11xxDriver
+#elif defined DEVICE_HAS_LR20xx
+  #define SX_DRIVER Lr20xxDriver
+#else
+  #define SX_DRIVER Sx128xDriver
+#endif
+
+#if defined DEVICE_HAS_DIVERSITY || defined DEVICE_HAS_DIVERSITY_SINGLE_SPI
+  #if defined DEVICE_HAS_SX126x
+    #define SX2_DRIVER Sx126xDriver2
+  #elif defined DEVICE_HAS_SX127x
+    #define SX2_DRIVER Sx127xDriver2
+  #elif defined DEVICE_HAS_LR11xx
+    #define SX2_DRIVER Lr11xxDriver2
+  #elif defined DEVICE_HAS_LR20xx
+    #define SX2_DRIVER Lr20xxDriver2
+  #else
+    #define SX2_DRIVER Sx128xDriver2
+  #endif
+#elif defined DEVICE_HAS_DUAL_SX126x_SX128x
+  #define SX2_DRIVER Sx128xDriver2
+#elif defined DEVICE_HAS_DUAL_SX126x_SX126x
+  #define SX2_DRIVER Sx126xDriver2
+#else
+  #define SX2_DRIVER SxDriverDummy
+#endif
+
+
+#if defined DEVICE_HAS_DIVERSITY || defined DEVICE_HAS_DIVERSITY_SINGLE_SPI || \
+    defined DEVICE_HAS_DUAL_SX126x_SX128x || defined DEVICE_HAS_DUAL_SX126x_SX126x
+  #define USE_SX2
+#endif
+
+#ifdef USE_SX2
+  #define IF_SX(x)                  if (Config.ReceiveUseAntenna1 || Config.TransmitUseAntenna1) { x; }
+  #define IF_SX2(x)                 if (Config.ReceiveUseAntenna2 || Config.TransmitUseAntenna2) { x; }
+  #define IF_ANTENNA1(x)            if (Config.ReceiveUseAntenna1) { x; }
+  #define IF_ANTENNA2(x)            if (Config.ReceiveUseAntenna2) { x; }
+  #define USE_ANTENNA1              (Config.ReceiveUseAntenna1)
+  #define USE_ANTENNA2              (Config.ReceiveUseAntenna2)
+  #define TRANSMIT_USE_ANTENNA1     (Config.TransmitUseAntenna1)
+  #define TRANSMIT_USE_ANTENNA2     (Config.TransmitUseAntenna2)
+  #define SX_OR_SX2(x1,x2)          (Config.ReceiveUseAntenna1 || Config.TransmitUseAntenna1) ? x1 : x2
+#else
+  #define IF_SX(x)                  x;
+  #define IF_SX2(x)
+  #define IF_ANTENNA1(x)            x;
+  #define IF_ANTENNA2(x)
+  #define USE_ANTENNA1              true
+  #define USE_ANTENNA2              false
+  #define TRANSMIT_USE_ANTENNA1     true
+  #define TRANSMIT_USE_ANTENNA2     false
+  #define SX_OR_SX2(x1,x2)          x1
+#endif
+
+#ifdef DEVICE_HAS_JRPIN5
+  #define IF_CRSF(x)                if (Config.UseCrsf) { x; }
+#else
+  #define IF_CRSF(x)
+#endif
+#ifdef USE_IN
+  #define IF_IN(x)                  if (Config.UseIn) { x; }
+#else
+  #define IF_IN(x)
+#endif
+
+
+//-- checks
+
+#if !defined DEVICE_IS_TRANSMITTER && !defined DEVICE_IS_RECEIVER
+  #error Must be either transmitter or receiver !
+#endif
+
+#if !defined DEVICE_HAS_SX128x && !defined DEVICE_HAS_SX127x && !defined DEVICE_HAS_SX126x && \
+    !defined DEVICE_HAS_LR11xx && !defined DEVICE_HAS_LR20xx && \
+    !defined DEVICE_HAS_DUAL_SX126x_SX128x && !defined DEVICE_HAS_DUAL_SX126x_SX126x
+  #error Must be either SX128x or SX127x or SX126x or LR11xx or LR20xx !
+#endif
+
+#if !defined FREQUENCY_BAND_2P4_GHZ && \
+    !defined FREQUENCY_BAND_915_MHZ_FCC && !defined FREQUENCY_BAND_868_MHZ && !defined FREQUENCY_BAND_866_MHZ_IN && \
+    !defined FREQUENCY_BAND_433_MHZ && !defined FREQUENCY_BAND_70_CM_HAM
+  #error At least one frequency band must be defined !
+#endif
+
+
+#if defined DEVICE_HAS_DUAL_SX126x_SX128x || defined DEVICE_HAS_DUAL_SX126x_SX126x
+  #ifdef DEVICE_HAS_DIVERSITY
+    #error DEVICE_HAS_DIVERSITY cannot be defined for dual band devices !
+  #endif
+#endif
+
+
+#if defined DEVICE_HAS_SERIAL2 && defined USE_WIRELESS_BRIDGE
+  #error Device cannot have HAS_SERIAL2 and HAS_WIRELESS_BRIDGE at the same time !
+#endif
+
+#if (defined DEVICE_HAS_ESP_WIFI_BRIDGE_ESP32 && defined DEVICE_HAS_ESP_WIFI_BRIDGE_ESP8266) || \
+    (defined DEVICE_HAS_ESP_WIFI_BRIDGE_ESP32 && defined DEVICE_HAS_ESP_WIFI_BRIDGE_ESP32C3) || \
+    (defined DEVICE_HAS_ESP_WIFI_BRIDGE_ESP8266 && defined DEVICE_HAS_ESP_WIFI_BRIDGE_ESP32C3)
+  #error Must be either DEVICE_HAS_ESP_WIFI_BRIDGE_ESP32, DEVICE_HAS_ESP_WIFI_BRIDGE_ESP8266 or DEVICE_HAS_ESP_WIFI_BRIDGE_ESP32C3
+#endif
+
+
+//-- checks for legacy flags
+
+#ifdef DEVICE_HAS_ESP_WIFI_BRIDGE_ON_SERIAL
+  #error DEVICE_HAS_ESP_WIFI_BRIDGE_ON_SERIAL is deprecated, use DEVICE_HAS_ESP_WIFI_BRIDGE!
+#endif
+#ifdef DEVICE_HAS_ESP_WIFI_BRIDGE_ON_SERIAL2
+  #error DEVICE_HAS_ESP_WIFI_BRIDGE_ON_SERIAL2 is deprecated, use DEVICE_HAS_ESP_WIFI_BRIDGE!
+#endif
+#ifdef DEVICE_HAS_HC04_MODULE_ON_SERIAL
+  #error DEVICE_HAS_HC04_MODULE_ON_SERIAL is deprecated, use DEVICE_HAS_HC04_MODULE!
+#endif
+#ifdef DEVICE_HAS_HC04_MODULE_ON_SERIAL2
+  #error DEVICE_HAS_HC04_MODULE_ON_SERIAL2 is deprecated, use DEVICE_HAS_HC04_MODULE!
+#endif
+#ifdef DEVICE_HAS_ESP_WIFI_BRIDGE
+  #error DEVICE_HAS_ESP_WIFI_BRIDGE is deprecated, use DEVICE_HAS_ESP_WIFI_BRIDGE_ESP32!
+#endif
+
+
+//-------------------------------------------------------
+// Further Derived Defines
+// These defines don't derive from DEVICE_HAS_XXX defines, but also result in USE_XXX defines
+//-------------------------------------------------------
+
+#define USE_FEATURE_MAVLINK_COMPONENT
+
+
+//-------------------------------------------------------
+// Empty Prototypes
+//-------------------------------------------------------
+// should be in the device hal files, but is just so much more convenient to have them here
+
+#ifndef SYSTICK_TIMESTEP
+  #define SYSTICK_TIMESTEP          1000 // 1 ms
+#endif
+
+
+#ifndef DEVICE_HAS_SYSTEMBOOT
+  void systembootloader_init(void) {}
+#endif
+
+#ifdef DEVICE_HAS_NO_LED
+  void leds_init(void) {}
+#endif
+
+#ifndef USE_ESP_WIFI_BRIDGE
+  void esp_init(void) {}
+#endif
+
+#if !defined DEVICE_HAS_FIVEWAY && !defined USE_DISPLAY
+  void fiveway_init(void) {}
+#endif
+
+
+#endif // HAL_H

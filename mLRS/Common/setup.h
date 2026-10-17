@@ -1,0 +1,1260 @@
+//*******************************************************
+// Copyright (c) MLRS project
+// GPL3
+// https://www.gnu.org/licenses/gpl-3.0.de.html
+// OlliW @ www.olliw.eu
+//*******************************************************
+// Setup
+//*******************************************************
+#ifndef SETUP_H
+#define SETUP_H
+#pragma once
+
+
+#include "setup_types.h"
+#include "hal/hal.h"
+
+
+tSetupMetaData SetupMetaData;
+tSetup Setup;
+tGlobalConfig Config;
+
+
+//-------------------------------------------------------
+// Configure Setup MetaData
+//-------------------------------------------------------
+
+void setup_configure_metadata(void)
+{
+    SetupMetaData = {};
+
+    //-- FrequencyBand: "2.4,915 FCC,868,433,70,866 IN,915+2.4,868+2.4"
+    // also define the default setting for use below in setup_sanitize_config()
+//** dual band
+#if defined DEVICE_HAS_DUAL_SX126x_SX128x
+  // DUALBAND 2.4 GHz & 868/915 MHz
+  #if defined FREQUENCY_BAND_2P4_GHZ && defined FREQUENCY_BAND_915_MHZ_FCC && defined FREQUENCY_BAND_868_MHZ
+    SetupMetaData.FrequencyBand_allowed_mask = 0b11000111; // 2.4 GHz, 915 FCC, 868, 915+2.4, 868+2.4
+    #define FREQUENCY_BAND_DEFAULT  SETUP_FREQUENCY_BAND_868_MHZ
+  #else
+    #error Unknown Frequencyband !
+  #endif
+#elif defined DEVICE_HAS_DUAL_SX126x_SX126x
+  // DUALBAND 868/915 MHz & 433 MHz
+  #if defined FREQUENCY_BAND_915_MHZ_FCC && defined FREQUENCY_BAND_868_MHZ && defined FREQUENCY_BAND_433_MHZ
+    SetupMetaData.FrequencyBand_allowed_mask = 0b00000110; // 915 FCC, 868
+    #define FREQUENCY_BAND_DEFAULT  SETUP_FREQUENCY_BAND_868_MHZ
+  #else
+    #error Unknown Frequencyband !
+  #endif
+//** multi band
+#elif defined FREQUENCY_BAND_2P4_GHZ && defined FREQUENCY_BAND_915_MHZ_FCC && defined FREQUENCY_BAND_868_MHZ
+    // MULTIBAND 2.4 GHz & 868/915 MHz
+    SetupMetaData.FrequencyBand_allowed_mask = 0b00000111; // 2.4 GHz, 915 FCC, 868
+    #define FREQUENCY_BAND_DEFAULT  SETUP_FREQUENCY_BAND_868_MHZ
+#elif defined FREQUENCY_BAND_2P4_GHZ && defined FREQUENCY_BAND_433_MHZ && defined FREQUENCY_BAND_70_CM_HAM
+    // MULTIBAND 2.4 GHz & 433 MHz/70 cm
+    SetupMetaData.FrequencyBand_allowed_mask = 0b00011001; // 2.4 GHz, 433, 70
+    #define FREQUENCY_BAND_DEFAULT  SETUP_FREQUENCY_BAND_433_MHZ
+//** single band, multiple frequencies
+#elif defined FREQUENCY_BAND_915_MHZ_FCC && defined FREQUENCY_BAND_868_MHZ && \
+      defined FREQUENCY_BAND_433_MHZ && defined FREQUENCY_BAND_70_CM_HAM
+    SetupMetaData.FrequencyBand_allowed_mask = 0b00011110; // 915 FCC, 868, 433, 70
+    #define FREQUENCY_BAND_DEFAULT  SETUP_FREQUENCY_BAND_868_MHZ
+#elif defined FREQUENCY_BAND_915_MHZ_FCC && defined FREQUENCY_BAND_868_MHZ && defined FREQUENCY_BAND_866_MHZ_IN
+    SetupMetaData.FrequencyBand_allowed_mask = 0b00100110; // 915 FCC, 868, 866 IN
+    #define FREQUENCY_BAND_DEFAULT  SETUP_FREQUENCY_BAND_868_MHZ
+#elif defined FREQUENCY_BAND_915_MHZ_FCC && defined FREQUENCY_BAND_868_MHZ
+    SetupMetaData.FrequencyBand_allowed_mask = 0b00000110; // 915 FCC, 868
+    #define FREQUENCY_BAND_DEFAULT  SETUP_FREQUENCY_BAND_868_MHZ
+#elif defined FREQUENCY_BAND_433_MHZ && defined FREQUENCY_BAND_70_CM_HAM
+    SetupMetaData.FrequencyBand_allowed_mask = 0b00011000; // 433, 70
+    #define FREQUENCY_BAND_DEFAULT  SETUP_FREQUENCY_BAND_433_MHZ
+//** single band, single frequency
+#elif defined FREQUENCY_BAND_2P4_GHZ
+    SetupMetaData.FrequencyBand_allowed_mask = 0b00000001; // 2.4 GHz, not editable
+    #define FREQUENCY_BAND_DEFAULT  SETUP_FREQUENCY_BAND_2P4_GHZ
+#elif defined FREQUENCY_BAND_915_MHZ_FCC
+    SetupMetaData.FrequencyBand_allowed_mask = 0b00000010; // 915 MHz FCC, not editable
+    #define FREQUENCY_BAND_DEFAULT  SETUP_FREQUENCY_BAND_915_MHZ_FCC
+#elif defined FREQUENCY_BAND_868_MHZ
+    SetupMetaData.FrequencyBand_allowed_mask = 0b00000100; // 868 MHz, not editable
+    #define FREQUENCY_BAND_DEFAULT  SETUP_FREQUENCY_BAND_868_MHZ
+#elif defined FREQUENCY_BAND_433_MHZ
+    SetupMetaData.FrequencyBand_allowed_mask = 0b00001000; // 433 MHz, not editable
+    #define FREQUENCY_BAND_DEFAULT  SETUP_FREQUENCY_BAND_433_MHZ
+#elif defined FREQUENCY_BAND_70_CM_HAM
+    SetupMetaData.FrequencyBand_allowed_mask = 0b00010000; // 70 cm HAM, not editable
+    #define FREQUENCY_BAND_DEFAULT  SETUP_FREQUENCY_BAND_70_CM_HAM
+#elif defined FREQUENCY_BAND_866_MHZ_IN
+    SetupMetaData.FrequencyBand_allowed_mask = 0b00100000; // 866 MHz IN, not editable
+    #define FREQUENCY_BAND_DEFAULT  SETUP_FREQUENCY_BAND_866_MHZ_IN
+#else
+    #error Unknown Frequencyband !
+#endif
+
+    //-- Mode: "50 Hz,31 Hz,19 Hz,FLRC,FSK,19 Hz 7x"
+    // also define the default setting for use below in setup_sanitize_config()
+#if defined DEVICE_HAS_DUAL_SX126x_SX128x
+    // DUALBAND 2.4 GHz & 868/915 MHz
+    // we cannot work out all cases here, as it depends on actual FrequencyBand selection, so we here just do what we can do
+    SetupMetaData.Mode_allowed_mask = 0b011111; // 50 Hz, 31 Hz, 19 Hz, FLRC, FSK - Note: FSK implies 50 Hz for SX128x
+    #define MODE_DEFAULT  MODE_31HZ
+#elif defined DEVICE_HAS_DUAL_SX126x_SX126x
+    // DUALBAND 868/915 MHz & 433 MHz
+    SetupMetaData.Mode_allowed_mask = 0b000110; // 31 Hz, 19 Hz
+    #define MODE_DEFAULT  MODE_31HZ
+#elif defined DEVICE_HAS_SX128x
+    SetupMetaData.Mode_allowed_mask = 0b001111; // 50 Hz, 31 Hz, 19 Hz, FLRC
+    #define MODE_DEFAULT  MODE_50HZ
+#elif defined DEVICE_HAS_SX126x
+    SetupMetaData.Mode_allowed_mask = 0b010110; // 31 Hz, 19 Hz, FSK
+    #define MODE_DEFAULT  MODE_31HZ
+#elif defined DEVICE_HAS_SX127x
+    SetupMetaData.Mode_allowed_mask = 0b100000; // 19 Hz 7x, not editable
+    #define MODE_DEFAULT  MODE_19HZ_7X
+#elif defined DEVICE_HAS_LR11xx
+    // MULTIBAND
+    // we cannot work out all cases here, as it depends on actual FrequencyBand selection, so we here just do what we can do
+    SetupMetaData.Mode_allowed_mask = 0b110111; // 50 Hz, 31 Hz, 19 Hz, 19 Hz 7x, FSK
+    #define MODE_DEFAULT  MODE_31HZ
+#elif defined DEVICE_HAS_LR20xx
+    // MULTIBAND
+    // we cannot work out all cases here, as it depends on actual FrequencyBand selection, so we here just do what we can do
+    SetupMetaData.Mode_allowed_mask = 0b111111; // 50 Hz, 31 Hz, 19 Hz, FLRC, FSK, 19 Hz 7x
+    #define MODE_DEFAULT  MODE_31HZ
+#else
+    #error Unknown Mode !
+#endif
+
+    //-- Ortho: "off,1/3,2/3,3/3"
+    // we cannot work out all cases here, as it depends on actual FrequencyBand selection, so we here just do what we can do
+#if defined FREQUENCY_BAND_2P4_GHZ || defined FREQUENCY_BAND_915_MHZ_FCC || defined FREQUENCY_BAND_70_CM_HAM
+    SetupMetaData.Ortho_allowed_mask = 0b1111; // all
+#else
+    SetupMetaData.Ortho_allowed_mask = 0; // not available, do not display
+#endif
+
+    //-- Privacy: "off,lvl1,lvl2,lvl3"
+#if defined DEVICE_IS_TRANSMITTER && !(defined STM32G4 || defined ESP32) // || defined STM32WL
+    SetupMetaData.Privacy_allowed_mask = 0; // not available, do not display
+#else
+    SetupMetaData.Privacy_allowed_mask = 0b1111; // all
+#endif
+
+    //-- Tx:
+
+    power_optstr_from_rfpower_list(SetupMetaData.Tx_Power_optstr, rfpower_list, RFPOWER_LIST_NUM, 67);
+
+    // Diversity: "enabled,antenna1,antenna2,r:e t:a1,r:e t:a2"
+#if defined DEVICE_HAS_DUAL_SX126x_SX128x
+    // we cannot work out all cases here, as it depends on actual FrequencyBand selection, so we here just do what we can do
+    SetupMetaData.Tx_Diversity_allowed_mask = 0b00111; // will be adjusted below
+#elif defined DEVICE_HAS_DUAL_SX126x_SX126x
+    SetupMetaData.Tx_Diversity_allowed_mask = 0b00001; // only enabled, not editable
+#elif defined DEVICE_HAS_DIVERSITY
+    SetupMetaData.Tx_Diversity_allowed_mask = 0b11111; // all
+#elif defined DEVICE_HAS_DIVERSITY_SINGLE_SPI
+    SetupMetaData.Tx_Diversity_allowed_mask = 0b11011; // TODO: no antenna2 for the moment
+#else
+    SetupMetaData.Tx_Diversity_allowed_mask = 0b00010; // antenna1, not editable
+#endif
+
+    // Tx ChannelSource: "none,crsf,in"
+#if defined DEVICE_HAS_JRPIN5 && defined USE_IN
+    SetupMetaData.Tx_ChannelsSource_allowed_mask = 0b111; // none, crsf, in
+#elif defined DEVICE_HAS_JRPIN5
+    SetupMetaData.Tx_ChannelsSource_allowed_mask = 0b011; // none, crsf
+#elif defined USE_IN
+    SetupMetaData.Tx_ChannelsSource_allowed_mask = 0b101; // none, in
+#else
+    SetupMetaData.Tx_ChannelsSource_allowed_mask = 0b001; // none, not editable
+#endif
+
+    // Tx InMode: "sbus,sbus inv"
+#if defined DEVICE_HAS_IN || defined DEVICE_HAS_IN_ON_JRPIN5_RX || defined DEVICE_HAS_IN_ON_JRPIN5_TX
+    SetupMetaData.Tx_InMode_allowed_mask = 0b11; // all
+#elif defined DEVICE_HAS_IN_NORMAL
+    SetupMetaData.Tx_InMode_allowed_mask = 0b10; // sbus inv, not editable
+#elif defined DEVICE_HAS_IN_INVERTED
+    SetupMetaData.Tx_InMode_allowed_mask = 0b01; // sbus, not editable
+#else
+    SetupMetaData.Tx_InMode_allowed_mask = 0; // not available, do not display
+#endif
+
+    // Tx SerialPort: "serial,wbridge,serial2,com,crsf"
+    // Tx SerialPort2: "none,serial,wbridge,serial2,crsf"
+    SetupMetaData.Tx_SerialPort_allowed_mask = 0; // not available, do not display
+    SetupMetaData.Tx_SerialPort2_allowed_mask = 0; // not available, do not display
+#ifdef USE_SERIAL
+    SetupMetaData.Tx_SerialPort_allowed_mask |= 0b00001; // add serial
+    SetupMetaData.Tx_SerialPort2_allowed_mask |= 0b00011; // add none, serial
+#endif
+#ifdef USE_WIRELESS_BRIDGE
+    SetupMetaData.Tx_SerialPort_allowed_mask |= 0b00010; // add wbridge
+    SetupMetaData.Tx_SerialPort2_allowed_mask |= 0b00101; // add none, wbridge
+#endif
+#ifdef DEVICE_HAS_SERIAL2 // attention: USE_SERIAL2 implies either serial2 or wireless bridge
+    SetupMetaData.Tx_SerialPort_allowed_mask |= 0b00100; // add serial2
+    SetupMetaData.Tx_SerialPort2_allowed_mask |= 0b01001; // add none, serial2
+#endif
+#ifdef USE_COM
+    SetupMetaData.Tx_SerialPort_allowed_mask |= 0b01000; // add com
+#endif
+#ifdef DEVICE_HAS_JRPIN5
+    // we cannot work out all cases here, as it depends on actual serial port selections, so we here just do what we can do
+    SetupMetaData.Tx_SerialPort_allowed_mask |= 0b10000; // add crsfbridge
+//TODO    SetupMetaData.Tx_SerialPort2_allowed_mask |= 0b10000; // add crsfbridge
+#endif
+#if !((defined STM32G4 || defined ESP32) && defined USE_SERIAL && defined USE_SERIAL2)
+    SetupMetaData.Tx_SerialPort2_allowed_mask = 0; // only for devices with a fast processor and two serial ports
+#endif
+
+    // Tx SerialBaudrate2: "9600,19200,38400,57600,115200,230400"
+    // display only when a second serial port is available
+    SetupMetaData.Tx_SerialBaudrate2_allowed_mask = (SetupMetaData.Tx_SerialPort2_allowed_mask) ? UINT16_MAX : 0;
+
+    // Tx Buzzer: ""off,LP,rxLQ"
+#ifdef DEVICE_HAS_BUZZER
+    SetupMetaData.Tx_Buzzer_allowed_mask = UINT16_MAX; // all
+#else
+    SetupMetaData.Tx_Buzzer_allowed_mask = 0; // not available, do not display
+#endif
+
+    // Tx Bridge WiFi Protocol : "TCP,UDP,BT,UDPSTA,BLE,ESPNOW"
+#if defined DEVICE_HAS_ESP_WIFI_BRIDGE_ESP8266
+    SetupMetaData.Tx_WiFiProt_allowed_mask = 0b101011; // TCP, UDP, UDPSTA, ESPNOW (no BT, no BLE)
+#elif defined DEVICE_HAS_ESP_WIFI_BRIDGE_ESP32C3
+    SetupMetaData.Tx_WiFiProt_allowed_mask = 0b111011; // all except BT (no classic BT on C3)
+#else // ESP32
+    SetupMetaData.Tx_WiFiProt_allowed_mask = 0b111111; // all protocols
+#endif
+
+    //-- Rx:
+
+    power_optstr_from_rfpower_list(SetupMetaData.Rx_Power_optstr, rfpower_list, RFPOWER_LIST_NUM, 67);
+
+    // Rx Diversity: "enabled,antenna1,antenna2,r:e t:a1,r:e t:a2"
+#if defined DEVICE_HAS_DUAL_SX126x_SX128x
+    // we cannot work out all cases here, as it depends on actual FrequencyBand selection, so we here just do what we can do
+    SetupMetaData.Rx_Diversity_allowed_mask = 0b00111; // will be adjusted below
+#elif defined DEVICE_HAS_DUAL_SX126x_SX126x
+    SetupMetaData.Rx_Diversity_allowed_mask = 0b00001; // only enabled, not editable
+#elif defined DEVICE_HAS_DIVERSITY
+    SetupMetaData.Rx_Diversity_allowed_mask = 0b11111; // all
+#elif defined DEVICE_HAS_DIVERSITY_SINGLE_SPI
+    SetupMetaData.Rx_Diversity_allowed_mask = 0b11011; // TODO: no antenna2 for the moment
+#else
+    SetupMetaData.Rx_Diversity_allowed_mask = 0b00010; // antenna1, not editable
+#endif
+
+    // Rx OutMode: "sbus,crsf,sbus inv"
+#ifdef DEVICE_HAS_OUT
+    SetupMetaData.Rx_OutMode_allowed_mask = 0b111; // all
+#elif defined DEVICE_HAS_OUT_NORMAL
+    SetupMetaData.Rx_OutMode_allowed_mask = 0b110; // crsf,sbus inv
+#elif defined DEVICE_HAS_OUT_INVERTED
+    SetupMetaData.Rx_OutMode_allowed_mask = 0b001; // sbus, not editable
+#else
+    SetupMetaData.Rx_OutMode_allowed_mask = 0; // not available, do not display
+#endif
+
+    // Rx SerialPort: "serial,can,canfd"
+    SetupMetaData.Rx_SerialPort_allowed_mask = 0; // not available, do not display
+#ifdef USE_SERIAL
+    SetupMetaData.Rx_SerialPort_allowed_mask |= 0b001; // add serial
+#endif
+#ifdef DEVICE_HAS_DRONECAN
+    SetupMetaData.Rx_SerialPort_allowed_mask |= 0b010; // add can
+#elif defined DEVICE_HAS_DRONECAN_FD
+    SetupMetaData.Rx_SerialPort_allowed_mask |= 0b110; // add can, canfd
+#endif
+
+    //-- Tx: Receiver setup meta data
+
+    SetupMetaData.rx_available = false;
+
+    SetupMetaData.rx_firmware_version = 0;
+    SetupMetaData.rx_setup_layout = 0;
+    strcpy(SetupMetaData.rx_device_name, "");
+    SetupMetaData.rx_actual_power_dbm = INT8_MAX;
+    SetupMetaData.rx_actual_diversity = DIVERSITY_NUM;
+}
+
+
+//-------------------------------------------------------
+// Setup
+//-------------------------------------------------------
+
+// override default setup setting from common_conf.h
+// enable rc channels for single serial receivers
+#if !defined DEVICE_HAS_OUT
+  #undef SETUP_RX_SEND_RC_CHANNELS
+  #define SETUP_RX_SEND_RC_CHANNELS  SEND_RC_CHANNELS_RADIORCCHANNELS
+#endif
+
+
+void inc_bindphrase_char(char* const s, uint8_t pos)
+{
+    char* cptr = strchr(bindphrase_chars, s[pos]);
+    uint8_t n = (cptr) ? cptr - bindphrase_chars + 1 : 0; // must not happen that c is not found, but play it safe
+    if (n >= strlen(bindphrase_chars)) n = 0;
+    s[pos] = bindphrase_chars[n];
+}
+
+
+// make the default bind phrases all different for all config id's
+// this provides a sort of model match per default
+void setup_default_bindphrase(char* const s, uint8_t config_id, const char* bindphrase_default)
+{
+    strcpy(s, bindphrase_default);
+    if (config_id == 0) return;
+
+#ifdef FREQUENCY_BAND_2P4_GHZ // a bit more to do because of the "except" option
+    switch (config_id) {
+        case 1: s[5] = '5'; break;
+        case 2: s[5] = 'a'; break;
+        case 3: s[5] = 'f'; break;
+        case 4: s[5] = 'k'; break;
+        case 5: s[5] = 'p'; break;
+        case 6: s[5] = 'u'; break;
+        case 7: s[5] = 'z'; break;
+        case 8: s[5] = '1'; break;
+        case 9: s[5] = '2'; break;
+    }
+    if (s[5] == bindphrase_default[5]) inc_bindphrase_char(s, 5);
+#else
+    for (uint8_t cnt = 0; cnt < config_id; cnt++) { // inc s[5] config_id many times
+        inc_bindphrase_char(s, 5);
+    }
+#endif
+}
+
+
+void setup_default(uint8_t config_id)
+{
+    char bind_phrase[6+1];
+    setup_default_bindphrase(bind_phrase, config_id, BIND_PHRASE);
+    strcpy(Setup.Common[config_id].BindPhrase, bind_phrase);
+
+    Setup.Common[config_id].FrequencyBand = SETUP_RF_BAND;
+    Setup.Common[config_id].Mode = SETUP_MODE;
+    Setup.Common[config_id].Ortho = SETUP_RF_ORTHO;
+    Setup.Common[config_id].Privacy = SETUP_PRIVACY;
+
+    Setup.Tx[config_id].Power = SETUP_TX_POWER;
+    Setup.Tx[config_id].Diversity = SETUP_TX_DIVERSITY;
+    Setup.Tx[config_id].SerialPort = SETUP_TX_SERIAL_PORT;
+    Setup.Tx[config_id].SerialPort2 = SETUP_TX_SERIAL_PORT2;
+    Setup.Tx[config_id].SerialBaudrate = SETUP_TX_SERIAL_BAUDRATE;
+    Setup.Tx[config_id].SerialBaudrate2 = SERIAL_BAUDRATE_115200;
+    Setup.Tx[config_id].ChannelsSource = SETUP_TX_CHANNELS_SOURCE;
+    Setup.Tx[config_id].ChannelOrder = SETUP_TX_CHANNEL_ORDER;
+    Setup.Tx[config_id].InMode = SETUP_TX_IN_MODE;
+    Setup.Tx[config_id].SendRadioStatus = SETUP_TX_SEND_RADIO_STATUS;
+    Setup.Tx[config_id].Buzzer = SETUP_TX_BUZZER;
+    Setup.Tx[config_id].MavlinkComponent = SETUP_TX_MAV_COMPONENT;
+    Setup.Tx[config_id].PowerSwitchChannel = POWER_SWITCH_CHANNEL_OFF;
+
+    Setup.Tx[config_id].WifiProtocol = WIFI_PROTOCOL_UDP;
+    Setup.Tx[config_id].WifiChannel = WIFI_CHANNEL_6;
+    Setup.Tx[config_id].WifiPower = WIFI_POWER_MED;
+
+    Setup.Rx.Power = SETUP_RX_POWER;
+    Setup.Rx.Diversity = SETUP_RX_DIVERSITY;
+    Setup.Rx.ChannelOrder = SETUP_RX_CHANNEL_ORDER;
+    Setup.Rx.OutMode = SETUP_RX_OUT_MODE;
+    Setup.Rx.OutRssiChannelMode = SETUP_RX_OUT_RSSI_CHANNEL;
+    Setup.Rx.FailsafeMode = SETUP_RX_FAILSAFE_MODE;
+    Setup.Rx.SerialPort = SETUP_RX_SERIAL_PORT;
+    Setup.Rx.SerialBaudrate = SETUP_RX_SERIAL_BAUDRATE;
+    Setup.Rx.SerialLinkMode = SETUP_RX_SERIAL_LINK_MODE;
+    Setup.Rx.SendRadioStatus = SETUP_RX_SEND_RADIO_STATUS;
+    Setup.Rx.SendRcChannels = SETUP_RX_SEND_RC_CHANNELS;
+    Setup.Rx.PowerSwitchChannel = POWER_SWITCH_CHANNEL_OFF;
+
+    for (uint8_t ch = 0; ch < 12; ch++) { Setup.Rx.FailsafeOutChannelValues_Ch1_Ch12[ch] = 0; }
+    for (uint8_t ch = 0; ch < 4; ch++) { Setup.Rx.FailsafeOutChannelValues_Ch13_Ch16[ch] = 1; }
+}
+
+
+void _setup_sanitize_config(uint8_t config_id, bool only_rx)
+{
+// note: if allowed_mask = 0, this also triggers
+// we may have to distinguish between not editable and not displayed, but currently
+// not displayed applies only to settings for which the default is ok
+
+#define TST_NOTALLOWED_TYPED(amask,pfield,val,ptype) \
+    if ((SetupMetaData.amask & (1 << Setup.pfield)) == 0) { Setup.pfield = (ptype)val; } \
+    if (SetupMetaData.amask != 0 && (SetupMetaData.amask & (1 << Setup.pfield)) == 0) { \
+      for (uint8_t i = 0; i < 16; i++) { if (SetupMetaData.amask & (1 << i)) { Setup.pfield = (ptype)i; break; } } \
+    }
+
+#define TST_NOTALLOWED(amask,pfield,val) \
+    if ((SetupMetaData.amask & (1 << Setup.pfield)) == 0) { Setup.pfield = val; } \
+    if (SetupMetaData.amask != 0 && (SetupMetaData.amask & (1 << Setup.pfield)) == 0) { \
+      for (uint8_t i = 0; i < 16; i++) { if (SetupMetaData.amask & (1 << i)) { Setup.pfield = i; break; } } \
+    }
+
+#define SANITIZE(pfield,max,setupval,defaultval) \
+    if (Setup.pfield >= max) { Setup.pfield = setupval; } \
+    if (Setup.pfield >= max) { Setup.pfield = defaultval; }
+
+    //-- BindPhrase, FrequencyBand, Mode, Ortho
+
+    char bind_phrase[6+1];
+    setup_default_bindphrase(bind_phrase, config_id, BIND_PHRASE);
+    sanitize_bindphrase(Setup.Common[config_id].BindPhrase, bind_phrase);
+
+    if (Setup.Common[config_id].FrequencyBand >= SETUP_FREQUENCY_BAND_NUM) {
+        Setup.Common[config_id].FrequencyBand = FREQUENCY_BAND_DEFAULT;
+    }
+    TST_NOTALLOWED_TYPED(FrequencyBand_allowed_mask, Common[config_id].FrequencyBand, FREQUENCY_BAND_DEFAULT, SETUP_FREQUENCY_BAND_ENUM);
+
+#if defined DEVICE_HAS_DUAL_SX126x_SX128x
+    // DUALBAND capable hardware, so adjust allowed modes for hardware capabilities
+    // we now know the frequency band, so can adjust the allowed mask for Mode and Ortho (Ortho is done below)
+    switch (Setup.Common[config_id].FrequencyBand) {
+    case SETUP_FREQUENCY_BAND_2P4_GHZ:
+        SetupMetaData.Mode_allowed_mask &= 0b001111; // filter down to 50 Hz, 31 Hz, 19 Hz, FLRC
+        SetupMetaData.Tx_Diversity_allowed_mask = 0b00100; // antenna2
+        SetupMetaData.Rx_Diversity_allowed_mask = 0b00100; // antenna2
+        break;
+    case SETUP_FREQUENCY_BAND_915_MHZ_FCC:
+    case SETUP_FREQUENCY_BAND_868_MHZ:
+        SetupMetaData.Mode_allowed_mask &= 0b010110; // filter down to 31 Hz, 19 Hz, FSK
+        SetupMetaData.Tx_Diversity_allowed_mask = 0b00010; // antenna1
+        SetupMetaData.Rx_Diversity_allowed_mask = 0b00010; // antenna1
+        break;
+    case SETUP_FREQUENCY_DUAL_BAND_915_MHZ_2P4_GHZ:
+    case SETUP_FREQUENCY_DUAL_BAND_868_MHZ_2P4_GHZ:
+        SetupMetaData.Mode_allowed_mask &= 0b010110; // filter down to 31 Hz, 19 Hz, FSK
+        SetupMetaData.Tx_Diversity_allowed_mask = 0b00001; // diversity / both antenna
+        SetupMetaData.Rx_Diversity_allowed_mask = 0b00001; // diversity / both antenna
+        break;
+    default:
+        while(1){} // must not happen, should have been resolved in setup_sanitize()
+    }
+#elif defined DEVICE_HAS_LR11xx
+    // MULTIBAND capable hardware, so adjust allowed modes for hardware capabilities
+    // we now know the frequency band, so can adjust the allowed mask for Mode and Ortho (Ortho is done below)
+    switch (Setup.Common[config_id].FrequencyBand) {
+    case SETUP_FREQUENCY_BAND_2P4_GHZ:
+        SetupMetaData.Mode_allowed_mask &= 0b000111; // filter down to 50 Hz, 31 Hz, 19 Hz
+        break;
+    case SETUP_FREQUENCY_BAND_915_MHZ_FCC:
+    case SETUP_FREQUENCY_BAND_868_MHZ:
+    case SETUP_FREQUENCY_BAND_70_CM_HAM:
+    case SETUP_FREQUENCY_BAND_433_MHZ:
+        SetupMetaData.Mode_allowed_mask &= 0b110110; // filter down to 31 Hz, 19 Hz, FSK, 19 Hz 7x
+        break;
+    default:
+        while(1){} // must not happen, should have been resolved in setup_sanitize()
+    }
+#elif defined DEVICE_HAS_LR20xx
+    // MULTIBAND capable hardware, so adjust allowed modes for hardware capabilities
+    // we now know the frequency band, so can adjust the allowed mask for Mode and Ortho (Ortho is done below)
+    switch (Setup.Common[config_id].FrequencyBand) {
+    case SETUP_FREQUENCY_BAND_2P4_GHZ:
+        SetupMetaData.Mode_allowed_mask &= 0b001111; // filter down to 50 Hz, 31 Hz, 19 Hz, FLRC
+        break;
+    case SETUP_FREQUENCY_BAND_915_MHZ_FCC:
+    case SETUP_FREQUENCY_BAND_868_MHZ:
+    case SETUP_FREQUENCY_BAND_70_CM_HAM:
+    case SETUP_FREQUENCY_BAND_433_MHZ:
+        SetupMetaData.Mode_allowed_mask &= 0b110110; // filter down to 31 Hz, 19 Hz, FSK, 19 Hz 7x
+        break;
+    default:
+        while(1){} // must not happen, should have been resolved in setup_sanitize()
+    }
+#endif
+
+    SANITIZE(Common[config_id].Mode, MODE_NUM, SETUP_MODE, MODE_DEFAULT);
+    TST_NOTALLOWED(Mode_allowed_mask, Common[config_id].Mode, MODE_DEFAULT);
+
+    SANITIZE(Common[config_id].Ortho, ORTHO_NUM, SETUP_RF_ORTHO, ORTHO_NONE);
+    // allowed Ortho depends on FrequencyBand, so we adjust here!
+    switch (Setup.Common[config_id].FrequencyBand) {
+    case SETUP_FREQUENCY_BAND_2P4_GHZ: // restrict ortho to 2.4GHz, 915FCC, 70CM
+    case SETUP_FREQUENCY_BAND_915_MHZ_FCC:
+    case SETUP_FREQUENCY_BAND_70_CM_HAM:
+//TODO    case SETUP_FREQUENCY_DUAL_BAND_915_MHZ_2P4_GHZ: // for the moment don't be concerned about ortho
+//TODO    case SETUP_FREQUENCY_DUAL_BAND_868_MHZ_2P4_GHZ:
+        break;
+    default:
+        SetupMetaData.Ortho_allowed_mask = 0; // not available, do not display
+    }
+    TST_NOTALLOWED(Ortho_allowed_mask, Common[config_id].Ortho, ORTHO_NONE);
+
+    SANITIZE(Common[config_id].Privacy, PRIVACY_NUM, SETUP_PRIVACY, PRIVACY_NONE);
+    TST_NOTALLOWED(Privacy_allowed_mask, Common[config_id].Privacy, PRIVACY_NONE);
+
+    //-- Tx:
+if (!only_rx) {
+
+    SANITIZE(Tx[config_id].Power, RFPOWER_LIST_NUM, SETUP_TX_POWER, RFPOWER_LIST_NUM - 1);
+
+    SANITIZE(Tx[config_id].Diversity, DIVERSITY_NUM, SETUP_TX_DIVERSITY, DIVERSITY_DEFAULT);
+    TST_NOTALLOWED(Tx_Diversity_allowed_mask, Tx[config_id].Diversity, DIVERSITY_ANTENNA1);
+
+    SANITIZE(Tx[config_id].ChannelsSource, CHANNEL_SOURCE_NUM, SETUP_TX_CHANNELS_SOURCE, CHANNEL_SOURCE_NONE);
+    TST_NOTALLOWED(Tx_ChannelsSource_allowed_mask, Tx[config_id].ChannelsSource, CHANNEL_SOURCE_NONE);
+
+    SANITIZE(Tx[config_id].InMode, IN_CONFIG_NUM, SETUP_TX_IN_MODE, IN_CONFIG_SBUS);
+    TST_NOTALLOWED(Tx_InMode_allowed_mask, Tx[config_id].InMode, IN_CONFIG_SBUS);
+
+    SANITIZE(Tx[config_id].SerialPort, TX_SERIAL_PORT_NUM, SETUP_TX_SERIAL_PORT, TX_SERIAL_PORT_SERIAL);
+    TST_NOTALLOWED(Tx_SerialPort_allowed_mask, Tx[config_id].SerialPort, TX_SERIAL_PORT_SERIAL);
+
+    SANITIZE(Tx[config_id].SerialPort2, TX_SERIAL_PORT2_NUM, SETUP_TX_SERIAL_PORT2, TX_SERIAL_PORT2_SERIAL);
+    TST_NOTALLOWED(Tx_SerialPort2_allowed_mask, Tx[config_id].SerialPort2, TX_SERIAL_PORT2_NONE);
+
+    SANITIZE(Tx[config_id].SerialBaudrate, SERIAL_BAUDRATE_NUM, SETUP_TX_SERIAL_BAUDRATE, SERIAL_BAUDRATE_115200);
+    SANITIZE(Tx[config_id].SerialBaudrate2, SERIAL_BAUDRATE_NUM, SERIAL_BAUDRATE_115200, SERIAL_BAUDRATE_115200);
+
+    SANITIZE(Tx[config_id].ChannelOrder, CHANNEL_ORDER_NUM, SETUP_TX_CHANNEL_ORDER, CHANNEL_ORDER_AETR);
+
+    SANITIZE(Tx[config_id].SendRadioStatus, TX_SEND_RADIO_STATUS_NUM, SETUP_TX_SEND_RADIO_STATUS, TX_SEND_RADIO_STATUS_OFF);
+    SANITIZE(Tx[config_id].MavlinkComponent, TX_MAVLINK_COMPONENT_NUM, SETUP_TX_MAV_COMPONENT, TX_MAVLINK_COMPONENT_OFF);
+
+    SANITIZE(Tx[config_id].Buzzer, BUZZER_NUM, SETUP_TX_BUZZER, BUZZER_OFF);
+    TST_NOTALLOWED(Tx_Buzzer_allowed_mask, Tx[config_id].Buzzer, BUZZER_OFF);
+
+    SANITIZE(Tx[config_id].PowerSwitchChannel, POWER_SWITCH_CHANNEL_NUM, POWER_SWITCH_CHANNEL_OFF, POWER_SWITCH_CHANNEL_OFF);
+
+    // device cannot use same serial for both SerialPort and SerialPort2 !
+    // also exclude "com" & "serial"
+    if ( ((Setup.Tx[config_id].SerialPort == TX_SERIAL_PORT_SERIAL) &&
+          (Setup.Tx[config_id].SerialPort2 == TX_SERIAL_PORT2_SERIAL)) ||
+         ((Setup.Tx[config_id].SerialPort == TX_SERIAL_PORT_WIRELESS_BRIDGE) &&
+          (Setup.Tx[config_id].SerialPort2 == TX_SERIAL_PORT2_WIRELESS_BRIDGE)) ||
+         ((Setup.Tx[config_id].SerialPort == TX_SERIAL_PORT_SERIAL2) &&
+          (Setup.Tx[config_id].SerialPort2 == TX_SERIAL_PORT2_SERIAL2)) ||
+         ((Setup.Tx[config_id].SerialPort == TX_SERIAL_PORT_CRSF_BRIDGE) &&
+          (Setup.Tx[config_id].SerialPort2 == TX_SERIAL_PORT2_CRSF_BRIDGE)) ||
+         ((Setup.Tx[config_id].SerialPort == TX_SERIAL_PORT_COM) &&
+          (Setup.Tx[config_id].SerialPort2 == TX_SERIAL_PORT2_SERIAL)) ){
+        Setup.Tx[config_id].SerialPort2 = TX_SERIAL_PORT2_NONE;
+    }
+
+#ifdef USE_ESP_WIFI_BRIDGE_CONFIGURE
+    SANITIZE(Tx[config_id].WifiProtocol, WIFI_PROTOCOL_NUM, WIFI_PROTOCOL_UDP, WIFI_PROTOCOL_UDP);
+    TST_NOTALLOWED(Tx_WiFiProt_allowed_mask, Tx[config_id].WifiProtocol, WIFI_PROTOCOL_UDP);
+    SANITIZE(Tx[config_id].WifiChannel, WIFI_CHANNEL_NUM, WIFI_CHANNEL_6, WIFI_CHANNEL_6);
+    SANITIZE(Tx[config_id].WifiPower, WIFI_POWER_NUM, WIFI_POWER_MED, WIFI_POWER_MED);
+#else
+    Setup.Tx[config_id].WifiProtocol = WIFI_PROTOCOL_UDP; // force them to default
+    Setup.Tx[config_id].WifiChannel = WIFI_CHANNEL_6;
+    Setup.Tx[config_id].WifiPower = WIFI_POWER_MED;
+#endif
+}
+
+    //-- Rx:
+
+    SANITIZE(Rx.Power, RFPOWER_LIST_NUM, SETUP_RX_POWER, RFPOWER_LIST_NUM - 1);
+
+    SANITIZE(Rx.Diversity, DIVERSITY_NUM, SETUP_RX_DIVERSITY, DIVERSITY_DEFAULT);
+    TST_NOTALLOWED(Rx_Diversity_allowed_mask, Rx.Diversity,  DIVERSITY_ANTENNA1);
+
+    SANITIZE(Rx.ChannelOrder, CHANNEL_ORDER_NUM, SETUP_RX_CHANNEL_ORDER, CHANNEL_ORDER_AETR);
+
+    SANITIZE(Rx.OutMode, OUT_CONFIG_NUM, SETUP_RX_OUT_MODE, OUT_CONFIG_SBUS);
+    TST_NOTALLOWED(Rx_OutMode_allowed_mask, Rx.OutMode, OUT_CONFIG_SBUS);
+
+    SANITIZE(Rx.OutRssiChannelMode, OUT_RSSI_LQ_CHANNEL_NUM, SETUP_RX_OUT_RSSI_CHANNEL, OUT_RSSI_LQ_CHANNEL_OFF);
+
+    SANITIZE(Rx.OutLqChannelMode, OUT_RSSI_LQ_CHANNEL_NUM, SETUP_RX_OUT_LQ_CHANNEL, OUT_RSSI_LQ_CHANNEL_OFF);
+
+    SANITIZE(Rx.FailsafeMode, FAILSAFE_MODE_NUM, SETUP_RX_FAILSAFE_MODE, FAILSAFE_MODE_NO_SIGNAL);
+
+    for (uint8_t ch = 0; ch < 12; ch++) {
+        if (Setup.Rx.FailsafeOutChannelValues_Ch1_Ch12[ch] < -120) Setup.Rx.FailsafeOutChannelValues_Ch1_Ch12[ch] = 0;
+        if (Setup.Rx.FailsafeOutChannelValues_Ch1_Ch12[ch] > 120) Setup.Rx.FailsafeOutChannelValues_Ch1_Ch12[ch] = 0;
+    }
+    for (uint8_t ch = 0; ch < 4; ch++) {
+        if (Setup.Rx.FailsafeOutChannelValues_Ch13_Ch16[ch] > 2) Setup.Rx.FailsafeOutChannelValues_Ch13_Ch16[ch] = 1;
+    }
+
+    SANITIZE(Rx.SerialPort, RX_SERIAL_PORT_NUM, SETUP_RX_SERIAL_PORT, RX_SERIAL_PORT_SERIAL);
+    TST_NOTALLOWED(Rx_SerialPort_allowed_mask, Rx.SerialPort, RX_SERIAL_PORT_SERIAL);
+
+    SANITIZE(Rx.SerialBaudrate, SERIAL_BAUDRATE_NUM, SETUP_RX_SERIAL_BAUDRATE, SERIAL_BAUDRATE_57600);
+
+    SANITIZE(Rx.SerialLinkMode, SERIAL_LINK_MODE_NUM, SETUP_RX_SERIAL_LINK_MODE, SERIAL_LINK_MODE_TRANSPARENT);
+    if (SERIAL_LINK_MODE_IS_MSP(Setup.Rx.SerialLinkMode)) Setup.Rx.SerialPort = RX_SERIAL_PORT_SERIAL; // don't do CAN when MSPX
+
+    SANITIZE(Rx.SendRadioStatus, RX_SEND_RADIO_STATUS_NUM, SETUP_RX_SEND_RADIO_STATUS, RX_SEND_RADIO_STATUS_OFF);
+
+    SANITIZE(Rx.SendRcChannels, SEND_RC_CHANNELS_NUM, SETUP_RX_SEND_RC_CHANNELS, SEND_RC_CHANNELS_OFF);
+
+    SANITIZE(Rx.PowerSwitchChannel, POWER_SWITCH_CHANNEL_NUM, POWER_SWITCH_CHANNEL_OFF, POWER_SWITCH_CHANNEL_OFF);
+
+    SANITIZE(Rx.MavlinkSystemID, 5, SETUP_RX_MAVLINK_SYSTEM_ID, 0);
+
+    //-- Spares and deprecated options:
+    // should be 0xFF'ed
+
+    for (uint8_t n = 0; n < sizeof(Setup.spare)/sizeof(Setup.spare[0]); n++) Setup.spare[n] = 0xFF;
+    for (uint8_t n = 0; n < sizeof(Setup.spare1)/sizeof(Setup.spare1[0]); n++) Setup.spare1[n] = 0xFF;
+    for (uint8_t n = 0; n < sizeof(Setup.Common[config_id].spare)/sizeof(Setup.Common[config_id].spare[0]); n++) Setup.Common[config_id].spare[n] = 0xFF;
+    for (uint8_t n = 0; n < sizeof(Setup.Tx[config_id].spare)/sizeof(Setup.Tx[config_id].spare[0]); n++) Setup.Tx[config_id].spare[n] = 0xFF;
+    for (uint8_t n = 0; n < sizeof(Setup.Rx.spare)/sizeof(Setup.Rx.spare[0]); n++) Setup.Rx.spare[n] = 0xFF;
+    Setup.Rx.spare1 = 0xFF;
+    Setup.Rx.spare2 = 0xFF;
+}
+
+
+void setup_sanitize_config(uint8_t config_id) { _setup_sanitize_config(config_id, false); }
+void setup_sanitize_rx_config(void) { _setup_sanitize_config(0, true); }
+
+
+//-------------------------------------------------------
+// Configure
+//-------------------------------------------------------
+
+// also called by bind
+void configure_mode(uint8_t mode, uint8_t frequencyband)
+{
+    Config.Mode = mode;
+
+    switch (Config.Mode) {
+    case MODE_50HZ:
+        Config.frame_rate_ms = 20; // 20 ms = 50 Hz
+        Config.frame_rate_hz = 50;
+        Config.send_frame_tmo_ms = MODE_50HZ_SEND_FRAME_TMO_MS; // 10;
+        break;
+    case MODE_31HZ:
+        Config.frame_rate_ms = 32; // 32 ms = 31.25 Hz
+        Config.frame_rate_hz = 31;
+        Config.send_frame_tmo_ms = MODE_31HZ_SEND_FRAME_TMO_MS; // 15
+        break;
+    case MODE_19HZ:
+    case MODE_19HZ_7X:
+        Config.frame_rate_ms = 53; // 53 ms = 18.9 Hz
+        Config.frame_rate_hz = 19;
+        Config.send_frame_tmo_ms = MODE_19HZ_SEND_FRAME_TMO_MS; // 25;
+        break;
+    case MODE_FLRC_111HZ:
+        Config.frame_rate_ms = 9; // 9 ms = 111 Hz
+        Config.frame_rate_hz = 111,
+        Config.send_frame_tmo_ms = MODE_FLRC_111HZ_SEND_FRAME_TMO_MS; // 7;
+        break;
+    case MODE_FSK_50HZ:
+        Config.frame_rate_ms = 20; // 20 ms = 50 Hz
+        Config.frame_rate_hz = 50;
+        Config.send_frame_tmo_ms = MODE_FSK_50HZ_SEND_FRAME_TMO_MS; // 10;
+        break;
+    default:
+        while(1){} // must not happen, should have been resolved in setup_sanitize_config()
+    }
+
+    // Sx/Sx2 LoraConfigIndex, is_lora helper for sx drivers
+    Config.Sx.is_lora = Config.Sx2.is_lora = true;
+
+    switch (Config.Mode) {
+    case MODE_50HZ:
+#if defined DEVICE_HAS_DUAL_SX126x_SX128x
+        // has hopefully been correctly sanitized in setup_sanitize_config(), only for 2.4 GHz frequency band
+        Config.Sx.LoraConfigIndex = 0; // 50Hz Lora not possible on sx126x, has no effect
+        Config.Sx2.LoraConfigIndex = SX128x_LORA_CONFIG_BW800_SF5_CRLI4_5;
+#elif defined DEVICE_HAS_DUAL_SX126x_SX126x
+        while(1){} // not possible
+#elif defined DEVICE_HAS_SX128x
+        Config.Sx.LoraConfigIndex = SX128x_LORA_CONFIG_BW800_SF5_CRLI4_5;
+        Config.Sx2.LoraConfigIndex = Config.Sx.LoraConfigIndex;
+#elif defined DEVICE_HAS_SX126x
+        while(1){} // not possible
+#elif defined DEVICE_HAS_SX127x
+        while(1){} // not possible
+#elif defined DEVICE_HAS_LR11xx
+        if (frequencyband == SETUP_FREQUENCY_BAND_2P4_GHZ) {
+            Config.Sx.LoraConfigIndex = LR11xx_LORA_CONFIG_BW800_SF5_CR4_5;
+        } else {
+            while(1){} // not possible
+        }
+        Config.Sx2.LoraConfigIndex = Config.Sx.LoraConfigIndex;
+#elif defined DEVICE_HAS_LR20xx
+        if (frequencyband == SETUP_FREQUENCY_BAND_2P4_GHZ) {
+            Config.Sx.LoraConfigIndex = LR20xx_LORA_CONFIG_BW800_SF5_CR4_5;
+        } else {
+            while(1){} // not possible
+        }
+        Config.Sx2.LoraConfigIndex = Config.Sx.LoraConfigIndex;
+#else
+  #error Unknown Device !
+#endif
+        break;
+
+    case MODE_31HZ:
+#if defined DEVICE_HAS_DUAL_SX126x_SX128x
+        Config.Sx.LoraConfigIndex = SX126x_LORA_CONFIG_BW500_SF5_CR4_5;
+        Config.Sx2.LoraConfigIndex = SX128x_LORA_CONFIG_BW800_SF6_CRLI4_5;
+#elif defined DEVICE_HAS_DUAL_SX126x_SX126x
+        Config.Sx.LoraConfigIndex = SX126x_LORA_CONFIG_BW500_SF5_CR4_5;
+        Config.Sx2.LoraConfigIndex = Config.Sx.LoraConfigIndex;
+#elif defined DEVICE_HAS_SX128x
+        Config.Sx.LoraConfigIndex = SX128x_LORA_CONFIG_BW800_SF6_CRLI4_5;
+        Config.Sx2.LoraConfigIndex = Config.Sx.LoraConfigIndex;
+#elif defined DEVICE_HAS_SX126x
+        Config.Sx.LoraConfigIndex = SX126x_LORA_CONFIG_BW500_SF5_CR4_5;
+        Config.Sx2.LoraConfigIndex = Config.Sx.LoraConfigIndex;
+#elif defined DEVICE_HAS_SX127x
+        while(1){} // not possible
+#elif defined DEVICE_HAS_LR11xx
+        if (frequencyband == SETUP_FREQUENCY_BAND_2P4_GHZ) {
+            Config.Sx.LoraConfigIndex = LR11xx_LORA_CONFIG_BW800_SF6_CR4_5;
+        } else {
+            Config.Sx.LoraConfigIndex = LR11xx_LORA_CONFIG_BW500_SF5_CR4_5;
+        }
+        Config.Sx2.LoraConfigIndex = Config.Sx.LoraConfigIndex;
+#elif defined DEVICE_HAS_LR20xx
+        if (frequencyband == SETUP_FREQUENCY_BAND_2P4_GHZ) {
+            Config.Sx.LoraConfigIndex = LR20xx_LORA_CONFIG_BW800_SF6_CR4_5;
+        } else {
+            Config.Sx.LoraConfigIndex = LR20xx_LORA_CONFIG_BW500_SF5_CR4_5;
+        }
+        Config.Sx2.LoraConfigIndex = Config.Sx.LoraConfigIndex;
+#else
+  #error Unknown Device !
+#endif
+        break;
+
+    case MODE_19HZ:
+    case MODE_19HZ_7X:
+#if defined DEVICE_HAS_DUAL_SX126x_SX128x
+        Config.Sx.LoraConfigIndex = SX126x_LORA_CONFIG_BW500_SF6_CR4_5;
+        Config.Sx2.LoraConfigIndex = SX128x_LORA_CONFIG_BW800_SF7_CRLI4_5;
+#elif defined DEVICE_HAS_DUAL_SX126x_SX126x
+        Config.Sx.LoraConfigIndex = SX126x_LORA_CONFIG_BW500_SF6_CR4_5;
+        Config.Sx2.LoraConfigIndex = Config.Sx.LoraConfigIndex;
+#elif defined DEVICE_HAS_SX128x
+        Config.Sx.LoraConfigIndex = SX128x_LORA_CONFIG_BW800_SF7_CRLI4_5;
+        Config.Sx2.LoraConfigIndex = Config.Sx.LoraConfigIndex;
+#elif defined DEVICE_HAS_SX126x
+        Config.Sx.LoraConfigIndex = SX126x_LORA_CONFIG_BW500_SF6_CR4_5;
+        Config.Sx2.LoraConfigIndex = Config.Sx.LoraConfigIndex;
+#elif defined DEVICE_HAS_SX127x
+        Config.Sx.LoraConfigIndex = SX127x_LORA_CONFIG_BW500_SF6_CR4_5;
+        Config.Sx2.LoraConfigIndex = Config.Sx.LoraConfigIndex;
+#elif defined DEVICE_HAS_LR11xx
+        if (frequencyband == SETUP_FREQUENCY_BAND_2P4_GHZ) {
+            Config.Sx.LoraConfigIndex = LR11xx_LORA_CONFIG_BW800_SF7_CR4_5;
+        } else {
+            Config.Sx.LoraConfigIndex = LR11xx_LORA_CONFIG_BW500_SF6_CR4_5;
+        }
+        Config.Sx2.LoraConfigIndex = Config.Sx.LoraConfigIndex;
+#elif defined DEVICE_HAS_LR20xx
+        if (frequencyband == SETUP_FREQUENCY_BAND_2P4_GHZ) {
+            Config.Sx.LoraConfigIndex = LR20xx_LORA_CONFIG_BW800_SF7_CR4_5;
+        } else {
+            Config.Sx.LoraConfigIndex = LR20xx_LORA_CONFIG_BW500_SF6_CR4_5;
+        }
+        Config.Sx2.LoraConfigIndex = Config.Sx.LoraConfigIndex;
+#else
+  #error Unknown Device !
+#endif
+        break;
+
+    case MODE_FLRC_111HZ:
+        Config.Sx.LoraConfigIndex = 0;
+        Config.Sx2.LoraConfigIndex = 0;
+        Config.Sx.is_lora = Config.Sx2.is_lora = false;
+        break;
+
+    case MODE_FSK_50HZ:
+#if defined DEVICE_HAS_DUAL_SX126x_SX128x
+        // has hopefully been correctly sanitized in setup_sanitize_config(), not for 2.4 GHz frequency band
+        Config.Sx.LoraConfigIndex = 0;
+        Config.Sx.is_lora = false;
+        Config.Sx2.LoraConfigIndex = SX128x_LORA_CONFIG_BW800_SF5_CRLI4_5;
+        Config.Sx2.is_lora = true;
+#else
+        Config.Sx.LoraConfigIndex = 0;
+        Config.Sx2.LoraConfigIndex = 0;
+        Config.Sx.is_lora = Config.Sx2.is_lora = false;
+#endif
+        break;
+    }
+
+    // Sx/Sx2 FrequencyBand
+    Config.Sx.FrequencyBand = cvt_to_sx_fhss_frequency_band(frequencyband); // asserts if not a valid SETUP_FREQUENCY_BAND_ENUM
+    Config.Sx2.FrequencyBand = Config.Sx.FrequencyBand;
+
+#if defined DEVICE_HAS_DUAL_SX126x_SX128x
+    if (Config.Sx.FrequencyBand == SX_FHSS_FREQUENCY_BAND_2P4_GHZ) {
+        Config.Sx.FrequencyBand = SX_FHSS_FREQUENCY_BAND_868_MHZ; // set a valid dummy
+    }
+    Config.Sx2.FrequencyBand = SX_FHSS_FREQUENCY_BAND_2P4_GHZ;
+#elif defined DEVICE_HAS_DUAL_SX126x_SX126x
+    Config.Sx2.FrequencyBand = SX_FHSS_FREQUENCY_BAND_433_MHZ;
+#endif
+}
+
+
+// also called by bind
+void configure_diversity(uint8_t diversity)
+{
+#if defined DEVICE_HAS_DUAL_SX126x_SX128x || defined DEVICE_HAS_DUAL_SX126x_SX126x || \
+    defined DEVICE_HAS_DIVERSITY || defined DEVICE_HAS_DIVERSITY_SINGLE_SPI
+    switch (diversity) {
+    case DIVERSITY_DEFAULT:
+        Config.Diversity = DIVERSITY_DEFAULT;
+        Config.ReceiveUseAntenna1 = Config.TransmitUseAntenna1 = true;
+        Config.ReceiveUseAntenna2 = Config.TransmitUseAntenna2 = true;
+        break;
+    case DIVERSITY_ANTENNA1:
+        Config.Diversity = DIVERSITY_ANTENNA1;
+        Config.ReceiveUseAntenna1 = Config.TransmitUseAntenna1 = true;
+        Config.ReceiveUseAntenna2 = Config.TransmitUseAntenna2 = false;
+        break;
+    case DIVERSITY_ANTENNA2:
+        Config.Diversity = DIVERSITY_ANTENNA2;
+        Config.ReceiveUseAntenna1 = Config.TransmitUseAntenna1 = false;
+        Config.ReceiveUseAntenna2 = Config.TransmitUseAntenna2 = true;
+        break;
+#if defined DEVICE_HAS_DIVERSITY || defined DEVICE_HAS_DIVERSITY_SINGLE_SPI
+    // must not happen for dual band, should have been resolved in setup_sanitize_config()
+    case DIVERSITY_R_ENABLED_T_ANTENNA1:
+        Config.Diversity = DIVERSITY_R_ENABLED_T_ANTENNA1;
+        Config.ReceiveUseAntenna1 = Config.TransmitUseAntenna1 = true;
+        Config.ReceiveUseAntenna2 = true;
+        Config.TransmitUseAntenna2 = false;
+        break;
+    case DIVERSITY_R_ENABLED_T_ANTENNA2:
+        Config.Diversity = DIVERSITY_R_ENABLED_T_ANTENNA2;
+        Config.ReceiveUseAntenna1 = true;
+        Config.TransmitUseAntenna1 = false;
+        Config.ReceiveUseAntenna2 = Config.TransmitUseAntenna2 = true;
+        break;
+#endif
+    default:
+        while(1){} // must not happen, should have been resolved in setup_sanitize()
+    }
+#else
+    Config.Diversity = DIVERSITY_ANTENNA1;
+    Config.ReceiveUseAntenna1 = Config.TransmitUseAntenna1 = true;
+    Config.ReceiveUseAntenna2 = Config.TransmitUseAntenna2 = false;
+#endif
+}
+
+
+void setup_configure_config(uint8_t config_id)
+{
+    //-- SyncWord
+    // note: FrameSyncWord will be modified by Ortho
+    // note: FrameSyncWord will be modified also for dual band
+    //       Use distinct sync word for dual band to prevent single band receivers from connecting
+    //       could be done nice after Config.IsDualBand is set up, but clearer to do here.
+
+    uint32_t bind_dblword = u32_from_bindphrase(Setup.Common[config_id].BindPhrase);
+
+    Config.FrameSyncWord = fmav_crc_calculate((uint8_t*)&bind_dblword, 4); // condense it into a u16
+
+    if (Setup.Common[config_id].Ortho > ORTHO_NONE) { // has hopefully been correctly sanitized in setup_sanitize_config()
+        Config.FrameSyncWord += 0x1111 * Setup.Common[config_id].Ortho;
+    }
+
+    if (Setup.Common[config_id].FrequencyBand == SETUP_FREQUENCY_DUAL_BAND_915_MHZ_2P4_GHZ) {
+        Config.FrameSyncWord += 0x5AA5;
+    }
+    if (Setup.Common[config_id].FrequencyBand == SETUP_FREQUENCY_DUAL_BAND_868_MHZ_2P4_GHZ) {
+        Config.FrameSyncWord += 0xA55A;
+    }
+
+    if (Setup.Common[config_id].Privacy > PRIVACY_NONE) {
+        Config.FrameSyncWord += 0x1212 * Setup.Common[config_id].Privacy;
+    }
+
+    //-- Diversity
+    // Config.Diversity is not actually used for anything besides reporting to disp, cli, etc.
+
+#ifdef DEVICE_IS_TRANSMITTER
+    configure_diversity(Setup.Tx[config_id].Diversity); // has hopefully been correctly sanitized in setup_sanitize_config()
+#else // DEVICE_IS_RECEIVER
+    configure_diversity(Setup.Rx.Diversity); // has hopefully been correctly sanitized in setup_sanitize_config()
+#endif
+
+    //-- FrequencyBand
+
+    Config.FrequencyBand = Setup.Common[config_id].FrequencyBand; // has hopefully been correctly sanitized in setup_sanitize_config()
+
+    Config.IsDualBand = (Config.FrequencyBand == SETUP_FREQUENCY_DUAL_BAND_915_MHZ_2P4_GHZ ||
+                         Config.FrequencyBand == SETUP_FREQUENCY_DUAL_BAND_868_MHZ_2P4_GHZ);
+
+    //-- Mode, Mode dependent settings
+
+    // sets Mode and related, also sets Sx/Sx2.LoraConfigIndex, Sx/Sx2.is_lora, Sx/Sx2.FrequencyBand
+    configure_mode(Setup.Common[config_id].Mode, Config.FrequencyBand);
+
+    //-- Sx12xx
+    //     LoraConfigIndex; <- set by configure_mode()
+    //     FskSyncWord
+    //     FlrcSyncWord;
+    //     Power_dbm;
+    //     FrequencyBand;   <- set by configure_mode()
+    //     is_lora;         <- set by configure_mode()
+
+    Config.Sx.FskSyncWord = Config.FrameSyncWord;
+    Config.Sx2.FskSyncWord = Config.Sx.FskSyncWord;
+
+    Config.Sx.FlrcSyncWord = bind_dblword;
+    Config.Sx2.FlrcSyncWord = Config.Sx.FlrcSyncWord;
+
+//TODO: sort out for dual band
+    if (Setup.Common[config_id].Ortho > ORTHO_NONE) { // has hopefully been correctly sanitized in setup_sanitize_config()
+        Config.Sx.FlrcSyncWord += 0x11111111 * Setup.Common[config_id].Ortho;
+        Config.Sx2.FlrcSyncWord = Config.Sx.FlrcSyncWord;
+    }
+
+    // note: the actually used power will be determined later when the SX are set up
+#ifdef DEVICE_IS_TRANSMITTER
+    Config.Sx.Power_dbm = rfpower_list[Setup.Tx[config_id].Power].dbm;
+#else // DEVICE_IS_RECEIVER
+    Config.Sx.Power_dbm = rfpower_list[Setup.Rx.Power].dbm;
+#endif
+    Config.Sx2.Power_dbm = Config.Sx.Power_dbm;
+
+    //-- Fhss
+    //     Num;
+    //     Seed;
+    //     FrequencyBand;
+    //     Ortho;
+    //     Except;
+    //     BindScan_mask;
+
+    //Config.FhssSeed = bind_dblword;
+    // this is much better for narrow bands, like 868 MHz
+    // we could make it dependable with a #ifdef, but what's the point
+    Config.Fhss.Seed = Config.FrameSyncWord;
+
+    Config.Fhss.Ortho = Setup.Common[config_id].Ortho; // has hopefully been correctly sanitized in setup_sanitize_config()
+
+//TODO: sort out for dual band
+    Config.Fhss.Except = EXCEPT_NONE;
+    if (Config.Sx.FrequencyBand == SX_FHSS_FREQUENCY_BAND_2P4_GHZ) {
+        Config.Fhss.Except = except_from_bindphrase(Setup.Common[config_id].BindPhrase);
+    }
+
+    Config.Fhss.FrequencyBand = cvt_to_sx_fhss_frequency_band(Config.FrequencyBand); // asserts if not a valid SETUP_FREQUENCY_BAND_ENUM
+
+    // this mask is only used in bind, to determine the frequencies to cycle through
+    // since both fhss should cycle in sync, we always set them to be equal and have all frequencies
+    Config.Fhss.BindScan_mask = 0;
+    if (SetupMetaData.FrequencyBand_allowed_mask & (1 << SETUP_FREQUENCY_BAND_2P4_GHZ)) {
+        Config.Fhss.BindScan_mask |= (1 << SX_FHSS_FREQUENCY_BAND_2P4_GHZ);
+    }
+    if (SetupMetaData.FrequencyBand_allowed_mask & (1 << SETUP_FREQUENCY_BAND_915_MHZ_FCC)) {
+        Config.Fhss.BindScan_mask |= (1 << SX_FHSS_FREQUENCY_BAND_915_MHZ_FCC);
+    }
+    if (SetupMetaData.FrequencyBand_allowed_mask & (1 << SETUP_FREQUENCY_BAND_868_MHZ)) {
+        Config.Fhss.BindScan_mask |= (1 << SX_FHSS_FREQUENCY_BAND_868_MHZ);
+    }
+    if (SetupMetaData.FrequencyBand_allowed_mask & (1 << SETUP_FREQUENCY_BAND_433_MHZ)) {
+        Config.Fhss.BindScan_mask |= (1 << SX_FHSS_FREQUENCY_BAND_433_MHZ);
+    }
+    if (SetupMetaData.FrequencyBand_allowed_mask & (1 << SETUP_FREQUENCY_BAND_70_CM_HAM)) {
+        Config.Fhss.BindScan_mask |= (1 << SX_FHSS_FREQUENCY_BAND_70_CM_HAM);
+    }
+    if (SetupMetaData.FrequencyBand_allowed_mask & (1 << SETUP_FREQUENCY_BAND_866_MHZ_IN)) {
+        Config.Fhss.BindScan_mask |= (1 << SX_FHSS_FREQUENCY_BAND_866_MHZ_IN);
+    }
+
+    uint8_t fhss_num_list[SX_FHSS_FREQUENCY_BAND_NUM][MODE_NUM] = {
+// MODE_50HZ,         MODE_31HZ,              MODE_19HZ,                MODE_FLRC_111HZ,   MODE_FSK_50HZ,         MODE_19HZ_7X
+// SX_FHSS_FREQUENCY_BAND_2P4_GHZ
+{  FHSS_NUM_2P4_GHZ,  FHSS_NUM_2P4_GHZ_31HZ,  FHSS_NUM_2P4_GHZ_19HZ,    FHSS_NUM_2P4_GHZ,  1,                     1},
+// SX_FHSS_FREQUENCY_BAND_915_MHZ_FCC
+{  1,                 FHSS_NUM_915_MHZ_FCC,   FHSS_NUM_915_MHZ_FCC,     1,                 FHSS_NUM_915_MHZ_FCC,  FHSS_NUM_915_MHZ_FCC},
+// SX_FHSS_FREQUENCY_BAND_868_MHZ
+{  1,                 FHSS_NUM_868_MHZ,       FHSS_NUM_868_MHZ,         1,                 FHSS_NUM_868_MHZ,      FHSS_NUM_868_MHZ},
+// SX_FHSS_FREQUENCY_BAND_866_MHZ_IN
+{  1,                 FHSS_NUM_866_MHZ_IN,    FHSS_NUM_866_MHZ_IN,      1,                 FHSS_NUM_866_MHZ_IN,   FHSS_NUM_866_MHZ_IN},
+// SX_FHSS_FREQUENCY_BAND_433_MHZ
+{  1,                 FHSS_NUM_433_MHZ,       FHSS_NUM_433_MHZ,         1,                 FHSS_NUM_433_MHZ,      FHSS_NUM_433_MHZ},
+// SX_FHSS_FREQUENCY_BAND_70_CM_HAM
+{  1,                 FHSS_NUM_70_CM_HAM,     FHSS_NUM_70_CM_HAM_19HZ,  1,                 FHSS_NUM_70_CM_HAM,    FHSS_NUM_70_CM_HAM_19HZ}
+    };
+    Config.Fhss.Num = fhss_num_list[Config.Fhss.FrequencyBand][Config.Mode];
+
+    // ensure equal fhss1, fhss2, is required in single band mode
+    Config.Fhss2 = Config.Fhss;
+
+#if defined DEVICE_HAS_DUAL_SX126x_SX128x
+    if (Config.IsDualBand) { // only modify if in dual band mode, otherwise keep fhss1 = fhss2
+        Config.Fhss2.FrequencyBand = SX_FHSS_FREQUENCY_BAND_2P4_GHZ;
+        Config.Fhss2.Num = fhss_num_list[Config.Fhss2.FrequencyBand][Config.Mode];
+    }
+#elif defined DEVICE_HAS_DUAL_SX126x_SX126x
+    Config.IsDualBand = true; // currently only dual band mode supported
+    Config.Fhss2.FrequencyBand = SX_FHSS_FREQUENCY_BAND_433_MHZ;
+    Config.Fhss2.Num = FHSS_NUM_433_MHZ;
+#endif
+
+    //-- More Config, may depend on above config settings
+
+    Config.connect_tmo_systicks = SYSTICK_DELAY_MS(CONNECT_TMO_MS);
+    if (Config.Fhss.Num >= Config.Fhss2.Num) {
+        Config.connect_sync_cnt_max = Config.Fhss.Num / 2;
+        Config.connect_listen_hop_cnt = (uint8_t)(1.5f * Config.Fhss.Num);
+    } else {
+        Config.connect_sync_cnt_max = Config.Fhss2.Num / 2;
+        Config.connect_listen_hop_cnt = (uint8_t)(1.5f * Config.Fhss2.Num);
+    }
+    if (Config.connect_sync_cnt_max < CONNECT_SYNC_CNT) Config.connect_sync_cnt_max = CONNECT_SYNC_CNT;
+
+    Config.LQAveragingPeriod = (LQ_AVERAGING_MS/Config.frame_rate_ms);
+
+    //-- Serial
+#ifdef DEVICE_IS_TRANSMITTER
+    switch (Setup.Tx[config_id].SerialBaudrate) {
+#else // DEVICE_IS_RECEIVER
+    switch (Setup.Rx.SerialBaudrate) {
+#endif
+    case SERIAL_BAUDRATE_57600: Config.SerialBaudrate = 57600; break;
+    case SERIAL_BAUDRATE_115200: Config.SerialBaudrate = 115200; break;
+    case SERIAL_BAUDRATE_230400: Config.SerialBaudrate = 230400; break;
+    default:
+#ifdef DEVICE_IS_TRANSMITTER
+        Config.SerialBaudrate = 115200;
+#else // DEVICE_IS_RECEIVER
+        Config.SerialBaudrate = 57600;
+#endif
+    }
+
+#ifdef DEVICE_IS_TRANSMITTER
+    switch (Setup.Tx[config_id].SerialBaudrate2) {
+    case SERIAL_BAUDRATE_57600: Config.SerialBaudrate2 = 57600; break;
+    case SERIAL_BAUDRATE_115200: Config.SerialBaudrate2 = 115200; break;
+    case SERIAL_BAUDRATE_230400: Config.SerialBaudrate2 = 230400; break;
+    default:
+        Config.SerialBaudrate2 = 115200;
+    }
+#endif
+
+    //-- Mbridge, Crsf, In
+
+    Config.UseCrsf = false;
+    Config.UseCrsfBridge = false;
+    Config.UseIn = false;
+#ifdef DEVICE_IS_TRANSMITTER
+    // conflicts must have been sorted out before in setup_sanitize_config()
+  #ifdef DEVICE_HAS_JRPIN5
+    if (Setup.Tx[config_id].ChannelsSource == CHANNEL_SOURCE_CRSF) {
+        Config.UseCrsf = true;
+    }
+    if ((Setup.Tx[config_id].SerialPort == TX_SERIAL_PORT_CRSF_BRIDGE) ||
+        (Setup.Tx[config_id].SerialPort2 == TX_SERIAL_PORT2_CRSF_BRIDGE)) {
+        Config.UseCrsf = true;
+        Config.UseCrsfBridge = true;
+    }
+  #endif
+  #ifdef USE_IN
+    if (Setup.Tx[Config.ConfigId].ChannelsSource == CHANNEL_SOURCE_INPORT) {
+        Config.UseIn = true;
+    }
+    if (Config.UseCrsf && Config.UseIn) {
+        while(1){} // In and CRSF cannot be used simultaneously, must not happen
+    }
+  #endif
+#endif
+}
+
+
+//-------------------------------------------------------
+// Crypto
+//-------------------------------------------------------
+
+void setup_configure_config_crypto(void)
+{
+    memset(Config.Uid, 0xFF, 12);
+    Config.BindRandom = UINT64_MAX;
+    Config.SessionRandom = UINT64_MAX;
+    Config.StartupRandom = UINT64_MAX;
+
+    mcu_uid(Config.Uid);
+#if defined DEVICE_IS_TRANSMITTER && \
+    (defined STM32G4 || defined STM32WL || defined ESP32) // trng is available, note, must match Privacy_allowed_mask
+    // trng_get32() can return UINT32_MAX, so give it few chances, but terminate
+    // if either is invalid and Privacy > 0, then we have a serious issue, system should fail to connect
+    for (uint8_t i = 0; i < 4; i++) {
+        if (Config.BindRandom == UINT64_MAX) Config.BindRandom = ((uint64_t)trng_get32() << 32) + trng_get32();
+        if (Config.SessionRandom == UINT64_MAX) Config.SessionRandom = ((uint64_t)trng_get32() << 32) + trng_get32();
+        if (Config.StartupRandom == UINT64_MAX) Config.StartupRandom = ((uint64_t)trng_get32() << 32) + trng_get32();
+    }
+#endif
+}
+
+
+//-------------------------------------------------------
+// helper
+//-------------------------------------------------------
+
+void setup_clear(void)
+{
+    memset((uint8_t*)&Setup, 0xff, sizeof(tSetup));
+}
+
+
+EE_STATUS_ENUM setup_store_to_EEPROM(void)
+{
+    return ee_writedata(&Setup, sizeof(tSetup));
+}
+
+
+EE_STATUS_ENUM setup_retrieve_from_EEPROM(void)
+{
+    return ee_readdata(&Setup, sizeof(tSetup));
+}
+
+
+void setup_reload(void)
+{
+    setup_retrieve_from_EEPROM();
+    setup_sanitize_config(Config.ConfigId);
+}
+
+
+//-------------------------------------------------------
+// Init
+//-------------------------------------------------------
+
+#define SETUPLAYOUT_L0_0_02    2 // layout version up to v0.3.28
+#define SETUPLAYOUT_L0_3_29  329 // layout version from v0.3.29 - v0.3.34
+#define SETUPLAYOUT_L0_3_35  335 // layout version from v0.3.35 onwards
+
+#ifdef DEVICE_IS_TRANSMITTER
+#define SETUP_MARKER_NEW_STR  SETUP_MARKER_TX_STR
+#else // DEVICE_IS_RECEIVER
+#define SETUP_MARKER_NEW_STR  SETUP_MARKER_RX_STR
+#endif
+
+
+void setup_init(void)
+{
+EE_STATUS_ENUM ee_status;
+bool doEEPROMwrite;
+
+    setup_clear();
+    ee_status = ee_init();
+    if (ee_status == EE_STATUS_OK) { ee_status = setup_retrieve_from_EEPROM(); }
+    if (ee_status != EE_STATUS_OK) { // try it a 2nd time
+        setup_clear();
+        ee_status = ee_init();
+        if (ee_status == EE_STATUS_OK) { ee_status = setup_retrieve_from_EEPROM(); }
+    }
+
+    if (ee_status != EE_STATUS_OK) setup_clear(); // force default
+
+    if ((strncmp(Setup.MarkerStr, SETUP_MARKER_NEW_STR, 16) != 0) &&
+        (strncmp(Setup.MarkerStr, SETUP_MARKER_OLD_STR, 16) != 0)) {
+        setup_clear(); // force default
+    }
+
+#ifdef SETUP_FORCE_COMMON_CONF
+    setup_clear(); // force default
+#endif
+
+    doEEPROMwrite = false;
+    if (Setup.Layout != SETUPLAYOUT) {
+        if (Setup.Layout < SETUPLAYOUT) {
+            // changes in L10401: TX_SERIAL_PORT_ENUM, SERIAL_BAUDRATE_ENUM
+            // was L10304 before
+            for (uint8_t id = 0; id < SETUP_CONFIG_NUM; id++) {
+                switch (Setup.Tx[id].SerialPort) {
+                case L10304_SERIAL_DESTINATION_SERIAL: Setup.Tx[id].SerialPort = TX_SERIAL_PORT_SERIAL; break;
+                case L10304_SERIAL_DESTINATION_SERIAL2:
+                    #ifdef USE_WIRELESS_BRIDGE
+                    Setup.Tx[id].SerialPort = TX_SERIAL_PORT_WIRELESS_BRIDGE;
+                    #else
+                    Setup.Tx[id].SerialPort = TX_SERIAL_PORT_SERIAL2;
+                    #endif
+                    break;
+                case L10304_SERIAL_DESTINATION_MBRIDGE: Setup.Tx[id].SerialPort = TX_SERIAL_PORT_CRSF_BRIDGE; break;
+                default:
+                    Setup.Tx[id].SerialPort = TX_SERIAL_PORT_SERIAL;
+                }
+
+                switch (Setup.Tx[id].SerialBaudrate) {
+                case L10304_SERIAL_BAUDRATE_57600: Setup.Tx[id].SerialBaudrate = SERIAL_BAUDRATE_57600; break;
+                case L10304_SERIAL_BAUDRATE_115200: Setup.Tx[id].SerialBaudrate = SERIAL_BAUDRATE_115200; break;
+                case L10304_SERIAL_BAUDRATE_230400: Setup.Tx[id].SerialBaudrate = SERIAL_BAUDRATE_230400; break;
+                default:
+                    Setup.Tx[id].SerialBaudrate = SERIAL_BAUDRATE_115200;
+                }
+
+                Setup.Tx[id].SerialBaudrate2 = SERIAL_BAUDRATE_115200;
+            }
+
+            switch (Setup.Rx.SerialBaudrate) {
+            case L10304_SERIAL_BAUDRATE_57600: Setup.Rx.SerialBaudrate = SERIAL_BAUDRATE_57600; break;
+            case L10304_SERIAL_BAUDRATE_115200: Setup.Rx.SerialBaudrate = SERIAL_BAUDRATE_115200; break;
+            case L10304_SERIAL_BAUDRATE_230400: Setup.Rx.SerialBaudrate = SERIAL_BAUDRATE_230400; break;
+            default:
+                Setup.Rx.SerialBaudrate = SERIAL_BAUDRATE_57600;
+            }
+
+        } else {
+            // ups, > 10401, should not happen
+            for (uint8_t id = 0; id < SETUP_CONFIG_NUM; id++) setup_default(id);
+            Setup._ConfigId = 0;
+        }
+        Setup.Layout = SETUPLAYOUT;
+        doEEPROMwrite = true;
+    }
+    if (Setup.Version != VERSION) { // do after Layout, ensures that these flags are correct irrespective of Layout handling
+        Setup.Version = VERSION;
+        doEEPROMwrite = true;
+    }
+    if ((strncmp(Setup.MarkerStr, SETUP_MARKER_NEW_STR, 16) != 0)) {
+        strbufstrcpy((char*)Setup.MarkerStr, SETUP_MARKER_NEW_STR, 16);
+        strbufstrcpy((char*)Setup.MarkerEnd, SETUP_MARKEREND_STR, 8);
+        doEEPROMwrite = true;
+    }
+    if (doEEPROMwrite) {
+        setup_store_to_EEPROM();
+    }
+
+#ifdef DEVICE_IS_TRANSMITTER
+    if (Setup._ConfigId >= SETUP_CONFIG_NUM) Setup._ConfigId = 0;
+
+    // ensure that all config id's have the same channel_source
+    // otherwise it can be very confusing concerning how to communicate with the module
+    for (uint8_t id = 0; id < SETUP_CONFIG_NUM; id++) {
+        Setup.Tx[id].ChannelsSource = Setup.Tx[Setup._ConfigId].ChannelsSource;
+    }
+#else // DEVICE_IS_RECEIVER
+    Setup._ConfigId = 0;
+#endif
+
+    Config.ConfigId = Setup._ConfigId;
+
+    setup_configure_metadata();
+
+    setup_sanitize_config(Config.ConfigId);
+
+    setup_configure_config(Config.ConfigId);
+
+    setup_configure_config_crypto();
+}
+
+
+#endif // SETUP_H
+
+
+/*
+setup_configure_metadata();
+  -> allowed_mask
+  -> optst
+  -> SetupMetaData.rx_xxxx
+
+setup_sanitize_config(Config.ConfigId):
+  SANITIZE():   ensure param value is in possible range
+  TST_NOTALLOWED(): ensure param value is one of the allowed ones
+
+  adjust allowed_mask where it depends on setting
+
+setup_configure_config(Config.ConfigId):
+
+
+
+*/

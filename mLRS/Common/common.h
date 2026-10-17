@@ -1,0 +1,479 @@
+//*******************************************************
+// Copyright (c) MLRS project
+// GPL3
+// https://www.gnu.org/licenses/gpl-3.0.de.html
+// OlliW @ www.olliw.eu
+//*******************************************************
+// common
+//*******************************************************
+#ifndef COMMON_H
+#define COMMON_H
+#pragma once
+
+
+#include "common_conf.h"
+#include "sx-drivers/sx12xx_driver.h"
+#include "lq_counter.h"
+#include "fhss.h"
+#include "frames.h"
+#include "frame_types.h"
+#include "link_types.h"
+#include "common_stats.h"
+#include "bind.h"
+#include "fail.h"
+#include "buzzer.h"
+#include "fan.h"
+#include "leds.h"
+#include "rf_power.h"
+#include "setup_types.h"
+
+
+//-------------------------------------------------------
+// Serial Classes
+//-------------------------------------------------------
+
+// tx: serial
+// rx: serial
+class tUartBPort : public tSerialBase
+{
+#if defined USE_SERIAL || defined USE_COM_ON_SERIAL
+  public:
+    void Init(void) override { uartb_init(); }
+    void SetBaudRate(uint32_t baud) override { uartb_setprotocol(baud, XUART_PARITY_NO, UART_STOPBIT_1); }
+    bool full(void) override { return !uartb_tx_notfull(); }
+    void putbuf(uint8_t* const buf, uint16_t len) override { uartb_putbuf(buf, len); }
+    bool available(void) override { return uartb_rx_available(); }
+    char getc(void) override { return uartb_getc(); }
+    void flush(void) override { uartb_rx_flush(); uartb_tx_flush(); }
+    uint16_t bytes_available(void) override { return uartb_rx_bytesavailable(); }
+    bool has_systemboot(void) override { return uartb_has_systemboot(); }
+#endif
+};
+
+
+// tx: com
+class tUartCPort : public tSerialBase
+{
+#if defined USE_COM && !defined DEVICE_HAS_COM_ON_USB
+  public:
+    void Init(void) override { uartc_init(); }
+    bool full(void) override { return !uartc_tx_notfull(); }
+    void putbuf(uint8_t* const buf, uint16_t len) override { uartc_putbuf(buf, len); }
+    bool available(void) override { return uartc_rx_available(); }
+    char getc(void) override { return uartc_getc(); }
+#endif
+};
+
+
+// tx: com
+class tUsbPort : public tSerialBase
+{
+#ifdef USE_USB
+  public:
+    void InitOnce(void) override { usb_init(); }
+    bool full(void) override { return usb_tx_full(); }
+    void putbuf(uint8_t* const buf, uint16_t len) override { usb_putbuf(buf, len); }
+    bool available(void) override { return usb_rx_available(); }
+    char getc(void) override { return usb_getc(); }
+    void flush(void) override { usb_flush(); }
+    uint16_t bytes_available(void) override { return usb_rx_bytesavailable(); }
+#endif
+};
+
+
+// tx: serial2 or wireless bridge
+class tUartDPort : public tSerialBase
+{
+#ifdef USE_SERIAL2 // DEVICE_HAS_SERIAL2 || USE_WIRELESS_BRIDGE
+  public:
+    void Init(void) override { uartd_init(); }
+    void SetBaudRate(uint32_t baud) override { uartd_setprotocol(baud, XUART_PARITY_NO, UART_STOPBIT_1); }
+    bool full(void) override { return !uartd_tx_notfull(); }
+    void putbuf(uint8_t* const buf, uint16_t len) override { uartd_putbuf(buf, len); }
+    bool available(void) override { return uartd_rx_available(); }
+    char getc(void) override { return uartd_getc(); }
+    void flush(void) override { uartd_rx_flush(); uartd_tx_flush(); }
+    uint16_t bytes_available(void) override { return uartd_rx_bytesavailable(); }
+    bool has_systemboot(void) override { return uartd_has_systemboot(); }
+#endif
+};
+
+
+// is always uartf (or swuart)
+class tDebugPort : public tSerialBase
+{
+#ifdef USE_DEBUG
+  public:
+#ifdef DEVICE_HAS_DEBUG_SWUART
+    void Init(void) override { swuart_init(); }
+    void putbuf(uint8_t* const buf, uint16_t len) override { swuart_putbuf(buf, len); }
+#else
+    void Init(void) override { uartf_init(); }
+    void putbuf(uint8_t* const buf, uint16_t len) override { uartf_putbuf(buf, len); }
+#endif
+#endif
+};
+
+
+// rx: dronecan // TODO: make tRxDroneCan a child of tSerialBase
+#if defined USE_DRONECAN && defined DEVICE_IS_RECEIVER
+#include "../CommonRx/dronecan_interface_rx_types.h"
+extern tRxDroneCan dronecan;
+#endif
+
+class tDroneCANPort : public tSerialBase
+{
+#ifdef USE_DRONECAN
+  public:
+    // no Init()
+    void putbuf(uint8_t* buf, uint16_t len) override { dronecan.putbuf(buf, len); }
+    bool available(void) override { return dronecan.available(); }
+    char getc(void) override { return dronecan.getc(); }
+    void flush(void) override { dronecan.flush(); }
+    uint16_t bytes_available(void) override { return dronecan.bytes_available(); }
+#endif
+};
+
+
+//-------------------------------------------------------
+// SerialPorts Class
+//-------------------------------------------------------
+
+#ifdef DEVICE_IS_TRANSMITTER
+tUartBPort uartb_port;
+tUartCPort uartc_port;
+tUartDPort uartd_port;
+tUsbPort usb_port;
+
+typedef struct
+{
+    tSerialBase* serial; // assigned according to TxSerPort
+    tSerialBase* com; // assigned according to TxSerPort
+    tSerialBase* serial2; // can be nullptr!
+    tSerialBase* jrpin5serial; // can be nullptr! is initialized in init_hw()
+    tSerialBase* uartb; // serial port
+    tSerialBase* uartd; // serial2 or wireless bridge port
+    tSerialBase* uartc; // com port
+    tSerialBase* usb; // com port if on USB
+
+    void Init(uint8_t serial_port, uint32_t baud, uint8_t serial_port2, uint32_t baud2);
+
+    tSerialBase* com_port(void);
+
+#ifdef USE_COM_ON_SERIAL
+    tSerialBase* ser_or_com_set_to_com(void);
+#endif
+} tSerialPorts;
+
+
+tSerialBase* tSerialPorts::com_port(void) // uartc or usb
+{
+#ifdef DEVICE_HAS_COM_ON_USB
+    return &usb_port;
+#else
+    return &uartc_port;
+#endif
+}
+
+
+#ifdef USE_COM_ON_SERIAL
+// device does not have an extra com port, but allows us to use the serial port as com by e.g. a button thing
+// is determined at startup
+// note: in that case, UARTC is not used and tUartCPort is a dummy port
+// let's check that
+#if defined USE_COM && !defined DEVICE_HAS_COM_ON_USB
+  #error UARTC is not a dummy port!
+#endif
+
+tSerialBase* tSerialPorts::ser_or_com_set_to_com(void)
+{
+    serial = com_port();
+    com = &uartb_port;
+    return com;
+}
+#endif
+
+// 2\1      | SERIAL          | WBRIDGE/SERIAL2 | COM                | MBRIDGE
+// --------------------------------------------------------------------------------------------
+// NONE     | serial = uartb  | serial = uartd  | serial = uartc/usb | serial = is not used, assign uartb
+//          | com = uartc/usb | com = uartc/usb | com = uartb        | com = uartc/usb
+//          | serial2 = null  | serial2 = null  | serial2 = null     | serial2 = null
+// --------------------------------------------------------------------------------------------
+// SERIAL   | should not      | serial = uartd  | should not         | serial = is not used, assign any
+//          | happen          | com = uartc/usb | happen             | com = uartc/usb
+//          |                 | serial2 = uartb |                    | serial2 = uartb
+// --------------------------------------------------------------------------------------------
+// WBRIDGE/ | serial = uartb  | should not      | serial = uartc/usb | serial = is not used, assign uartb
+// SERIAL2  | com = uartc/usb | happen          | com = uartb        | com = uartc/usb
+//          | serial2 = uartd |                 | serial2 = uartd    | serial2 = uartd
+// --------------------------------------------------------------------------------------------
+
+void tSerialPorts::Init(uint8_t serial_port, uint32_t baud, uint8_t serial_port2, uint32_t baud2)
+{
+#if defined USE_COM_ON_SERIAL // button forces com onto uartB serial pins (no separate com port)
+    if (!ser_or_com_init()) { serial_port = TX_SERIAL_PORT_COM; } // force swap
+#elif defined DEVICE_HAS_SERIAL_OR_COM // button forces com onto uartC or usb
+    if (!ser_or_com_init()) { serial_port = 0; } // force default, note: gets serial wrong if it should be uartd
+#endif
+
+    switch (serial_port) {
+    case TX_SERIAL_PORT_SERIAL2:
+    case TX_SERIAL_PORT_WIRELESS_BRIDGE:
+        serial = &uartd_port;
+        com = com_port();
+        break;
+    case TX_SERIAL_PORT_COM:
+        serial = com_port();
+        com = &uartb_port;
+        break;
+    default:
+        serial = &uartb_port;
+        com = com_port();
+    }
+
+    switch (serial_port2) {
+    case TX_SERIAL_PORT2_SERIAL:
+        serial2 = &uartb_port;
+        break;
+    case TX_SERIAL_PORT2_SERIAL2:
+    case TX_SERIAL_PORT2_WIRELESS_BRIDGE:
+        serial2 = &uartd_port;
+        break;
+    default:
+        serial2 = nullptr;
+    }
+
+    jrpin5serial = nullptr;
+
+    uartb = &uartb_port;
+    uartc = &uartc_port;
+    uartd = &uartd_port;
+    usb = &usb_port;
+
+#ifdef TX_ELRS_RADIOMASTER_INTERNAL_AX12_ESP32
+    serial->SetBaudRate((serial == &uartb_port) ? 460800 : baud); // dirty workaround, fixed baud rate for AX12 due to limitation
+#else
+    serial->SetBaudRate(baud);
+#endif
+    if (serial2) { serial2->SetBaudRate(baud2); }
+    // ensure com has correct baud rate
+    com->SetBaudRate(TX_COM_BAUDRATE);
+}
+
+#endif // DEVICE_IS_TRANSMITTER
+#ifdef DEVICE_IS_RECEIVER
+tUartBPort uartb_port;
+tDroneCANPort dronecan_port;
+// in contrast to the tx code, in the rx code we directly use the pointer to serial
+// works here since we only have one serial, and makes the higher level code simpler
+tSerialBase* serial; // assigned according to RxSerPort
+
+typedef struct
+{
+    void Init(uint8_t serial_port, uint32_t baud);
+} tSerialPorts;
+
+
+void tSerialPorts::Init(uint8_t serial_port, uint32_t baud)
+{
+#if defined USE_SERIAL && defined USE_DRONECAN
+    switch (serial_port) {
+    case RX_SERIAL_PORT_CAN:
+    case RX_SERIAL_PORT_CANFD:
+        serial = &dronecan_port; // assign dronecan to serial
+        break;
+    default:
+        serial = &uartb_port; // assign uartb to serial
+    }
+#elif defined USE_DRONECAN
+    serial = &dronecan_port;
+#else // USE_SERIAL or DEVICE_HAS_NO_SERIAL, uartb_port is always defined
+    serial = &uartb_port;
+#endif
+
+    serial->SetBaudRate(baud);
+}
+#endif // DEVICE_IS_RECEIVER
+
+
+//-------------------------------------------------------
+// Common Variables
+//-------------------------------------------------------
+
+tSerialPorts Serials;
+tDebugPort dbg;
+
+tRcData rcData;
+
+#ifdef DEVICE_IS_RECEIVER
+tTxFrame txFrame, txFrame2;
+tRxFrame rxFrame;
+#endif
+#ifdef DEVICE_IS_TRANSMITTER
+tTxFrame txFrame;
+tRxFrame rxFrame, rxFrame2;
+#endif
+
+SX_DRIVER sx;
+SX2_DRIVER sx2;
+
+tStats stats;
+tFhss fhss;
+tBindBase bind;
+
+#ifdef DEVICE_IS_TRANSMITTER
+tBuzzer buzzer;
+#endif
+tFan fan;
+tLEDs leds;
+tRfPower rfpower;
+
+
+//-------------------------------------------------------
+// Sx/Sx2 convenience wrapper
+//-------------------------------------------------------
+
+void sxReadFrame(uint8_t antenna, void* const data, void* const data2, uint8_t len)
+{
+    if (antenna == ANTENNA_1) {
+        sx.ReadFrame((uint8_t*)data, len); // should never happen that SX is not set up when antenna1
+    } else {
+        sx2.ReadFrame((uint8_t*)data2, len); // should never happen that SX2 is not set up when antenna2
+    }
+}
+
+
+void sxSendFrame(uint8_t antenna, void* const data, uint8_t len, uint16_t tmo_ms)
+{
+#if defined DEVICE_HAS_DUAL_SX126x_SX128x || defined DEVICE_HAS_DUAL_SX126x_SX126x // DUAL BAND
+    if (Config.IsDualBand) {
+        sx.SendFrame((uint8_t*)data, len, tmo_ms);
+        sx2.SendFrame((uint8_t*)data, len, tmo_ms);
+    } else
+#endif
+    if (antenna == ANTENNA_1) {
+        sx.SendFrame((uint8_t*)data, len, tmo_ms); // should never happen that SX is not set up when antenna1
+        IF_SX2(sx2.SetToIdle();)
+    } else {
+        sx2.SendFrame((uint8_t*)data, len, tmo_ms); // should never happen that SX2 is not set up when antenna2
+        IF_SX(sx.SetToIdle();)
+    }
+}
+
+
+void sxGetPacketStatus(uint8_t antenna, tStats* const stats)
+{
+    if (antenna == ANTENNA_1) {
+        sx.GetPacketStatus(&(stats->last_rssi1), &(stats->last_snr1));
+    } else {
+        sx2.GetPacketStatus(&(stats->last_rssi2), &(stats->last_snr2));
+    }
+}
+
+
+//-------------------------------------------------------
+//-- FAIL
+//-------------------------------------------------------
+
+typedef enum {
+    BLINK_RD_GR_OFF = FAIL_LED_PATTERN_GR_OFF_RD_BLINK,
+    BLINK_GR_RD_OFF = FAIL_LED_PATTERN_RD_OFF_GR_BLINK,
+    BLINK_RD_GR_ON = FAIL_LED_PATTERN_GR_ON_RD_BLINK,
+    BLINK_GR_RD_ON = FAIL_LED_PATTERN_RD_ON_GR_BLINK,
+    BLINK_COMMON = FAIL_LED_PATTERN_BLINK_COMMON,
+    BLINK_ALTERNATE = FAIL_LED_PATTERN_BLINK_ALTERNATE,
+    BLINK_1 = FAIL_LED_PATTERN_RD_BLINK_GR_BLINK1,
+    BLINK_2 = FAIL_LED_PATTERN_RD_BLINK_GR_BLINK2,
+    BLINK_3 = FAIL_LED_PATTERN_RD_BLINK_GR_BLINK3,
+    BLINK_4 = FAIL_LED_PATTERN_RD_BLINK_GR_BLINK4,
+    BLINK_5 = FAIL_LED_PATTERN_RD_BLINK_GR_BLINK5,
+} FAIL_ENUM;
+
+
+void FAILALWAYS(uint8_t led_pattern, const char* const msg)
+{
+    fail(&dbg, led_pattern, msg);
+}
+
+
+void FAILALWAYS_WSTATE(
+    uint8_t led_pattern,
+    const char* const msg,
+    uint16_t irq_status,
+    uint8_t link_state,
+    uint8_t link_rx1_status,
+    uint8_t link_rx2_status)
+{
+char s[64];
+
+    strcpy(s, msg);
+    strcat(s, " irq=x");
+    strcat(s, u16toHEX_s(irq_status));
+    strcat(s, " ls=");
+    strcat(s, linkstate_str[link_state]);
+    strcat(s, " rx1s=");
+    strcat(s, rxstatus_str[link_rx1_status]);
+    strcat(s, " rx2s=");
+    strcat(s, rxstatus_str[link_rx2_status]);
+    fail(&dbg, led_pattern, s);
+}
+
+
+void FAIL_WPATTERN(uint8_t led_pattern, const char* const msg)
+{
+#ifdef FAIL_ENABLED
+    fail(&dbg, led_pattern, msg);
+#endif
+}
+
+
+void FAIL_WMSG(const char* const msg)
+{
+#ifdef FAIL_ENABLED
+    fail(&dbg, 0, msg);
+#endif
+}
+
+
+void FAIL_WSTATE(
+    uint8_t led_pattern,
+    const char* const msg,
+    uint16_t irq_status,
+    uint8_t link_state,
+    uint8_t link_rx1_status,
+    uint8_t link_rx2_status)
+{
+#ifdef FAIL_ENABLED
+    FAILALWAYS_WSTATE(led_pattern, msg, irq_status, link_state, link_rx1_status, link_rx2_status);
+#endif
+}
+
+
+//-------------------------------------------------------
+//-- check some sizes
+//-------------------------------------------------------
+
+STATIC_ASSERT(sizeof(tTxFrameStatus) == FRAME_TX_RX_HEADER_LEN - 2, "tTxFrameStatus len missmatch")
+STATIC_ASSERT(sizeof(tRxFrameStatus) == FRAME_TX_RX_HEADER_LEN - 2, "tRxFrameStatus len missmatch")
+STATIC_ASSERT(sizeof(tTxFrame) == FRAME_TX_RX_LEN, "tTxFrame len missmatch")
+STATIC_ASSERT(sizeof(tRxFrame) == FRAME_TX_RX_LEN, "tRxFrame len missmatch")
+
+STATIC_ASSERT(sizeof(tTxBindFrame) == FRAME_TX_RX_LEN, "tTxBindFrame len missmatch")
+STATIC_ASSERT(sizeof(tRxBindFrame) == FRAME_TX_RX_LEN, "tRxBindFrame len missmatch")
+
+STATIC_ASSERT(sizeof(tTxCmdFrameRxParams) == FRAME_TX_PAYLOAD_LEN, "tTxCmdFrameRxParams len missmatch")
+STATIC_ASSERT(sizeof(tRxCmdFrameRxSetupData) == FRAME_RX_PAYLOAD_LEN, "tRxCmdFrameRxSetupData len missmatch")
+
+STATIC_ASSERT(sizeof(tRxSetup) == 36, "tRxSetup len missmatch")
+STATIC_ASSERT(sizeof(tTxSetup) == 20, "tTxSetup len missmatch")
+STATIC_ASSERT(sizeof(tCommonSetup) == 16, "tCommonSetup len missmatch")
+STATIC_ASSERT(sizeof(tSetup) == 22+16+36+(20+16+12+8)*SETUP_CONFIG_NUM+8+6, "tSetup len missmatch")
+STATIC_ASSERT(sizeof(((tSetup*)0)->peer_uid[0]) == 12, "hardware_uid = 12 len missmatch")
+STATIC_ASSERT(sizeof(((tSetup*)0)->peer_uid[0]) == sizeof(((tTxBindFrame*)0)->tx_uid), "tx_uid len missmatch")
+STATIC_ASSERT(sizeof(((tSetup*)0)->peer_uid[0]) == sizeof(((tRxBindFrame*)0)->rx_uid), "rx_uid len missmatch")
+
+STATIC_ASSERT(sizeof(fhss_config) == sizeof(tFhssConfig) * SX_FHSS_FREQUENCY_BAND_NUM, "fhss_config size missmatch")
+
+STATIC_ASSERT(RFPOWER_LIST_NUM <= sizeof(((tRxCmdFrameRxSetupData *)0)->Power_list)/sizeof(int16_t), "too many power options")
+
+#endif // COMMON_H
