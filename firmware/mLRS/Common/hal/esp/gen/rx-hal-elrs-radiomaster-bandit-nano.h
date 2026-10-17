@@ -7,6 +7,7 @@
 //-------------------------------------------------------
 
 #define DEVICE_HAS_SINGLE_LED
+#define DEVICE_HAS_FAN_ONOFF
 #define DEVICE_HAS_NO_DEBUG
 
 
@@ -86,6 +87,21 @@ void leds_init(void)
 IRAM_ATTR void led_red_off(void) { gpio_low(LED_RED); }
 IRAM_ATTR void led_red_on(void) { gpio_high(LED_RED); }
 IRAM_ATTR void led_red_toggle(void) { gpio_toggle(LED_RED); }
+
+
+//-- Cooling Fan
+
+#define FAN_IO                    IO_P2
+
+void fan_init(void)
+{
+    gpio_init(FAN_IO, IO_MODE_OUTPUT_PP_LOW);
+}
+
+IRAM_ATTR void fan_set_power(int8_t power_dbm) // on from 250 mW, ExpressLRS's default
+{
+    if (power_dbm >= POWER_24_DBM) { gpio_high(FAN_IO); } else { gpio_low(FAN_IO); }
+}
 
 
 //-- POWER

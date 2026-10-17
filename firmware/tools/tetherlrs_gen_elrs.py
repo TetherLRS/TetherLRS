@@ -28,11 +28,11 @@ MAP = os.path.join(ROOT, 'tools', 'elrs-gen.json')
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# what a data link does not use: PWM, battery and voltage sense, VTX, gyro, I2C, IR, backpack, fan (FAN on a Tx module)
-IGNORED = re.compile(r'^(//|/power_rxen|vbat|vsrc|pwm_outputs|i2c_|vtx_|gyro_|ir_|adc_|misc_|ledidx_rgb_vtx|ledidx_rgb_boot|'
+# what a data link does not use: PWM, battery and voltage sense, VTX, gyro, I2C, IR, backpack; of misc_ only the FAN
+IGNORED = re.compile(r'^(//|vbat|vsrc|pwm_outputs|i2c_|vtx_|gyro_|ir_|adc_|misc_|ledidx_rgb_vtx|ledidx_rgb_boot|'
                      r'spi_|serial1_|ant_group|use_backpack|debug_|backpack|screen_|joystick|five_way|fan_|power_pdet)')
 # on a Tx module also the radio bay's serial pin, ELRS's unused power_high, the fan's speeds and tachometer
-TX_IGNORED = re.compile(r'^(serial_|power_high|passthrough_baud|button2|button_led_index|led_rgb_isgrb|thermal_|radio_dio2|misc_fan_speeds|misc_fan_tacho)')
+TX_IGNORED = re.compile(r'^(serial_|power_high|passthrough_baud|button2|button_led_index|thermal_|radio_dio2|misc_fan_speeds|misc_fan_tacho)')
 FAN = ('misc_fan_en', 'misc_fan_pwm')
 # handheld radios with the module inside, flashed over their own USB: not modules for a ground station
 HANDHELDS = ('RadioMaster AX12 2.4/900 TX', 'HDZero Radio 2.4GHz TX')
@@ -77,7 +77,7 @@ def hardware(product, kind):
     hw.update(product.get('overlay', {}))
 
     def used(k):
-        return k in FAN or not (IGNORED.match(k) or TX_IGNORED.match(k)) if kind == 'tx' else not IGNORED.match(k)
+        return k in FAN or not (IGNORED.match(k) or kind == 'tx' and TX_IGNORED.match(k))
     hw = {k: v for k, v in hw.items() if v is not None and v != -1 and used(k)}  # -1: ELRS's no pin
     if kind == 'tx':
         if 'led' not in hw and 'led_rgb' not in hw and ('led_red' in hw or 'led_green' in hw):
@@ -148,8 +148,8 @@ def power_block(radio, hw):
         dac, sub = {d: v for d, _, v in levels(hw, hw['power_values'])}, 'power_values2'
         lines += [define('SX_PA_DAC_IO', io(hw['power_apc2'])) + ' // the PA gain (ELRS power_apc2)', '']
     if radio == 'LR1121':
-        lf = levels(hw, hw[sub]) if hw.get(sub) is not None else []
-        hf = levels(hw, hw['power_values_dual']) if hw.get('power_values_dual') is not None else []
+        lf = distinct(levels(hw, hw[sub]), dac) if hw.get(sub) is not None else []
+        hf = distinct(levels(hw, hw['power_values_dual']), dac) if hw.get('power_values_dual') is not None else []
         lines += ['#include "../../../setup_types.h" // needed for frequency band condition in rfpower calc', '',
                   'void lr11xx_rfpower_calc(const int8_t power_dbm, int8_t* sx_power, int8_t* actual_power_dbm, const uint8_t frequency_band)', '{']
         if hf and lf:
@@ -161,19 +161,30 @@ def power_block(radio, hw):
         table = sorted(set((d, m) for d, m, _ in hf + lf))
     else:
         if hw.get(sub) is not None:
-            t = levels(hw, hw[sub])
+            t = distinct(levels(hw, hw[sub]), dac)
         else:  # an SX127x behind a DAC with no radio table: ELRS leaves PA_BOOST at OutputPower 0
-            t = [(d, m, 0) for d, m, _ in levels(hw, hw['power_values'])]
+            t = distinct([(d, m, 0) for d, m, _ in levels(hw, hw['power_values'])], dac)
         lines += [f'void {RADIO[radio]["calc"]}(const int8_t power_dbm, int8_t* sx_power, int8_t* actual_power_dbm)', '{']
         lines += calc_chain(t, '    ', dac)
         lines.append('}')
         table = sorted(set((d, m) for d, m, _ in t))
-    default = max(0, min(len(table) - 1, hw.get('power_default', 0) - hw.get('power_min', 0)))
+    want = LEVEL_DBM[hw.get('power_default', 0)]
+    default = max([i for i, (d, _) in enumerate(table) if d <= want] or [0])
     lines += ['', f'#define RFPOWER_DEFAULT           {default} // index into rfpower_list array', '',
               'const rfpower_t rfpower_list[] = {']
     lines += [f'    {{ .dbm = POWER_{d}_DBM, .mW = {m} }},' for d, m in table]
     lines += ['};']
     return lines
+
+
+def distinct(table, dac=None):
+    # a level whose radio value (and DAC value) repeats the one below gives no more power: the lower name stays
+    out = []
+    for d, m, v in table:
+        if out and v == out[-1][2] and (dac is None or dac[d] == dac[out[-1][0]]):
+            continue
+        out.append((d, m, v))
+    return out
 
 
 def calc_chain(table, ind, dac=None):
@@ -312,8 +323,10 @@ def hal(name, kind, plat, radio, hw, products, layout, overlay):
     L += ['', '', '//-- LEDs', '']
     if rgb:
         idx = hw.get('ledidx_rgb_status') or [0]
-        L += [f'#define LED_RGB                   {io(hw["led_rgb"])}', f'#define LED_RGB_PIXEL_NUM         {max(idx) + 1}',
-              '#include "../esp-hal-led-rgb.h"']
+        L += [f'#define LED_RGB                   {io(hw["led_rgb"])}', f'#define LED_RGB_PIXEL_NUM         {max(idx) + 1}']
+        if not hw.get('led_rgb_isgrb'):
+            L.append('#define LED_RGB_ORDER_RGB         // ELRS without led_rgb_isgrb: red first')
+        L.append('#include "../esp-hal-led-rgb.h"')
     elif hw.get('led') is None:
         L += ['void leds_init(void) {} // no LED on this board', '', 'IRAM_ATTR void led_red_off(void) {}',
               'IRAM_ATTR void led_red_on(void) {}', 'IRAM_ATTR void led_red_toggle(void) {}']

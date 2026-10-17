@@ -79,6 +79,7 @@ IRAM_ATTR bool button_pressed(void) { return false; }
 
 #define LED_RGB                   IO_P15
 #define LED_RGB_PIXEL_NUM         1
+#define LED_RGB_ORDER_RGB         // ELRS without led_rgb_isgrb: red first
 #include "../esp-hal-led-rgb.h"
 
 

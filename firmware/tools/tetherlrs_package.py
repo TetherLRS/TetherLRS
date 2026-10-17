@@ -44,11 +44,12 @@ info = {'env': ENV, 'version': VERSION}
 # by them and shows the bands with the board
 with open(firmware, 'rb') as f:
     marker = re.search(rb'TetherLRS:(Tx|Rx):([^:\x00]*):(v\d+\.\d+(?:\.\d+)?(?:-RC\d+)?):(?:([^:\x00]*):)?', f.read())
-if marker:
-    info['role'] = marker.group(1).decode()
-    info['device'] = marker.group(2).decode()
-    if marker.group(4):
-        info['bands'] = [b for b in marker.group(4).decode().split(',') if b]
+if not marker:
+    sys.exit(f'{ENV}: no TetherLRS marker in the image, the tool could not match it to a radio')
+info['role'] = marker.group(1).decode()
+info['device'] = marker.group(2).decode()
+if marker.group(4):
+    info['bands'] = [b for b in marker.group(4).decode().split(',') if b]
 if os.path.exists(bootloader):
     with open(bootloader, 'rb') as f:
         header = f.read(16)

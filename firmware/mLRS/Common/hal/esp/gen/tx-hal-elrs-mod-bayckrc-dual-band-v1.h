@@ -127,10 +127,7 @@ IRAM_ATTR void fan_set_power(int8_t power_dbm) // on from 250 mW, ExpressLRS's d
 void lr11xx_rfpower_calc(const int8_t power_dbm, int8_t* sx_power, int8_t* actual_power_dbm, const uint8_t frequency_band)
 {
     if (frequency_band == SX_FHSS_FREQUENCY_BAND_2P4_GHZ) {
-        if (power_dbm >= POWER_33_DBM) {
-            *sx_power = 3;
-            *actual_power_dbm = 33;
-        } else if (power_dbm >= POWER_30_DBM) {
+        if (power_dbm >= POWER_30_DBM) {
             *sx_power = 3;
             *actual_power_dbm = 30;
         } else if (power_dbm >= POWER_27_DBM) {
