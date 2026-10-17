@@ -1,8 +1,24 @@
 {
  "products": {
+  "AXIS Thor 2.4GHz TX": [
+   "elrs-mod-axis-thor-2400",
+   "esp32"
+  ],
   "Anyleaf 2.4GHz single radio RX": [
    "elrs-2400-div-pa-v1",
    "esp8285"
+  ],
+  "BAYCKRC 900/2400 Dual Band 1W Micro Gemini TX": [
+   "elrs-mod-bayckrc-dual-band-v1",
+   "esp32"
+  ],
+  "BAYCKRC 900/2400 Dual Band 1W Nano Gemini TX": [
+   "elrs-mod-bayckrc-dual-band-v2",
+   "esp32"
+  ],
+  "BAYCKRC 900/2400 Dual Band 1W Nano TX": [
+   "elrs-mod-bayckrc-dual-band-v3",
+   "esp32"
   ],
   "BAYCKRC 900MHz Dual Core RX": [
    "elrs-900-td",
@@ -28,12 +44,44 @@
    "elrs-c3-lr1121-td-10mw",
    "esp32-c3"
   ],
+  "BETAFPV 2.4GHz Micro TX": [
+   "elrs-mod-betafpv-2400-micro",
+   "esp32"
+  ],
+  "BETAFPV 2.4GHz Nano TX": [
+   "elrs-mod-betafpv-2400-nano",
+   "esp32"
+  ],
+  "BETAFPV 2.4GHz Nano TX V2": [
+   "elrs-mod-betafpv-2400-nano-v2",
+   "esp32"
+  ],
+  "BETAFPV 900MHz Micro TX": [
+   "elrs-mod-betafpv-900-micro",
+   "esp32"
+  ],
+  "BETAFPV 900MHz Micro TX V2": [
+   "elrs-mod-betafpv-900-micro-v2",
+   "esp32"
+  ],
+  "BETAFPV 900MHz Nano TX": [
+   "elrs-mod-betafpv-900-nano",
+   "esp32"
+  ],
+  "BETAFPV 900MHz Nano TX V2": [
+   "elrs-mod-betafpv-900-nano-v2",
+   "esp32"
+  ],
   "BETAFPV PWM 2.4GHz RX": [
    "elrs-2400-pwmp5-v1",
    "esp8285"
   ],
   "BETAFPV SuperD 900MHz RX": [
    "elrs-900-td",
+   "esp32"
+  ],
+  "BETAFPV SuperG 2.4GHz Gemini TX": [
+   "elrs-mod-2400-gemini",
    "esp32"
   ],
   "BETAFPV SuperP 14Ch 2.4GHz RX": [
@@ -60,9 +108,17 @@
    "elrs-c3-lr1121-td-v4",
    "esp32-c3"
   ],
+  "DAKEFPV 2.4GHz Micro MAX 1W TX": [
+   "elrs-mod-dakefpv-max-1000mw",
+   "esp32"
+  ],
   "DAKEFPV 2G4 SuperD Pro MAX 500mW RX": [
    "elrs-c3-lr1121-td-500mw",
    "esp32-c3"
+  ],
+  "DAKEFPV 900MHz Micro MAX 2W TX": [
+   "elrs-mod-dakefpv-max-2000mw",
+   "esp32"
   ],
   "DAKEFPV C3 900/2400 Dual Band 100mW Gemini RX": [
    "elrs-c3-lr1121-td-v6",
@@ -80,6 +136,22 @@
    "elrs-c3-2400-pa-v1",
    "esp32-c3"
   ],
+  "DIY ESP32 E19 900MHz TX": [
+   "elrs-mod-diy-900-e19",
+   "esp32"
+  ],
+  "DIY ESP32 E28 2.4GHz TX": [
+   "elrs-mod-diy-2400-e28",
+   "esp32"
+  ],
+  "DIY ESP32 F27 2.4GHz TX": [
+   "elrs-mod-diy-2400-f27",
+   "esp32"
+  ],
+  "DIY ESP32 RFM95 900MHz TX": [
+   "elrs-mod-diy-900-rfm95",
+   "esp32"
+  ],
   "DIY ESP32-S3 DevKit True Diversity 16xPWM 2.4Ghz RX ": [
    "elrs-diy-s3-devkit-2400-td-pwm-16",
    "esp32-s3"
@@ -92,12 +164,40 @@
    "elrs-diy-huzzah-rfm95",
    "esp8285"
   ],
+  "DIY Mini ESP32 SX1280 2.4GHz TX": [
+   "elrs-mod-diy-2400-mini",
+   "esp32"
+  ],
   "DIY TTGO V1 900MHz RX": [
    "elrs-diy-900-ttgo-v1",
    "esp32"
   ],
+  "DIY TTGO V1 900MHz TX": [
+   "elrs-mod-diy-900-ttgo-v1",
+   "esp32"
+  ],
   "DIY TTGO V2 900MHz RX": [
    "elrs-diy-900-ttgo-v2",
+   "esp32"
+  ],
+  "DIY TTGO V2 900MHz TX": [
+   "elrs-mod-diy-900-ttgo-v2",
+   "esp32"
+  ],
+  "EMAX Nano 2.4GHz TX": [
+   "elrs-mod-emax-2400-nano",
+   "esp32"
+  ],
+  "EMAX Nano 900MHz TX": [
+   "elrs-mod-emax-900-nano",
+   "esp32"
+  ],
+  "EMAX OLED 2.4GHz TX": [
+   "elrs-mod-emax-2400-oled",
+   "esp32"
+  ],
+  "EMAX OLED 900MHz TX": [
+   "elrs-mod-emax-900-oled",
    "esp32"
   ],
   "FD R24D 2.4GHz RX": [
@@ -124,6 +224,18 @@
    "elrs-c3-lr1121-td-v9",
    "esp32-c3"
   ],
+  "GEPRC LINKFLOW 900/2400 Dual-Band TX": [
+   "elrs-mod-geprc-dualband-linkflow-1000mw",
+   "esp32"
+  ],
+  "GEPRC LINKFLOW 900M TX": [
+   "elrs-mod-geprc-900-linkflow",
+   "esp32"
+  ],
+  "GEPRC LINKFLOW 900M TX V2": [
+   "elrs-mod-geprc-dualband-linkflow-2000mw",
+   "esp32"
+  ],
   "GEPRC Nano True Diversity 2.4GHz RX": [
    "elrs-c3-2400-td-v1",
    "esp32-c3"
@@ -135,6 +247,10 @@
   "Gemini C3 XrossBand PA 2.4/900 RX": [
    "elrs-c3-lr1121-td-v10",
    "esp32-c3"
+  ],
+  "Gemini XrossBand 2.4/900 TX": [
+   "elrs-mod-lr1121-gemini",
+   "esp32"
   ],
   "Generic C3 LR1121 2.4/900 PWM RX": [
    "elrs-c3-lr1121-pwm",
@@ -224,6 +340,14 @@
    "elrs-900-td",
    "esp32"
   ],
+  "HGLRC Hermes 2.4GHz TX": [
+   "elrs-mod-hglrc-hermes-2400",
+   "esp32"
+  ],
+  "HGLRC OLED 900MHz TX": [
+   "elrs-mod-hglrc-oled-900",
+   "esp32"
+  ],
   "HappyModel AIO 2.4GHz RX+VTX": [
    "elrs-2400-whoop-rx-vtx",
    "esp32"
@@ -236,8 +360,24 @@
    "elrs-900-pwmp",
    "esp8285"
   ],
+  "HappyModel ES24 2.4GHz TX": [
+   "elrs-mod-happymodel-es24",
+   "esp32"
+  ],
+  "HappyModel ES24 Pro 2.4GHz TX": [
+   "elrs-mod-happymodel-es24-pro",
+   "esp32"
+  ],
+  "HappyModel ES24 Slim Pro 2.4GHz TX": [
+   "elrs-mod-happymodel-es24-pro",
+   "esp32"
+  ],
   "HappyModel ES900 Dual RX": [
    "elrs-900-td",
+   "esp32"
+  ],
+  "HappyModel ES900 TX": [
+   "elrs-mod-happymodel-es900",
    "esp32"
   ],
   "HelloRadio HR7E 2.4GHz Diversity+7xPWM RX": [
@@ -246,6 +386,10 @@
   ],
   "HelloRadio HR8E 2.4GHz Diversity+8xPWM RX": [
    "elrs-helloradio-hr8e",
+   "esp32"
+  ],
+  "Jumper AION Nano 2.4GHz TX": [
+   "elrs-mod-jumper-aion-nano",
    "esp32"
   ],
   "Jumper AION P6 2.4GHz RX": [
@@ -268,9 +412,17 @@
    "elrs-namimno-flash-2400-pa",
    "esp8285"
   ],
+  "NamimnoRC Flash OLED 2.4GHz TX": [
+   "elrs-mod-namimno-flash-oled",
+   "esp32"
+  ],
   "NamimnoRC Voyager ESP 900MHz RX": [
    "elrs-namimno-voyager-900",
    "esp8285"
+  ],
+  "NamimnoRC Voyager OLED 900MHz TX": [
+   "elrs-mod-namimno-voyager-oled",
+   "esp32"
   ],
   "NewBeeDrone 2.4Ghz RaceSpec RX": [
    "elrs-c3-2400-v2",
@@ -299,6 +451,18 @@
   "Oxbot 2.4GHz RX": [
    "elrs-c3-2400-pa-v1",
    "esp32-c3"
+  ],
+  "QuadKopters JR 2.4GHz TX": [
+   "elrs-mod-quadkopters-jr-2400",
+   "esp32"
+  ],
+  "QuadKopters Slim 2.4GHz TX": [
+   "elrs-mod-quadkopters-jr-2400",
+   "esp32"
+  ],
+  "RadioMaster Bandit Nano/Micro 900MHz RX": [
+   "elrs-radiomaster-bandit-nano",
+   "esp32"
   ],
   "RadioMaster ER12 Dual Band True Diversity RX": [
    "elrs-radiomaster-er-series",
@@ -358,6 +522,14 @@
   ],
   "RadioMaster RP4TD-M True Diversity 2.4GHz RX": [
    "elrs-2400-td",
+   "esp32"
+  ],
+  "RadioMaster Ranger Micro 2.4GHz TX": [
+   "elrs-mod-radiomaster-ranger-micro-v1",
+   "esp32"
+  ],
+  "RadioMaster Ranger Nano 2.4GHz TX": [
+   "elrs-mod-radiomaster-ranger-micro-v2",
    "esp32"
   ],
   "Radiomaster Nexus-XR True Diversity 2.4GHz RX": [
@@ -420,15 +592,36 @@
    "elrs-c3-900",
    "esp32-c3"
   ],
+  "Vantac Lite 2.4GHz TX": [
+   "elrs-mod-vantac-lite",
+   "esp32"
+  ],
   "iFlight 2.4GHz RX": [
    "elrs-iflight-2400",
    "esp8285"
+  ],
+  "iFlight 2.4GHz TX": [
+   "elrs-mod-iflight-2400",
+   "esp32"
+  ],
+  "iFlight 2.4GHz TX V2": [
+   "elrs-mod-iflight-2400-v2",
+   "esp32"
+  ],
+  "iFlight 900MHz TX": [
+   "elrs-mod-iflight-900",
+   "esp32"
+  ],
+  "iFlight 900MHz TX V2": [
+   "elrs-mod-iflight-900-v2",
+   "esp32"
   ]
  },
  "left_out": {
+  "CoreWing Sirius 2.4GHz TX": "Tx module on ESP32S3, not built yet",
+  "DIY ESP32 BLE Joystick TX": "no radio chip select or reset",
   "Generic ESP8285 6xPWM 2.4Ghz RX": "no radio busy pin",
   "Generic ESP8285 7xPWM 2.4Ghz RX": "no radio chip select or reset",
-  "HappyModel EPW6 2.4GHz PWM RX": "no radio busy pin",
-  "RadioMaster Bandit Nano/Micro 900MHz RX": "power set by power_control 3 (a DAC), not by the radio"
+  "HappyModel EPW6 2.4GHz PWM RX": "no radio busy pin"
  }
 }

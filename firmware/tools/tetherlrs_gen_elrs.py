@@ -1,14 +1,16 @@
 #!/usr/bin/env python
 '''
-TetherLRS: generates a receiver hal and a PlatformIO env for every ExpressLRS ESP receiver no hal here covers
+TetherLRS: generates a hal and a PlatformIO env for every ExpressLRS ESP receiver no hal here covers, and for the
+external ExpressLRS Tx modules on ESP32
     python tools/tetherlrs_gen_elrs.py [<ExpressLRS targets clone>] [--check]
 From each product its hardware layout with the product's overlay, keeping only what a data link uses (radio pins and
 options, power tables, PA and antenna switches, serial, button, LED). Products with the same such hardware share one
-build. Writes:
-    mLRS/Common/hal/esp/gen/rx-hal-elrs-<name>.h     one per build
+build. A Tx module becomes a ground radio (TLRS_RX_AS_TX) with the data and the CLI on UART0, the port its USB-C
+reaches; its fan and power control are kept, its display, joystick and backpack are not. Writes:
+    mLRS/Common/hal/esp/gen/{rx,tx}-hal-elrs-<name>.h  one per build
     mLRS/Common/hal/esp/gen/elrs-device_conf.h       DEVICE_NAME, radio, bands
     mLRS/Common/hal/esp/gen/elrs-hal.h               includes the hal of the build
-    platformio-tetherlrs-elrs.ini                    the [env:rx-elrs-<name>] sections
+    platformio-tetherlrs-elrs.ini                    the [env:rx-elrs-<name>] and [env:tx-elrs-mod-<name>] sections
     tools/elrs-gen.json                              product name -> env name, and what was left out and why
 The power tables are ExpressLRS's: its levels (10 mW to 2 W) with the radio values of the layout, which the
 manufacturers set. --check only says whether the files are up to date (for CI).
@@ -26,9 +28,14 @@ MAP = os.path.join(ROOT, 'tools', 'elrs-gen.json')
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# what a data link does not use: PWM, battery and voltage sense, VTX, gyro, I2C, IR, backpack, fan
+# what a data link does not use: PWM, battery and voltage sense, VTX, gyro, I2C, IR, backpack, fan (FAN on a Tx module)
 IGNORED = re.compile(r'^(//|/power_rxen|vbat|vsrc|pwm_outputs|i2c_|vtx_|gyro_|ir_|adc_|misc_|ledidx_rgb_vtx|ledidx_rgb_boot|'
                      r'spi_|serial1_|ant_group|use_backpack|debug_|backpack|screen_|joystick|five_way|fan_|power_pdet)')
+# on a Tx module also the radio bay's serial pin, ELRS's unused power_high, the fan's speeds and tachometer
+TX_IGNORED = re.compile(r'^(serial_|power_high|passthrough_baud|button2|button_led_index|led_rgb_isgrb|thermal_|radio_dio2|misc_fan_speeds|misc_fan_tacho)')
+FAN = ('misc_fan_en', 'misc_fan_pwm')
+# handheld radios with the module inside, flashed over their own USB: not modules for a ground station
+HANDHELDS = ('RadioMaster AX12 2.4/900 TX', 'HDZero Radio 2.4GHz TX')
 LEVEL_MW = [10, 25, 50, 100, 250, 500, 1000, 2000]
 LEVEL_DBM = [10, 14, 17, 20, 24, 27, 30, 33]
 FAMILY = {
@@ -37,6 +44,7 @@ FAMILY = {
     'esp32-c3': {'common': 'env_common_rx_esp32c3', 'board': 'esp32-c3-devkitm-1', 'chip': 'ESP32C3'},
     'esp32-s3': {'common': 'env_common_rx_esp32s3', 'board': 'esp32-s3-devkitc-1', 'chip': 'ESP32S3'},
 }
+TX_FAMILY = {'esp32': {'common': 'env_common_tx_esp32', 'board': 'esp32dev', 'chip': 'ESP32'}}
 RADIO = {
     'SX1280': {'src': 'sx128x.cpp', 'has': 'DEVICE_HAS_SX128x', 'calc': 'sx128x_rfpower_calc', 'spi': '18000000L'},
     'SX127x': {'src': 'sx127x.cpp', 'has': 'DEVICE_HAS_SX127x', 'calc': 'sx1276_rfpower_calc', 'spi': '10000000L'},
@@ -63,18 +71,42 @@ def radio_of(product, hw):
     return None
 
 
-def hardware(product):
-    with open(os.path.join(TARGETS, 'RX', product['layout_file']), encoding='utf-8') as f:
+def hardware(product, kind):
+    with open(os.path.join(TARGETS, kind.upper(), product['layout_file']), encoding='utf-8') as f:
         hw = json.load(f)
     hw.update(product.get('overlay', {}))
-    return {k: v for k, v in hw.items() if v is not None and v != -1 and not IGNORED.match(k)}  # -1: ELRS's no pin
+
+    def used(k):
+        return k in FAN or not (IGNORED.match(k) or TX_IGNORED.match(k)) if kind == 'tx' else not IGNORED.match(k)
+    hw = {k: v for k, v in hw.items() if v is not None and v != -1 and used(k)}  # -1: ELRS's no pin
+    if kind == 'tx':
+        if 'led' not in hw and 'led_rgb' not in hw and ('led_red' in hw or 'led_green' in hw):
+            hw['led'] = hw.get('led_red', hw.get('led_green'))  # the red one is ELRS's status LED
+            if 'led_red' in hw and hw.get('led_red_invert'):
+                hw['led_invert'] = True
+        for k in ('led_red', 'led_green', 'led_blue', 'led_red_invert'):
+            hw.pop(k, None)
+    return hw
+
+
+def tx_module(d):
+    # an external Tx module, flashed over its own USB: not inside a radio (EdgeTX passthrough, "Internal", handhelds)
+    return 'etx' not in d.get('upload_methods', []) and 'Internal' not in d['product_name'] and d['product_name'] not in HANDHELDS
 
 
 def why_not(product, hw, radio):
     if radio is None:
         return 'radio not recognised'
-    if hw.get('power_control', 0) != 0:
-        return f'power set by power_control {hw["power_control"]} (a DAC), not by the radio'
+    pc = hw.get('power_control', 0)
+    if pc == 3:  # ELRS's DAC on power_apc2, which only the ESP32 has
+        if product['platform'] != 'esp32' or hw.get('power_apc2') is None:
+            return 'power set by a DAC the chip or the layout does not have'
+        if hw.get('power_values2') is None and (radio != 'SX127x' or hw.get('radio_rfo_hf')):
+            return 'power set by a DAC without the radio power table'
+        if hw.get('power_values2') is not None and len(hw['power_values2']) != len(hw.get('power_values') or []):
+            return 'DAC and radio power tables of different length'
+    elif pc != 0:
+        return f'power set by power_control {pc}, not by the radio'
     if product['platform'] == 'esp8285' and (hw.get('radio_sck'), hw.get('radio_miso'), hw.get('radio_mosi')) not in ((14, 12, 13), (None, None, None)):
         return 'ESP8285 radio not on the HSPI pins'
     if hw.get('radio_nss') is None or hw.get('radio_rst') is None:  # GPIO 0 is a pin too
@@ -111,22 +143,29 @@ def levels(hw, values):
 
 def power_block(radio, hw):
     lines = ['//-- POWER', '']
+    dac, sub = None, 'power_values'
+    if hw.get('power_control', 0) == 3:  # ELRS: power_values to the PA's DAC, power_values2 to the radio
+        dac, sub = {d: v for d, _, v in levels(hw, hw['power_values'])}, 'power_values2'
+        lines += [define('SX_PA_DAC_IO', io(hw['power_apc2'])) + ' // the PA gain (ELRS power_apc2)', '']
     if radio == 'LR1121':
-        lf = levels(hw, hw['power_values']) if hw.get('power_values') is not None else []
+        lf = levels(hw, hw[sub]) if hw.get(sub) is not None else []
         hf = levels(hw, hw['power_values_dual']) if hw.get('power_values_dual') is not None else []
         lines += ['#include "../../../setup_types.h" // needed for frequency band condition in rfpower calc', '',
                   'void lr11xx_rfpower_calc(const int8_t power_dbm, int8_t* sx_power, int8_t* actual_power_dbm, const uint8_t frequency_band)', '{']
         if hf and lf:
-            lines += ['    if (frequency_band == SX_FHSS_FREQUENCY_BAND_2P4_GHZ) {'] + calc_chain(hf, '        ')
-            lines += ['    } else {'] + calc_chain(lf, '        ') + ['    }']
+            lines += ['    if (frequency_band == SX_FHSS_FREQUENCY_BAND_2P4_GHZ) {'] + calc_chain(hf, '        ', dac)
+            lines += ['    } else {'] + calc_chain(lf, '        ', dac) + ['    }']
         else:  # one band only, the device conf allows no other
-            lines += ['    (void)frequency_band;'] + calc_chain(hf or lf, '    ')
+            lines += ['    (void)frequency_band;'] + calc_chain(hf or lf, '    ', dac)
         lines.append('}')
         table = sorted(set((d, m) for d, m, _ in hf + lf))
     else:
-        t = levels(hw, hw['power_values'])
+        if hw.get(sub) is not None:
+            t = levels(hw, hw[sub])
+        else:  # an SX127x behind a DAC with no radio table: ELRS leaves PA_BOOST at OutputPower 0
+            t = [(d, m, 0) for d, m, _ in levels(hw, hw['power_values'])]
         lines += [f'void {RADIO[radio]["calc"]}(const int8_t power_dbm, int8_t* sx_power, int8_t* actual_power_dbm)', '{']
-        lines += calc_chain(t, '    ')
+        lines += calc_chain(t, '    ', dac)
         lines.append('}')
         table = sorted(set((d, m) for d, m, _ in t))
     default = max(0, min(len(table) - 1, hw.get('power_default', 0) - hw.get('power_min', 0)))
@@ -137,12 +176,14 @@ def power_block(radio, hw):
     return lines
 
 
-def calc_chain(table, ind):
+def calc_chain(table, ind, dac=None):
     # the highest level at or below the request, the lowest below them all
     out = []
     rev = sorted(table, reverse=True)
     for i, (dbm, mw, v) in enumerate(rev):
         body = [f'{ind}    *sx_power = {v};', f'{ind}    *actual_power_dbm = {dbm};']
+        if dac is not None:
+            body.append(f'{ind}    dacWrite(SX_PA_DAC_IO, {dac[dbm]});')
         if i == len(rev) - 1:
             out += ([f'{ind}}} else {{'] if i else [f'{ind}{{']) + body + [f'{ind}}}']
         else:
@@ -190,6 +231,9 @@ def radio_block(plat, radio, hw, n):
         L.append(define(f'{sx}_TX_EN', io(tx)))
     if rx is not None:
         L.append(define(f'{sx}_RX_EN', io(rx)))
+    pa_en = hw.get('power_enable') if not n else None
+    if pa_en is not None:
+        L.append(define('SX_PA_EN', io(pa_en)) + ' // ELRS power_enable: high while sending or receiving')
     L += radio_options(radio, hw, sx)
     ant = not n and hw.get('ant_ctrl') is not None and 'radio_nss_2' not in hw
     if ant:
@@ -207,6 +251,8 @@ def radio_block(plat, radio, hw, n):
         L.append(f'    gpio_init({sx}_TX_EN, IO_MODE_OUTPUT_PP_LOW);')
     if rx is not None:
         L.append(f'    gpio_init({sx}_RX_EN, IO_MODE_OUTPUT_PP_LOW);')
+    if pa_en is not None:
+        L.append('    gpio_init(SX_PA_EN, IO_MODE_OUTPUT_PP_HIGH);')
     if ant:
         L.append('    gpio_init(SX_ANT_CTRL, IO_MODE_OUTPUT_PP_LOW);')
     L += ['}', '']
@@ -229,22 +275,27 @@ def radio_block(plat, radio, hw, n):
     return L
 
 
-def hal(name, plat, radio, hw, products, layout, overlay):
+def hal(name, kind, plat, radio, hw, products, layout, overlay):
     td = 'radio_nss_2' in hw
     rgb = hw.get('led_rgb') is not None
     L = ['//*******************************************************',
          '// TetherLRS, generated by tools/tetherlrs_gen_elrs.py from ExpressLRS/targets: do not edit',
          '// GPL3, https://www.gnu.org/licenses/gpl-3.0.de.html',
          '//*******************************************************',
-         f'// {FAMILY[plat]["chip"]}, {radio}{" true diversity" if td else ""}: ExpressLRS layout "{layout}"' + (', with the products\' overlay' if overlay else ''),
+         f'// {FAMILY[plat]["chip"]}, {radio}{" true diversity" if td else ""}: ExpressLRS {"Tx module" if kind == "tx" else "receiver"} layout "{layout}"' + (', with the products\' overlay' if overlay else ''),
          '// ' + '; '.join(products)[:600],
          '//-------------------------------------------------------', '',
          '#define DEVICE_HAS_SINGLE_LED_RGB' if rgb else '#define DEVICE_HAS_SINGLE_LED']
+    fan = hw.get('misc_fan_en', hw.get('misc_fan_pwm'))
+    if fan is not None:
+        L.append('#define DEVICE_HAS_FAN_ONOFF')
     if td:
         L.append('#define DEVICE_HAS_DIVERSITY_SINGLE_SPI // must be set, doesn\'t work without it')
     L += ['#define DEVICE_HAS_NO_DEBUG', '', '', '//-- UARTS', '// UARTB = serial port', '// UARTF = debug port', '',
           '#define UARTB_USE_SERIAL', '#define UARTB_BAUD                RX_SERIAL_BAUDRATE']
-    if plat != 'esp8285' and hw.get('serial_tx') is not None and (plat != 'esp32' or (hw['serial_tx'], hw['serial_rx']) != (1, 3)):
+    if kind == 'tx':  # ESP32 UART0, wired to the module's USB-C
+        L += [define('UARTB_USE_TX_IO', 'IO_P1'), define('UARTB_USE_RX_IO', 'IO_P3')]
+    elif plat != 'esp8285' and hw.get('serial_tx') is not None and (plat != 'esp32' or (hw['serial_tx'], hw['serial_rx']) != (1, 3)):
         L += [f'#define UARTB_USE_TX_IO           {io(hw["serial_tx"])}', f'#define UARTB_USE_RX_IO           {io(hw["serial_rx"])}']
     L += ['#define UARTB_TXBUFSIZE           RX_SERIAL_TXBUFSIZE', '#define UARTB_RXBUFSIZE           RX_SERIAL_RXBUFSIZE', '',
           '#define UARTF_USE_SERIAL', '#define UARTF_BAUD                115200', '', '']
@@ -268,9 +319,15 @@ def hal(name, plat, radio, hw, products, layout, overlay):
               'IRAM_ATTR void led_red_on(void) {}', 'IRAM_ATTR void led_red_toggle(void) {}']
     else:
         L += [f'#define LED_RED                   {io(hw["led"])}', '', 'void leds_init(void)', '{',
-              '    gpio_init(LED_RED, IO_MODE_OUTPUT_PP_LOW);', '}', '',
-              'IRAM_ATTR void led_red_off(void) { gpio_low(LED_RED); }', 'IRAM_ATTR void led_red_on(void) { gpio_high(LED_RED); }',
+              f'    gpio_init(LED_RED, IO_MODE_OUTPUT_PP_{"HIGH" if hw.get("led_invert") else "LOW"});', '}', '',
+              f'IRAM_ATTR void led_red_off(void) {{ gpio_{"high" if hw.get("led_invert") else "low"}(LED_RED); }}',
+              f'IRAM_ATTR void led_red_on(void) {{ gpio_{"low" if hw.get("led_invert") else "high"}(LED_RED); }}',
               'IRAM_ATTR void led_red_toggle(void) { gpio_toggle(LED_RED); }']
+    if fan is not None:
+        L += ['', '', '//-- Cooling Fan', '', define('FAN_IO', io(fan)), '', 'void fan_init(void)', '{',
+              '    gpio_init(FAN_IO, IO_MODE_OUTPUT_PP_LOW);', '}', '',
+              'IRAM_ATTR void fan_set_power(int8_t power_dbm) // on from 250 mW, ExpressLRS\'s default', '{',
+              '    if (power_dbm >= POWER_24_DBM) { gpio_high(FAN_IO); } else { gpio_low(FAN_IO); }', '}']
     L += ['', ''] + power_block(radio, hw)
     return '\n'.join(L) + '\n'
 
@@ -302,25 +359,31 @@ def generate(covered):
         if not isinstance(cats, dict):
             continue
         for cat, devs in cats.items():
-            if not cat.startswith('rx') or not isinstance(devs, dict):
+            kind = cat[:2]
+            if kind not in ('rx', 'tx') or not isinstance(devs, dict):
                 continue
             for d in devs.values():
-                if not isinstance(d, dict) or d.get('platform') not in FAMILY or covered(d):
+                if not isinstance(d, dict) or d.get('platform') not in FAMILY or covered(d, kind):
                     continue
-                hw = hardware(d)
+                if kind == 'tx' and not tx_module(d):
+                    continue
+                if kind == 'tx' and d['platform'] not in TX_FAMILY:
+                    left_out[d['product_name']] = f'Tx module on {FAMILY[d["platform"]]["chip"]}, not built yet'
+                    continue
+                hw = hardware(d, kind)
                 radio = radio_of(d, hw)
                 why = why_not(d, hw, radio)
                 if why:
                     left_out[d['product_name']] = why
                     continue
-                key = json.dumps([d['platform'], radio, d['layout_file'], hw], sort_keys=True)
-                c = configs.setdefault(key, {'plat': d['platform'], 'radio': radio, 'hw': hw, 'layout': d['layout_file'],
+                key = json.dumps([kind, d['platform'], radio, d['layout_file'], hw], sort_keys=True)
+                c = configs.setdefault(key, {'kind': kind, 'plat': d['platform'], 'radio': radio, 'hw': hw, 'layout': d['layout_file'],
                                              'overlay': bool(d.get('overlay')), 'products': []})
                 c['products'].append(d['product_name'])
     # names: the layout, and where one layout has several builds the top power or a number
     by_layout = {}
     for c in configs.values():
-        by_layout.setdefault((c['plat'], c['layout']), []).append(c)
+        by_layout.setdefault((c['kind'], c['plat'], c['layout']), []).append(c)
     for group in by_layout.values():
         group.sort(key=lambda c: sorted(c['products'])[0])
         tops = [max(m for _, m in power_levels(c)) for c in group]
@@ -328,9 +391,10 @@ def generate(covered):
             base = short(c['layout'])
             tag = '' if len(group) == 1 else (f' {tops[i]}mW' if tops.count(tops[i]) == 1 else f' v{i + 1}')
             c['title'] = base + tag
-            c['env'] = 'elrs-' + re.sub(r'[^a-z0-9]+', '-', (base + tag).lower()).strip('-')
-            c['name'] = name20(base + tag, c['radio'])
-    return sorted(configs.values(), key=lambda c: c['env']), left_out
+            c['env'] = ('elrs-mod-' if c['kind'] == 'tx' else 'elrs-') + re.sub(r'[^a-z0-9]+', '-', (base + tag).lower()).strip('-')
+    configs = sorted(configs.values(), key=lambda c: c['env'])
+    name_all(configs)
+    return configs, left_out
 
 
 def power_levels(c):
@@ -340,9 +404,48 @@ def power_levels(c):
     return [(d, m) for d, m, _ in levels(hw, hw['power_values'])]
 
 
-def name20(s, radio):
-    s = s.upper().replace('LR1121', 'LR11')
-    return s if len(s) <= 20 else s[:20].rstrip()
+# DEVICE_NAME holds 20 characters and tells the tool which build a TetherLRS radio runs: unique per role
+SHORT_NAMES = {
+    'DIY S3 DevKit 2400 TD PWM 16': 'DIY S3 TD PWM16',
+    'DIY S3 DevKit 2400 TD VTX PWM 11': 'DIY S3 TD VTX PWM11',
+    'GEPRC DualBand Linkflow 1000mW': 'GEPRC LINKFLOW DB',
+    'GEPRC DualBand Linkflow 2000mW': 'GEPRC LINKFLOW 900V2',  # the dual band layout with one band
+    'Namimno FLASH 2400 PA': 'NAMIMNO FLASH 2.4 PA',
+    'SPRacing RXG1 Gyro 2400 RX GYRO': 'SPRACING RXG1 2400',
+    'SPRacing RXN1 Gyro 2400 RX GYRO IR D4': 'SPRACING RXN1 2400',
+}
+
+
+def name20(title):
+    short = {k.upper(): v for k, v in SHORT_NAMES.items()}
+    return short.get(title.upper(), title).upper().replace('LR1121', 'LR11').replace('RADIOMASTER ', 'RM ')
+
+
+def hand_names():
+    # the DEVICE_NAMEs of the ESP hals written by hand that an env of platformio.ini builds
+    with open(os.path.join(ROOT, 'platformio.ini'), encoding='utf-8') as f:
+        built = set(re.findall(r'^\s*-D\s+(\w+)', f.read(), re.M))
+    with open(os.path.join(ROOT, 'mLRS', 'Common', 'hal', 'esp', 'esp-device_conf.h'), encoding='utf-8') as f:
+        blocks = re.findall(r'#ifdef (\w+)\s+#define DEVICE_NAME\s+"([^"]+)"', f.read())
+    return {n.upper() for d, n in blocks if d in built}
+
+
+def name_all(configs):
+    # a Tx module named like a receiver gets MOD: every receiver is also built as Tx
+    rx = {name20(c['title']) for c in configs if c['kind'] == 'rx'}
+    for c in configs:
+        c['name'] = name20(c['title'])
+        if c['kind'] == 'tx' and c['name'] in rx:
+            c['name'] = c['name'][:16].rstrip() + ' MOD'
+    hand = hand_names()
+    for role in ('rx', 'tx'):
+        seen = {}
+        for c in configs:
+            if role == 'tx' or c['kind'] == 'rx':
+                n = c['name']
+                if len(n) > 20 or n in hand or n in seen:
+                    sys.exit(f'DEVICE_NAME "{n}" of {c["env"]}: too long or not unique, add a name to SHORT_NAMES')
+                seen[n] = c
 
 
 def files(configs, left_out):
@@ -350,21 +453,24 @@ def files(configs, left_out):
     conf = ['// TetherLRS, generated by tools/tetherlrs_gen_elrs.py from ExpressLRS/targets: do not edit', '']
     halh = ['// TetherLRS, generated by tools/tetherlrs_gen_elrs.py from ExpressLRS/targets: do not edit', '']
     ini = ['; generated by tools/tetherlrs_gen_elrs.py from ExpressLRS/targets, do not edit',
-           '; ExpressLRS receivers no hal of mLRS covers, one build per hardware (layout with the overlay that matters)', '']
+           '; ExpressLRS receivers no hal of mLRS covers, one build per hardware (layout with the overlay that matters),',
+           '; and the external Tx modules as ground radios (tx-elrs-mod-*)', '']
     mapping = {'products': {}, 'left_out': dict(sorted(left_out.items()))}
     for c in configs:
-        define = 'RX_ELRS_GEN_' + c['env'][len('elrs-'):].upper().replace('-', '_') + '_' + FAMILY[c['plat']]['chip']
-        fname = f'rx-hal-{c["env"]}.h'
-        out[os.path.join(GEN, fname)] = hal(c['env'], c['plat'], c['radio'], c['hw'], sorted(c['products']), c['layout'], c['overlay'])
-        conf += [f'#ifdef {define}', f'  #define DEVICE_NAME "{c["name"]}"', '  #define DEVICE_IS_RECEIVER',
+        kind = c['kind']
+        define = f'{kind.upper()}_ELRS_GEN_' + c['env'][len('elrs-'):].upper().replace('-', '_') + '_' + FAMILY[c['plat']]['chip']
+        fname = f'{kind}-hal-{c["env"]}.h'
+        out[os.path.join(GEN, fname)] = hal(c['env'], kind, c['plat'], c['radio'], c['hw'], sorted(c['products']), c['layout'], c['overlay'])
+        conf += [f'#ifdef {define}', f'  #define DEVICE_NAME "{c["name"]}"',
+                 '  #define DEVICE_IS_RECEIVER' + (' // built as Tx only, TLRS_RX_AS_TX' if kind == 'tx' else ''),
                  f'  #define {RADIO[c["radio"]]["has"]}'] + [f'  #define {b}' for b in bands(c['radio'], c['hw'])] + ['#endif', '']
         halh += [f'#ifdef {define}', f'#include "{fname}"', '#endif', '']
-        fam = FAMILY[c['plat']]
-        ini += [f'[env:rx-{c["env"]}]', f'extends = {fam["common"]}', f'board = {fam["board"]}']
+        fam = TX_FAMILY[c['plat']] if kind == 'tx' else FAMILY[c['plat']]
+        ini += [f'[env:{kind}-{c["env"]}]', f'extends = {fam["common"]}', f'board = {fam["board"]}']
         if c['hw'].get('led_rgb') is not None:
             ini += ['lib_deps =', '  makuna/NeoPixelBus@^2.8.3']
         ini += ['build_src_filter =', f'  ${{{fam["common"]}.build_src_filter}}', f'  +<modules/sx12xx-lib/src/{RADIO[c["radio"]]["src"]}>',
-                'build_flags =', f'  ${{{fam["common"]}.build_flags}}', f'  -D {define}', '']
+                'build_flags =', f'  ${{{fam["common"]}.build_flags}}', f'  -D {define}'] + (['  -D TLRS_RX_AS_TX'] if kind == 'tx' else []) + ['']
         for p in c['products']:
             mapping['products'][p] = [c['env'], c['plat']]
     out[os.path.join(GEN, 'elrs-device_conf.h')] = '\n'.join(conf)
@@ -376,16 +482,19 @@ def files(configs, left_out):
 
 
 def covered_by_hand():
-    # what tools/tetherlrs_elrs_products.py maps to a hal written by hand (an env of platformio.ini)
+    # what tools/tetherlrs_elrs_products.py maps to a hal written by hand (an env of platformio.ini); a Tx module only
+    # by its own hal
     import tetherlrs_elrs_products as p
     with open(os.path.join(ROOT, 'platformio.ini'), encoding='utf-8') as f:
-        envs = set(re.findall(r'^\[env:rx-([^\]]+)\]', f.read(), re.M))
+        envs = set(re.findall(r'^\[env:((?:rx|tx)-[^\]]+)\]', f.read(), re.M))
 
-    def covered(d):
+    def covered(d, kind):
+        if kind == 'tx':
+            return f'tx-{p.OWN_HAL.get(d["product_name"])}' in envs
         env = p.OWN_HAL.get(d['product_name'], p.slug(d['layout_file']))
         if env in p.BAND_SPLIT:
             env += p.band_suffix(d, TARGETS)
-        return env in envs
+        return f'rx-{env}' in envs
     return covered
 
 

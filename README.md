@@ -37,8 +37,8 @@ manufacturers set.
 
 | | Builds | Tested |
 |---|---|---|
-| ExpressLRS receivers, ESP8285, ESP32, ESP32-C3, ESP32-S3 | 212 of 216 products | 4 boards, below |
-| ExpressLRS Tx modules, external, as ground radio on their USB-C | RadioMaster Ranger, Nomad, Bandit, Bandit Micro and Nano; BETAFPV Micro 1W 2.4 GHz | none yet |
+| ExpressLRS receivers, ESP8285, ESP32, ESP32-C3, ESP32-S3 | 213 of 216 products | 4 boards, below |
+| ExpressLRS Tx modules, external, ESP32, as ground radio on their USB-C | 53 of 55 products | none yet |
 | mLRS STM32 receivers and Tx boards: FrSky R9, Matek mR900 and mR24, Wio-E5, E77, DIY E22/E28/LR2021 | 49 images | none yet |
 
 Tested on the bench:
@@ -49,17 +49,22 @@ Tested on the bench:
 - DAKEFPV Nano 2.4 GHz receiver, as aircraft radio (ESP32-C3, LR1121)
 
 Everything else is built but not tested on the real board yet: **testers are welcome**, open an issue with what worked
-and what did not. Not supported yet: two ESP8285 PWM receivers and the HappyModel EPW6 (no radio BUSY pin), the
-RadioMaster Bandit Nano/Micro receiver (its power is set by a DAC), and the ExpressLRS Tx modules not listed above.
-Radio-internal modules (TX16S, Zorro, Boxer and alike) are left out on purpose: they talk only to their radio.
+and what did not. Not supported yet: two ESP8285 PWM receivers and the HappyModel EPW6 (their layouts lack a radio
+pin TetherLRS needs) and the CoreWing Sirius Tx module (ESP32-S3). Modules inside a radio (TX16S, Zorro, Boxer and
+alike) are left out on purpose: they talk only to their radio.
+
+A Tx module runs as a ground radio on its USB-C port: the data, and the CLI after `+++`. Its fan turns on from
+250 mW; its screen, joystick, WiFi backpack and radio bay pins are not used. USB alone may not power the higher levels:
+power the module the way its maker says.
 
 ## Getting started
 
 1. Get the tool: the desktop app from [Releases](../../releases), or the web app (Chrome or Edge) on this
    repository's GitHub Pages.
 2. Connect a radio to the computer: a receiver through a USB serial adapter (3.3 V, TX to RX, RX to TX, GND, 5 V), a
-   board with USB directly, or a receiver already wired to a flight controller, through the flight controller's USB
-   (the tool opens the INAV or Betaflight serial passthrough; nothing is saved on the flight controller).
+   Tx module or a board with USB directly, or a receiver already wired to a flight controller, through the flight
+   controller's USB (the tool opens the INAV or Betaflight serial passthrough; nothing is saved on the flight
+   controller).
 3. On the **Firmware** page: Identify, Back up, choose ground radio (Tx) or aircraft radio (Rx), type a bind phrase
    (six characters, the same on both radios), Flash. Do the other radio the same way.
 4. Wire the aircraft radio to a free UART of the flight controller and set that UART to MAVLink telemetry at 115200:
@@ -103,7 +108,7 @@ python tools/run_make_firmwares.py --nopause # every STM32 build, arm-none-eabi-
 test/run_tests.sh                            # host tests
 ```
 
-The ExpressLRS receivers' hardware files are generated from the `firmware/elrs-targets` submodule by
+The hardware files of the ExpressLRS receivers and Tx modules are generated from the `firmware/elrs-targets` submodule by
 `tools/tetherlrs_gen_elrs.py`; `tools/tetherlrs_tx_envs.py` makes every receiver also a ground radio, and
 `tools/tetherlrs_elrs_products.py` tells the tool which build fits which ExpressLRS product. CI checks they are
 up to date.

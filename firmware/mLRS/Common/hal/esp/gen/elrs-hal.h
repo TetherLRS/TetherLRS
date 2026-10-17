@@ -204,6 +204,186 @@
 #include "rx-hal-elrs-iflight-2400.h"
 #endif
 
+#ifdef TX_ELRS_GEN_MOD_2400_GEMINI_ESP32
+#include "tx-hal-elrs-mod-2400-gemini.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_AXIS_THOR_2400_ESP32
+#include "tx-hal-elrs-mod-axis-thor-2400.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_BAYCKRC_DUAL_BAND_V1_ESP32
+#include "tx-hal-elrs-mod-bayckrc-dual-band-v1.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_BAYCKRC_DUAL_BAND_V2_ESP32
+#include "tx-hal-elrs-mod-bayckrc-dual-band-v2.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_BAYCKRC_DUAL_BAND_V3_ESP32
+#include "tx-hal-elrs-mod-bayckrc-dual-band-v3.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_BETAFPV_2400_MICRO_ESP32
+#include "tx-hal-elrs-mod-betafpv-2400-micro.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_BETAFPV_2400_NANO_ESP32
+#include "tx-hal-elrs-mod-betafpv-2400-nano.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_BETAFPV_2400_NANO_V2_ESP32
+#include "tx-hal-elrs-mod-betafpv-2400-nano-v2.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_BETAFPV_900_MICRO_ESP32
+#include "tx-hal-elrs-mod-betafpv-900-micro.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_BETAFPV_900_MICRO_V2_ESP32
+#include "tx-hal-elrs-mod-betafpv-900-micro-v2.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_BETAFPV_900_NANO_ESP32
+#include "tx-hal-elrs-mod-betafpv-900-nano.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_BETAFPV_900_NANO_V2_ESP32
+#include "tx-hal-elrs-mod-betafpv-900-nano-v2.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_DAKEFPV_MAX_1000MW_ESP32
+#include "tx-hal-elrs-mod-dakefpv-max-1000mw.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_DAKEFPV_MAX_2000MW_ESP32
+#include "tx-hal-elrs-mod-dakefpv-max-2000mw.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_DIY_2400_E28_ESP32
+#include "tx-hal-elrs-mod-diy-2400-e28.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_DIY_2400_F27_ESP32
+#include "tx-hal-elrs-mod-diy-2400-f27.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_DIY_2400_MINI_ESP32
+#include "tx-hal-elrs-mod-diy-2400-mini.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_DIY_900_E19_ESP32
+#include "tx-hal-elrs-mod-diy-900-e19.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_DIY_900_RFM95_ESP32
+#include "tx-hal-elrs-mod-diy-900-rfm95.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_DIY_900_TTGO_V1_ESP32
+#include "tx-hal-elrs-mod-diy-900-ttgo-v1.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_DIY_900_TTGO_V2_ESP32
+#include "tx-hal-elrs-mod-diy-900-ttgo-v2.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_EMAX_2400_NANO_ESP32
+#include "tx-hal-elrs-mod-emax-2400-nano.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_EMAX_2400_OLED_ESP32
+#include "tx-hal-elrs-mod-emax-2400-oled.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_EMAX_900_NANO_ESP32
+#include "tx-hal-elrs-mod-emax-900-nano.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_EMAX_900_OLED_ESP32
+#include "tx-hal-elrs-mod-emax-900-oled.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_GEPRC_900_LINKFLOW_ESP32
+#include "tx-hal-elrs-mod-geprc-900-linkflow.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_GEPRC_DUALBAND_LINKFLOW_1000MW_ESP32
+#include "tx-hal-elrs-mod-geprc-dualband-linkflow-1000mw.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_GEPRC_DUALBAND_LINKFLOW_2000MW_ESP32
+#include "tx-hal-elrs-mod-geprc-dualband-linkflow-2000mw.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_HAPPYMODEL_ES24_ESP32
+#include "tx-hal-elrs-mod-happymodel-es24.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_HAPPYMODEL_ES24_PRO_ESP32
+#include "tx-hal-elrs-mod-happymodel-es24-pro.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_HAPPYMODEL_ES900_ESP32
+#include "tx-hal-elrs-mod-happymodel-es900.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_HGLRC_HERMES_2400_ESP32
+#include "tx-hal-elrs-mod-hglrc-hermes-2400.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_HGLRC_OLED_900_ESP32
+#include "tx-hal-elrs-mod-hglrc-oled-900.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_IFLIGHT_2400_ESP32
+#include "tx-hal-elrs-mod-iflight-2400.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_IFLIGHT_2400_V2_ESP32
+#include "tx-hal-elrs-mod-iflight-2400-v2.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_IFLIGHT_900_ESP32
+#include "tx-hal-elrs-mod-iflight-900.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_IFLIGHT_900_V2_ESP32
+#include "tx-hal-elrs-mod-iflight-900-v2.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_JUMPER_AION_NANO_ESP32
+#include "tx-hal-elrs-mod-jumper-aion-nano.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_LR1121_GEMINI_ESP32
+#include "tx-hal-elrs-mod-lr1121-gemini.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_NAMIMNO_FLASH_OLED_ESP32
+#include "tx-hal-elrs-mod-namimno-flash-oled.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_NAMIMNO_VOYAGER_OLED_ESP32
+#include "tx-hal-elrs-mod-namimno-voyager-oled.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_QUADKOPTERS_JR_2400_ESP32
+#include "tx-hal-elrs-mod-quadkopters-jr-2400.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_RADIOMASTER_RANGER_MICRO_V1_ESP32
+#include "tx-hal-elrs-mod-radiomaster-ranger-micro-v1.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_RADIOMASTER_RANGER_MICRO_V2_ESP32
+#include "tx-hal-elrs-mod-radiomaster-ranger-micro-v2.h"
+#endif
+
+#ifdef TX_ELRS_GEN_MOD_VANTAC_LITE_ESP32
+#include "tx-hal-elrs-mod-vantac-lite.h"
+#endif
+
 #ifdef RX_ELRS_GEN_NAMIMNO_FLASH_2400_PA_ESP8285
 #include "rx-hal-elrs-namimno-flash-2400-pa.h"
 #endif
@@ -222,6 +402,10 @@
 
 #ifdef RX_ELRS_GEN_RADIOMASTER_2400_ER8G_V3_ESP32
 #include "rx-hal-elrs-radiomaster-2400-er8g-v3.h"
+#endif
+
+#ifdef RX_ELRS_GEN_RADIOMASTER_BANDIT_NANO_ESP32
+#include "rx-hal-elrs-radiomaster-bandit-nano.h"
 #endif
 
 #ifdef RX_ELRS_GEN_RADIOMASTER_ER_SERIES_ESP32S3
