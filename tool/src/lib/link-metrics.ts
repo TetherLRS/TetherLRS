@@ -20,9 +20,15 @@ const mw = (dbm: number) => {
   const v = Math.pow(10, dbm / 10);
   return v < 1 ? `${v.toFixed(2)} mW` : `${Math.round(v)} mW`;
 };
+// the receiver's power comes as its Rx Power option names it: "10 mW", "0.02 mW"
+export const optionDbm = (name: string | undefined) => {
+  const m = /^(\d+(?:\.\d+)?) mW$/.exec(name ?? '');
+  return m ? Math.round(10 * Math.log10(Number(m[1]))) : undefined;
+};
 
 export function linkMetrics(stats: LinkStats[]): Metric[] {
   const last = stats.at(-1);
+  const rxDbm = optionDbm(last?.rxPower);
   return [
     {
       key: 'lq',
@@ -78,9 +84,15 @@ export function linkMetrics(stats: LinkStats[]): Metric[] {
       unit: 'dBm',
       readout: [
         { name: 'Ground', text: last?.txPower !== undefined ? `${last.txPower} dBm · ${mw(last.txPower)}` : '–' },
-        { name: 'Aircraft', text: last?.rxPower ?? (last ? 'not told' : '–') },
+        {
+          name: 'Aircraft',
+          text: last?.rxPower ? (rxDbm !== undefined ? `${rxDbm} dBm · ${last.rxPower}` : last.rxPower) : last ? 'not told' : '–',
+        },
       ],
-      series: [{ name: 'Ground', values: stats.map((s) => s.txPower) }],
+      series: [
+        { name: 'Ground', values: stats.map((s) => s.txPower) },
+        { name: 'Aircraft', values: stats.map((s) => optionDbm(s.rxPower)) },
+      ],
       span: 10,
     },
     {
