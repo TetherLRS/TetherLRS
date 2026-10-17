@@ -1,5 +1,8 @@
 blank_issues_enabled: true
 contact_links:
+  - name: Questions
+    url: https://github.com/TetherLRS/TetherLRS/discussions/categories/q-a
+    about: How to set something up, which board to pick, whether something should work.
   - name: Documentation
     url: https://github.com/TetherLRS/TetherLRS/wiki
     about: Getting started, hardware, parameters, troubleshooting.

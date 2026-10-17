@@ -50,7 +50,8 @@ Tested on the bench:
 - Flywoo EL24E 2.4 GHz receiver, as ground radio (ESP8285, SX1280)
 - DAKEFPV Nano 2.4 GHz receiver, as aircraft radio (ESP32-C3, LR1121)
 
-Everything else is built but not tested on the real board yet: **testers are welcome**, open an issue with what worked
+Everything else is built but not tested on the real board yet: **testers are welcome**, send a
+[hardware report](https://github.com/TetherLRS/TetherLRS/issues/new?template=hardware-report.yml) with what worked
 and what did not. Not supported yet: two ESP8285 PWM receivers and the HappyModel EPW6 (their layouts lack a radio
 pin TetherLRS needs), the CoreWing Sirius Tx module (ESP32-S3) and the DIY BLE joystick (no radio). Modules inside a
 radio (TX16S, Zorro, Boxer and alike) are left out on purpose: they talk only to their radio.
@@ -102,6 +103,13 @@ TetherLRS can always be replaced, and the radio put back as it was:
   bootloader always answers, and the tool or esptool can write again.
 - **STM32 boards** go back the way they came to TetherLRS: an ST-Link, or the bootloader they have (the ExpressLRS
   bootloader on R9 boards), with the mLRS or ExpressLRS image.
+
+## Help and feedback
+
+- **Documentation**: the [wiki](https://github.com/TetherLRS/TetherLRS/wiki), from getting started to every parameter.
+- **Questions**: [Discussions](https://github.com/TetherLRS/TetherLRS/discussions/categories/q-a).
+- **A board tried**, working or not: a [hardware report](https://github.com/TetherLRS/TetherLRS/issues/new?template=hardware-report.yml).
+- **A bug**: a [bug report](https://github.com/TetherLRS/TetherLRS/issues/new?template=bug-report.yml).
 
 ## Building
 
