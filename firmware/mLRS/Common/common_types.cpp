@@ -600,6 +600,13 @@ char ss[32];
     u8toBCDstr(minor, ss);
     remove_leading_zeros(ss);
     strcat(s, ss);
+    if (patch > 50) { // TetherLRS release candidate, see common_conf.h
+        strcat(s, "-RC");
+        u8toBCDstr(patch - 50, ss);
+        remove_leading_zeros(ss);
+        strcat(s, ss);
+        return;
+    }
     strcat(s, ".");
     u8toBCDstr(patch, ss);
     ss[0] = ss[1]; ss[1] = ss[2]; ss[2] = '\0'; // remove_leading_zeros(ss);
