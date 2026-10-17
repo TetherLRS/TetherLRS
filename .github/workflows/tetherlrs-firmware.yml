@@ -1,7 +1,7 @@
-# TetherLRS: builds every PlatformIO environment; on a v* tag publishes them as a GitHub Release with
-# manifest.json for the tool (env, chip, offsets, sizes, sha256), and the web app with the firmware on GitHub
-# Pages. Per env: <env>.bin for the ELRS web page or an update over TetherLRS, <env>-full.bin for the ESP ROM
-# bootloader at 0x0.
+# TetherLRS: runs the host tests and the tool's tests, builds every PlatformIO (ESP) environment and every STM32
+# target; on a v* tag publishes them as a GitHub Release with manifest.json for the tool (env, chip, offsets, sizes,
+# sha256), and the web app with the firmware on GitHub Pages. Per ESP env: <env>.bin for the ELRS web page or an
+# update over TetherLRS, <env>-full.bin for the ESP ROM bootloader at 0x0. Per STM32 target: a .hex.
 name: TetherLRS firmware
 
 on:
@@ -15,6 +15,65 @@ permissions:
   contents: read
 
 jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Firmware host tests
+        run: firmware/test/run_tests.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Tool tests and types
+        working-directory: tool
+        run: |
+          npm ci
+          npx vitest run
+          npx svelte-check --threshold error
+
+  # mLRS's own build script with Arm's toolchain, the ST drivers and the DroneCAN library it generates
+  stm32:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: firmware
+    steps:
+      - uses: actions/checkout@v4
+      - name: Submodules the STM32 builds use
+        run: |
+          git submodule update --init --depth 1 mLRS/modules/mavlink mLRS/modules/fastmavlink mLRS/modules/stm32ll-lib \
+            mLRS/modules/sx12xx-lib mLRS/modules/dronecan/DSDL mLRS/modules/dronecan/dronecan_dsdlc
+          git submodule update --init --depth 1 $(git config -f ../.gitmodules --get-regexp 'path' | awk '{print $2}' | grep '^firmware/tools/st-drivers/' | sed 's#^firmware/##')
+      - uses: actions/cache@v4
+        id: arm
+        with:
+          path: ~/arm-gnu-toolchain
+          key: arm-gnu-toolchain-13.2.rel1
+      - name: Arm GNU toolchain 13.2.rel1
+        if: steps.arm.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/arm-gnu-toolchain
+          curl -sSL https://developer.arm.com/-/media/Files/downloads/gnu/13.2.rel1/binrel/arm-gnu-toolchain-13.2.rel1-x86_64-arm-none-eabi.tar.xz \
+            | tar -xJ -C ~/arm-gnu-toolchain --strip-components=1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install empy==3.3.4 pexpect dronecan
+      - name: ST drivers, MAVLink and DroneCAN libraries
+        run: |
+          (cd tools && python run_copy_st_drivers.py -silent)
+          (cd mLRS/Common/mavlink && python fmav_generate_c_library.py)
+          (cd mLRS/Common/dronecan && python dronecan_generate_c_library.py -np)
+      - name: Build
+        run: |
+          export PATH=~/arm-gnu-toolchain/bin:$PATH
+          python tools/run_make_firmwares.py --nopause --version ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'dev' }} | tee stm32.log
+          ! grep -E "error:" stm32.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fw-stm32
+          path: firmware/tools/build/firmware/*.hex
+
   envs:
     runs-on: ubuntu-24.04
     defaults:
@@ -63,7 +122,7 @@ jobs:
           path: firmware/out/${{ matrix.env }}
 
   release:
-    needs: build
+    needs: [tests, build, stm32]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     permissions:
@@ -77,11 +136,13 @@ jobs:
         run: |
           mkdir rel
           for d in fw/fw-*; do
+            [ "$d" = fw/fw-stm32 ] && continue
             e=${d#fw/fw-}
             cp "$d/firmware.bin" "rel/$e.bin"
             cp "$d/full.bin" "rel/$e-full.bin"
           done
-          jq -s 'map({(.env): .}) | add' fw/fw-*/info.json > rel/manifest.json
+          cp fw/fw-stm32/*.hex rel/
+          jq -s 'map({(.env): .}) | add' $(ls fw/fw-*/info.json) > rel/manifest.json
       - uses: softprops/action-gh-release@v2
         with:
           files: rel/*

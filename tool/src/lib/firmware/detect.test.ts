@@ -61,8 +61,8 @@ describe('what a flash holds', () => {
     expect(await whatRuns(reader(new Uint8Array(0x20000).fill(0xff)), 'ESP32-C3')).toBeUndefined();
   });
 
-  // the dumps and builds on this computer, read the way the radio is
-  const mlrs = 'D:/personal/Tesi/inav-dev-docs/projects/mlrs';
+  // flash dumps of real radios and packaged builds in $TLRS_REAL_IMAGES, read the way the radio is; skipped without them
+  const mlrs = process.env.TLRS_REAL_IMAGES ?? '/nonexistent';
   const dump = (p: string) => reader(new Uint8Array(readFileSync(`${mlrs}/${p}`)));
   it.skipIf(!existsSync(`${mlrs}/backup/flywoo-esp8285-20261016-152542.bin`))('the Flywoo as it came: ExpressLRS on an ESP8285', async () => {
     expect(await whatRuns(dump('backup/flywoo-esp8285-20261016-152542.bin'), 'ESP8266')).toMatchObject({ family: 'ExpressLRS', role: 'Rx', name: 'Flywoo EL24E TCXO 2.4GHz RX' });
@@ -73,8 +73,8 @@ describe('what a flash holds', () => {
   it.skipIf(!existsSync(`${mlrs}/backup/flywoo-tlrs-su-resti-elrs-20261016.bin`))('the Flywoo with a build from before the marker, ExpressLRS left behind it', async () => {
     expect(await whatRuns(dump('backup/flywoo-tlrs-su-resti-elrs-20261016.bin'), 'ESP8266')).toMatchObject({ family: 'mLRS', role: 'Tx', name: 'GENERIC 2400' });
   });
-  it.skipIf(!existsSync(`${mlrs}/build-wsl/prova/pkg/tx-generic-2400/full.bin`))('TetherLRS builds: Tx on an ESP8285, Rx on a C3', async () => {
-    expect(await whatRuns(dump('build-wsl/prova/pkg/tx-generic-2400/full.bin'), 'ESP8266')).toMatchObject({ family: 'TetherLRS', role: 'Tx', name: 'GENERIC 2400' });
-    expect(await whatRuns(dump('build-wsl/prova/pkg/rx-bayck-ur500/full.bin'), 'ESP32-C3')).toMatchObject({ family: 'TetherLRS', role: 'Rx' });
+  it.skipIf(!existsSync(`${mlrs}/pkg/tx-generic-2400/full.bin`))('TetherLRS builds: Tx on an ESP8285, Rx on a C3', async () => {
+    expect(await whatRuns(dump('pkg/tx-generic-2400/full.bin'), 'ESP8266')).toMatchObject({ family: 'TetherLRS', role: 'Tx', name: 'GENERIC 2400' });
+    expect(await whatRuns(dump('pkg/rx-bayck-ur500/full.bin'), 'ESP32-C3')).toMatchObject({ family: 'TetherLRS', role: 'Rx' });
   });
 });

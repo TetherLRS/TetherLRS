@@ -55,8 +55,9 @@ describe('the bind phrase in the image', () => {
     await expect(writeBindPhrase(spoiled, 0, true, 'abcdef', 1)).rejects.toThrow(/does not check out/);
   });
 
-  // the builds of tools/compila_mlrs_wsl.sh: an ESP8285 (app behind the boot loader at 0x1000, no SHA) and a C3
-  const pkg = 'D:/personal/Tesi/inav-dev-docs/projects/mlrs/build-wsl/prova/pkg';
+  // packaged builds (tools/tetherlrs_package.py) in $TLRS_REAL_IMAGES/pkg: an ESP8285 (app behind the boot loader
+  // at 0x1000, no SHA) and a C3; skipped without them
+  const pkg = `${process.env.TLRS_REAL_IMAGES ?? '/nonexistent'}/pkg`;
   it.skipIf(!existsSync(`${pkg}/tx-generic-2400/full.bin`) || !existsSync(`${pkg}/rx-dakefpv-900-max-1w/full.bin`))('real builds check out before and after', async () => {
     for (const [env, start, esp32] of [['tx-generic-2400', 0x1000, false], ['rx-dakefpv-900-max-1w', 0x10000, true], ['rx-dakefpv-900-max-1w', 0, true]] as const) {
       const img = new Uint8Array(readFileSync(`${pkg}/${env}/${start === 0 && esp32 ? 'firmware' : 'full'}.bin`));
