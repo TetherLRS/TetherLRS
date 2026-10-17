@@ -124,7 +124,13 @@ export class DemoSerialPort {
   }
 
   private escape() {
-    if (this.plus !== 3 || performance.now() - this.lastHostMs < GUARD_MS) return;
+    if (this.plus !== 3) return;
+    // as the firmware, which looks again every loop: a timer can fire before performance.now() says the guard is over
+    const left = GUARD_MS - (performance.now() - this.lastHostMs);
+    if (left > 0) {
+      this.plusTimer = setTimeout(() => this.escape(), Math.ceil(left));
+      return;
+    }
     this.plus = 0;
     this.command = true;
     this.line = '';
