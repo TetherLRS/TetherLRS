@@ -1,4 +1,4 @@
-# TetherLRS
+# <img src="tool/src-tauri/icons/128x128@2x.png" width="44" align="center" alt=""> TetherLRS
 
 A long-range telemetry and data link for drones and planes, on the radio hardware people already have: ExpressLRS
 receivers and modules, and mLRS boards. The core is [mLRS](https://github.com/olliw42/mLRS): its radio link,
