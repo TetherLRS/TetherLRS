@@ -1,0 +1,48 @@
+[submodule "firmware/mLRS/modules/mavlink"]
+	path = firmware/mLRS/modules/mavlink
+	url = https://github.com/mavlink/mavlink.git
+[submodule "firmware/mLRS/modules/fastmavlink"]
+	path = firmware/mLRS/modules/fastmavlink
+	url = https://github.com/olliw42/fastmavlink.git
+[submodule "firmware/mLRS/modules/stm32ll-lib"]
+	path = firmware/mLRS/modules/stm32ll-lib
+	url = https://github.com/olliw42/stm32ll-lib.git
+[submodule "firmware/mLRS/modules/sx12xx-lib"]
+	path = firmware/mLRS/modules/sx12xx-lib
+	url = https://github.com/olliw42/sx12xx-lib.git
+[submodule "firmware/tools/st-drivers/stm32f1xx_hal_driver"]
+	path = firmware/tools/st-drivers/stm32f1xx_hal_driver
+	url = https://github.com/STMicroelectronics/stm32f1xx_hal_driver.git
+[submodule "firmware/tools/st-drivers/stm32g4xx_hal_driver"]
+	path = firmware/tools/st-drivers/stm32g4xx_hal_driver
+	url = https://github.com/STMicroelectronics/stm32g4xx_hal_driver.git
+[submodule "firmware/tools/st-drivers/stm32l4xx_hal_driver"]
+	path = firmware/tools/st-drivers/stm32l4xx_hal_driver
+	url = https://github.com/STMicroelectronics/stm32l4xx_hal_driver.git
+[submodule "firmware/tools/st-drivers/cmsis_device_f1"]
+	path = firmware/tools/st-drivers/cmsis_device_f1
+	url = https://github.com/STMicroelectronics/cmsis_device_f1.git
+[submodule "firmware/tools/st-drivers/cmsis_device_g4"]
+	path = firmware/tools/st-drivers/cmsis_device_g4
+	url = https://github.com/STMicroelectronics/cmsis_device_g4.git
+[submodule "firmware/tools/st-drivers/cmsis_device_l4"]
+	path = firmware/tools/st-drivers/cmsis_device_l4
+	url = https://github.com/STMicroelectronics/cmsis_device_l4.git
+[submodule "firmware/tools/st-drivers/cmsis_device_wl"]
+	path = firmware/tools/st-drivers/cmsis_device_wl
+	url = https://github.com/STMicroelectronics/cmsis_device_wl.git
+[submodule "firmware/tools/st-drivers/stm32wlxx_hal_driver"]
+	path = firmware/tools/st-drivers/stm32wlxx_hal_driver
+	url = https://github.com/STMicroelectronics/stm32wlxx_hal_driver.git
+[submodule "firmware/tools/st-drivers/cmsis_device_f3"]
+	path = firmware/tools/st-drivers/cmsis_device_f3
+	url = https://github.com/STMicroelectronics/cmsis_device_f3.git
+[submodule "firmware/tools/st-drivers/stm32f3xx_hal_driver"]
+	path = firmware/tools/st-drivers/stm32f3xx_hal_driver
+	url = https://github.com/STMicroelectronics/stm32f3xx_hal_driver.git
+[submodule "firmware/mLRS/modules/dronecan/dronecan_dsdlc"]
+	path = firmware/mLRS/modules/dronecan/dronecan_dsdlc
+	url = https://github.com/dronecan/dronecan_dsdlc.git
+[submodule "firmware/mLRS/modules/dronecan/DSDL"]
+	path = firmware/mLRS/modules/dronecan/DSDL
+	url = https://github.com/dronecan/DSDL.git

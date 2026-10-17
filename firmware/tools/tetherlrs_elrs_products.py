@@ -10,7 +10,7 @@ import os
 import sys
 
 SRC = sys.argv[1]
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'tool', 'src', 'lib', 'firmware', 'elrs-products.json')
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'tool', 'src', 'lib', 'firmware', 'elrs-products.json')
 
 
 # ExpressLRS products with a hal of their own here: the env suffix, past the generic layout

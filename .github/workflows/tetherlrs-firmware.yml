@@ -6,7 +6,7 @@ name: TetherLRS firmware
 
 on:
   push:
-    branches: ['tetherlrs/**']
+    branches: [main]
     tags: ['v*']
   pull_request:
   workflow_dispatch:
@@ -17,6 +17,9 @@ permissions:
 jobs:
   envs:
     runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: firmware
     outputs:
       list: ${{ steps.list.outputs.list }}
     steps:
@@ -29,6 +32,9 @@ jobs:
   build:
     needs: envs
     runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: firmware
     strategy:
       fail-fast: false
       matrix:
@@ -43,10 +49,10 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/.platformio
-          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini', 'platformio-tetherlrs.ini') }}
+          key: pio-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini', 'firmware/platformio-tetherlrs.ini') }}
       - run: pip install platformio==6.1.19 esptool==4.8.1
       - name: MAVLink library
-        working-directory: mLRS/Common/mavlink
+        working-directory: firmware/mLRS/Common/mavlink
         run: python fmav_generate_c_library.py
       - run: pio run -e ${{ matrix.env }}
       - name: Package
@@ -54,7 +60,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: fw-${{ matrix.env }}
-          path: out/${{ matrix.env }}
+          path: firmware/out/${{ matrix.env }}
 
   release:
     needs: build
