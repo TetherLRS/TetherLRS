@@ -66,13 +66,19 @@ jobs:
           (cd mLRS/Common/dronecan && python dronecan_generate_c_library.py -np)
       - name: Build
         run: |
+          set -o pipefail
           export PATH=~/arm-gnu-toolchain/bin:$PATH
           python tools/run_make_firmwares.py --nopause --version ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'dev' }} | tee stm32.log
-          ! grep -E "error:" stm32.log
+          ! grep -E "error:|Traceback" stm32.log
+          # every target of run_make_firmwares.py: 49 .hex, and 4 .elrs for the R9 boards with the ExpressLRS bootloader
+          test "$(ls tools/build/firmware/*.hex | wc -l)" -eq 49 && test "$(ls tools/build/firmware/*.elrs | wc -l)" -eq 4
       - uses: actions/upload-artifact@v4
         with:
           name: fw-stm32
-          path: firmware/tools/build/firmware/*.hex
+          if-no-files-found: error
+          path: |
+            firmware/tools/build/firmware/*.hex
+            firmware/tools/build/firmware/*.elrs
 
   envs:
     runs-on: ubuntu-24.04
@@ -153,7 +159,7 @@ jobs:
             cp "$d/firmware.bin" "rel/$e.bin"
             cp "$d/full.bin" "rel/$e-full.bin"
           done
-          cp fw/fw-stm32/*.hex rel/
+          cp fw/fw-stm32/*.hex fw/fw-stm32/*.elrs rel/
           jq -s 'map({(.env): .}) | add' fw/fw-*/*/info.json > rel/manifest.json
       - uses: softprops/action-gh-release@v2
         with:

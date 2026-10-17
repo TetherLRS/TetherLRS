@@ -152,7 +152,9 @@ def mlrs_set_branch_hash(version_str):
     global HASHSTR
     import subprocess
 
-    v_patch = int(version_str.split('.')[2])
+    # TetherLRS: v1.0 and v1.0-RC1 are releases, no patch number
+    v = re.match(r'v\d+\.\d+(?:\.(\d+))?', version_str)
+    v_patch = int(v.group(1)) if v and v.group(1) else 0
 
     git_branch = subprocess.getoutput("git branch --show-current")
     if not git_branch == 'main' and v_patch != 0: # is a branch, but not a main release
