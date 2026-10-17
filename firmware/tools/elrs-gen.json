@@ -1,0 +1,434 @@
+{
+ "products": {
+  "Anyleaf 2.4GHz single radio RX": [
+   "elrs-2400-div-pa-v1",
+   "esp8285"
+  ],
+  "BAYCKRC 900MHz Dual Core RX": [
+   "elrs-900-td",
+   "esp32"
+  ],
+  "BAYCKRC C3 2.4Ghz 6PWM 10mw RX": [
+   "elrs-c3-2400-pwm",
+   "esp32-c3"
+  ],
+  "BAYCKRC C3 900/2400 Dual Band 100mW Gemini RX": [
+   "elrs-c3-lr1121-td-v1",
+   "esp32-c3"
+  ],
+  "BAYCKRC C3 900/2400 Dual Band 100mw 6PWM RX": [
+   "elrs-c3-lr1121-pwm",
+   "esp32-c3"
+  ],
+  "BAYCKRC RRD1 2.4GHz RX": [
+   "elrs-c3-2400-td-v1",
+   "esp32-c3"
+  ],
+  "BAYCKRC RRD2 2.4GHz RX": [
+   "elrs-c3-lr1121-td-10mw",
+   "esp32-c3"
+  ],
+  "BETAFPV PWM 2.4GHz RX": [
+   "elrs-2400-pwmp5-v1",
+   "esp8285"
+  ],
+  "BETAFPV SuperD 900MHz RX": [
+   "elrs-900-td",
+   "esp32"
+  ],
+  "BETAFPV SuperP 14Ch 2.4GHz RX": [
+   "elrs-2400-td-pa-pwm-14-v1",
+   "esp32"
+  ],
+  "BETAFPV SuperP 14Ch 900MHz RX": [
+   "elrs-900-td-pwm-16",
+   "esp32"
+  ],
+  "BETAFPV SuperX Nano RX": [
+   "elrs-c3-lr1121-td-v3",
+   "esp32-c3"
+  ],
+  "BlackSheep IP YB-Diversity Dual Band RX": [
+   "elrs-s3-lr1121-td",
+   "esp32-s3"
+  ],
+  "BotLabDynamics BotLink1 2.4GHz RX": [
+   "elrs-c3-2400-v1",
+   "esp32-c3"
+  ],
+  "BrotherHobby C3 900/2400 Dual Band 100mW Gemini RX": [
+   "elrs-c3-lr1121-td-v4",
+   "esp32-c3"
+  ],
+  "DAKEFPV 2G4 SuperD Pro MAX 500mW RX": [
+   "elrs-c3-lr1121-td-500mw",
+   "esp32-c3"
+  ],
+  "DAKEFPV C3 900/2400 Dual Band 100mW Gemini RX": [
+   "elrs-c3-lr1121-td-v6",
+   "esp32-c3"
+  ],
+  "DAKEFPV SuperD 2.4GHz RX": [
+   "elrs-c3-lr1121-td-v7",
+   "esp32-c3"
+  ],
+  "DAKEFPV SuperD 900MHz RX": [
+   "elrs-c3-lr1121-td-v8",
+   "esp32-c3"
+  ],
+  "DEEPSPACE 2.4GHz Nano 100mw RX": [
+   "elrs-c3-2400-pa-v1",
+   "esp32-c3"
+  ],
+  "DIY ESP32-S3 DevKit True Diversity 16xPWM 2.4Ghz RX ": [
+   "elrs-diy-s3-devkit-2400-td-pwm-16",
+   "esp32-s3"
+  ],
+  "DIY ESP32-S3 DevKit True Diversity, VTX, 11xPWM 2.4Ghz RX ": [
+   "elrs-diy-s3-devkit-2400-td-vtx-pwm-11",
+   "esp32-s3"
+  ],
+  "DIY Huzzah RFM95 900MHz TX": [
+   "elrs-diy-huzzah-rfm95",
+   "esp8285"
+  ],
+  "DIY TTGO V1 900MHz RX": [
+   "elrs-diy-900-ttgo-v1",
+   "esp32"
+  ],
+  "DIY TTGO V2 900MHz RX": [
+   "elrs-diy-900-ttgo-v2",
+   "esp32"
+  ],
+  "FD R24D 2.4GHz RX": [
+   "elrs-2400-div-pa-v2",
+   "esp8285"
+  ],
+  "Flycolor 2.4GHz Nano RX": [
+   "elrs-c3-2400-v2",
+   "esp32-c3"
+  ],
+  "Flysky PR01 2.4GHz RX": [
+   "elrs-flysky-pr01",
+   "esp32-c3"
+  ],
+  "Foxeer 2.4Ghz RX": [
+   "elrs-2400-pa-rgb",
+   "esp8285"
+  ],
+  "Foxeer 900MHz True Diversity RX": [
+   "elrs-900-td",
+   "esp32"
+  ],
+  "GEPRC C3 900/2400 Gemini Xrossband RX": [
+   "elrs-c3-lr1121-td-v9",
+   "esp32-c3"
+  ],
+  "GEPRC Nano True Diversity 2.4GHz RX": [
+   "elrs-c3-2400-td-v1",
+   "esp32-c3"
+  ],
+  "GEPRC True Diversity 900MHz RX": [
+   "elrs-900-td",
+   "esp32"
+  ],
+  "Gemini C3 XrossBand PA 2.4/900 RX": [
+   "elrs-c3-lr1121-td-v10",
+   "esp32-c3"
+  ],
+  "Generic C3 LR1121 2.4/900 PWM RX": [
+   "elrs-c3-lr1121-pwm",
+   "esp32-c3"
+  ],
+  "Generic ESP32 2.4Ghz Franken RX": [
+   "elrs-frank-2400",
+   "esp32"
+  ],
+  "Generic ESP32 2.4Ghz Rx and VTx": [
+   "elrs-2400-whoop-rx-vtx",
+   "esp32"
+  ],
+  "Generic ESP32 PWM Vario 2.4Ghz RX": [
+   "elrs-vario-2400-v1",
+   "esp32"
+  ],
+  "Generic ESP32 True Diversity 16xPWM 2.4Ghz RX ": [
+   "elrs-2400-td-pwm-16",
+   "esp32"
+  ],
+  "Generic ESP32 True Diversity 16xPWM 900MHz RX ": [
+   "elrs-900-td-pwm-16",
+   "esp32"
+  ],
+  "Generic ESP32 True Diversity 2.4Ghz RX and VTx": [
+   "elrs-2400-td-vtx",
+   "esp32"
+  ],
+  "Generic ESP32 True Diversity 900MHz RX": [
+   "elrs-900-td",
+   "esp32"
+  ],
+  "Generic ESP32 True Diversity PA 14xPWM 2.4Ghz RX ": [
+   "elrs-2400-td-pa-pwm-14-v2",
+   "esp32"
+  ],
+  "Generic ESP32 True Diversity PA 2.4Ghz RX and VTx": [
+   "elrs-2400-td-pa-vtx",
+   "esp32"
+  ],
+  "Generic ESP32C3 2.4Ghz PA RX": [
+   "elrs-c3-2400-pa-v1",
+   "esp32-c3"
+  ],
+  "Generic ESP32C3 2.4Ghz RX": [
+   "elrs-c3-2400-v2",
+   "esp32-c3"
+  ],
+  "Generic ESP32C3 PWM 2.4Ghz RX": [
+   "elrs-c3-2400-pwm",
+   "esp32-c3"
+  ],
+  "Generic ESP32C3 True Diversity 2.4Ghz RX": [
+   "elrs-c3-2400-td-v1",
+   "esp32-c3"
+  ],
+  "Generic ESP8285 5xPWM 2.4Ghz RX": [
+   "elrs-2400-pwmp5-v1",
+   "esp8285"
+  ],
+  "Generic ESP8285 Diversity PA 2.4Ghz RX": [
+   "elrs-2400-div-pa-v2",
+   "esp8285"
+  ],
+  "Generic ESP8285 RGB + PA 2.4Ghz RX": [
+   "elrs-2400-pa-rgb",
+   "esp8285"
+  ],
+  "Generic ESP8285 SX127x with PWM 900MHz RX": [
+   "elrs-900-pwmp",
+   "esp8285"
+  ],
+  "HDZero 2.4GHz AIO RX": [
+   "elrs-c3-2400-v2",
+   "esp32-c3"
+  ],
+  "HDZero Halo FC 2.4GHz Gemini RX": [
+   "elrs-c3-2400-td-v2",
+   "esp32-c3"
+  ],
+  "HGLRC C3 900/2400 Dual Band PRO RX": [
+   "elrs-c3-lr1121-td-v11",
+   "esp32-c3"
+  ],
+  "HGLRC Gemini 900M RX": [
+   "elrs-900-td",
+   "esp32"
+  ],
+  "HappyModel AIO 2.4GHz RX+VTX": [
+   "elrs-2400-whoop-rx-vtx",
+   "esp32"
+  ],
+  "HappyModel EPW5 2.4GHz PWM RX": [
+   "elrs-2400-pwmp5-v1",
+   "esp8285"
+  ],
+  "HappyModel EPW6 PWM RX": [
+   "elrs-900-pwmp",
+   "esp8285"
+  ],
+  "HappyModel ES900 Dual RX": [
+   "elrs-900-td",
+   "esp32"
+  ],
+  "HelloRadio HR7E 2.4GHz Diversity+7xPWM RX": [
+   "elrs-helloradio-hr7e",
+   "esp32"
+  ],
+  "HelloRadio HR8E 2.4GHz Diversity+8xPWM RX": [
+   "elrs-helloradio-hr8e",
+   "esp32"
+  ],
+  "Jumper AION P6 2.4GHz RX": [
+   "elrs-c3-2400-pwm",
+   "esp32-c3"
+  ],
+  "Konex FC 2.4GHz RX": [
+   "elrs-c3-2400-v2",
+   "esp32-c3"
+  ],
+  "MATEK R24-D 2.4GHz RX": [
+   "elrs-2400-div-pa-v2",
+   "esp8285"
+  ],
+  "MATEK R24-P PWM 2.4GHz RX": [
+   "elrs-2400-pwmp5-v1",
+   "esp8285"
+  ],
+  "NamimnoRC Flash 100mW Diversity 2.4GHz RX": [
+   "elrs-namimno-flash-2400-pa",
+   "esp8285"
+  ],
+  "NamimnoRC Voyager ESP 900MHz RX": [
+   "elrs-namimno-voyager-900",
+   "esp8285"
+  ],
+  "NewBeeDrone 2.4Ghz RaceSpec RX": [
+   "elrs-c3-2400-v2",
+   "esp32-c3"
+  ],
+  "NewBeeDrone Diversity 2.4Ghz RX": [
+   "elrs-2400-div-pa-v2",
+   "esp8285"
+  ],
+  "NewBeeDrone Diversity 2.4Ghz RX V2": [
+   "elrs-c3-2400-pa-v2",
+   "esp32-c3"
+  ],
+  "NewBeeDrone Quadversity Receiver 2.4GHz RX": [
+   "elrs-c3-2400-pa-v2",
+   "esp32-c3"
+  ],
+  "OMPHOBBY OFS3+ 2.4 GHz RX": [
+   "elrs-c3-2400-v2",
+   "esp32-c3"
+  ],
+  "ORBIT 2.4Ghz Nano RX": [
+   "elrs-c3-2400-pa-v1",
+   "esp32-c3"
+  ],
+  "Oxbot 2.4GHz RX": [
+   "elrs-c3-2400-pa-v1",
+   "esp32-c3"
+  ],
+  "RadioMaster ER12 Dual Band True Diversity RX": [
+   "elrs-radiomaster-er-series",
+   "esp32-s3"
+  ],
+  "RadioMaster ER16 Dual Band True Diversity RX": [
+   "elrs-radiomaster-er-series",
+   "esp32-s3"
+  ],
+  "RadioMaster ER3C-i 2.4GHz PWM RX": [
+   "elrs-2400-pwmp5-v1",
+   "esp8285"
+  ],
+  "RadioMaster ER4 2.4GHz PWM RX": [
+   "elrs-2400-pwmp5-v2",
+   "esp8285"
+  ],
+  "RadioMaster ER5A/C 2.4GHz PWM RX": [
+   "elrs-2400-pwmp5-v1",
+   "esp8285"
+  ],
+  "RadioMaster ER5A/C V2 2.4GHz PWM RX": [
+   "elrs-2400-pwmp5-v1",
+   "esp8285"
+  ],
+  "RadioMaster ER5C-i 2.4GHz PWM RX": [
+   "elrs-2400-pwmp5-v1",
+   "esp8285"
+  ],
+  "RadioMaster ER6 2.4GHz Diversity+6xPWM RX": [
+   "elrs-radiomaster-2400-er8g-v1",
+   "esp32"
+  ],
+  "RadioMaster ER6-G 2.4GHz Diversity+6xPWM RX": [
+   "elrs-vario-2400-v2",
+   "esp32"
+  ],
+  "RadioMaster ER6-GV 2.4GHz Diversity+6xPWM+Vario RX": [
+   "elrs-vario-2400-v2",
+   "esp32"
+  ],
+  "RadioMaster ER8 2.4GHz Diversity+8xPWM RX": [
+   "elrs-radiomaster-2400-er8g-v2",
+   "esp32"
+  ],
+  "RadioMaster ER8-G 2.4GHz Diversity+8xPWM RX": [
+   "elrs-radiomaster-2400-er8g-v3",
+   "esp32"
+  ],
+  "RadioMaster ER8-GV 2.4GHz Diversity+8xPWM+Vario RX": [
+   "elrs-radiomaster-2400-er8g-v3",
+   "esp32"
+  ],
+  "RadioMaster RP3 Diversity 2.4GHz RX": [
+   "elrs-2400-div-pa-v1",
+   "esp8285"
+  ],
+  "RadioMaster RP4TD-M True Diversity 2.4GHz RX": [
+   "elrs-2400-td",
+   "esp32"
+  ],
+  "Radiomaster Nexus-XR True Diversity 2.4GHz RX": [
+   "elrs-2400-td",
+   "esp32"
+  ],
+  "Radiomaster RP3-H Diversity 2.4GHz RX": [
+   "elrs-2400-div-pa-v3",
+   "esp8285"
+  ],
+  "SEQURE 900MHz Dual RX": [
+   "elrs-900-td",
+   "esp32"
+  ],
+  "SPRacing RXG1 Gyro 2.4GHz RX/GYRO (S3)": [
+   "elrs-spracing-rxg1-gyro-2400-rx-gyro",
+   "esp32-s3"
+  ],
+  "SPRacing RXN1 Gyro 2.4GHz RX/GYRO/IR (D4)": [
+   "elrs-spracing-rxn1-gyro-2400-rx-gyro-ir-d4",
+   "esp32"
+  ],
+  "STPHOBBY Nano 2.4G RX": [
+   "elrs-c3-2400-pa-v3",
+   "esp32-c3"
+  ],
+  "SkyGuy Max 2.4GHz RX": [
+   "elrs-c3-2400-pa-1000mw",
+   "esp32-c3"
+  ],
+  "SkyGuy Nano 2.4GHz RX": [
+   "elrs-c3-2400-pa-v1",
+   "esp32-c3"
+  ],
+  "Skystars SS24D 2.4GHz RX": [
+   "elrs-2400-div-pa-v2",
+   "esp8285"
+  ],
+  "Spedix 2.4GHz RX": [
+   "elrs-c3-2400-v3",
+   "esp32-c3"
+  ],
+  "Speedybee AIO 2.4Ghz RX": [
+   "elrs-c3-2400-pa-v1",
+   "esp32-c3"
+  ],
+  "THOBBY 2.4GHz RX": [
+   "elrs-c3-2400-v3",
+   "esp32-c3"
+  ],
+  "TuneRC 2.4G nano PA RX": [
+   "elrs-c3-2400-pa-v5",
+   "esp32-c3"
+  ],
+  "UPOINT Nano 2.4G RX": [
+   "elrs-c3-2400-pa-v6",
+   "esp32-c3"
+  ],
+  "UPOINT Nano 900M RX": [
+   "elrs-c3-900",
+   "esp32-c3"
+  ],
+  "iFlight 2.4GHz RX": [
+   "elrs-iflight-2400",
+   "esp8285"
+  ]
+ },
+ "left_out": {
+  "Generic ESP8285 6xPWM 2.4Ghz RX": "no radio busy pin",
+  "Generic ESP8285 7xPWM 2.4Ghz RX": "no radio chip select or reset",
+  "HappyModel EPW6 2.4GHz PWM RX": "no radio busy pin",
+  "RadioMaster Bandit Nano/Micro 900MHz RX": "power set by power_control 3 (a DAC), not by the radio"
+ }
+}

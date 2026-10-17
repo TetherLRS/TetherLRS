@@ -46,3 +46,6 @@
 [submodule "firmware/mLRS/modules/dronecan/DSDL"]
 	path = firmware/mLRS/modules/dronecan/DSDL
 	url = https://github.com/dronecan/DSDL.git
+[submodule "firmware/elrs-targets"]
+	path = firmware/elrs-targets
+	url = https://github.com/ExpressLRS/targets.git

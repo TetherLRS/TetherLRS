@@ -12,6 +12,7 @@ import sys
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 SRC = os.path.join(ROOT, 'platformio.ini')
+GEN = os.path.join(ROOT, 'platformio-tetherlrs-elrs.ini')  # tools/tetherlrs_gen_elrs.py
 OUT = os.path.join(ROOT, 'platformio-tetherlrs.ini')
 FAMILIES = ('esp82xx', 'esp32', 'esp32c3', 'esp32s3')
 
@@ -21,6 +22,9 @@ def load():
     cp.optionxform = str
     with open(SRC, encoding='utf-8') as f:
         cp.read_file(f)
+    if os.path.exists(GEN):
+        with open(GEN, encoding='utf-8') as f:
+            cp.read_file(f)
     return cp
 
 

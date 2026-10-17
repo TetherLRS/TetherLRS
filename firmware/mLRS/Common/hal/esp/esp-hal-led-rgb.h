@@ -18,7 +18,11 @@
 bool leds_initialized = false; // Begin() aborts if called again, since the rmt driver is installed already
 uint8_t ledCurrentColorState;;
 
+#ifdef ESP8266 // no RMT: bit-banged, a pixel takes some 30 us with interrupts off
+NeoPixelBus<NeoGrbFeature, NeoEsp8266BitBangWs2812xMethod> ledRGB(LED_RGB_PIXEL_NUM, LED_RGB);
+#else
 NeoPixelBus<NeoGrbFeature, NeoEsp32Rmt0Ws2812xMethod> ledRGB(LED_RGB_PIXEL_NUM, LED_RGB);
+#endif
 
 void leds_init(void) 
 { 

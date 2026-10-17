@@ -1,16 +1,20 @@
 #!/usr/bin/env python
 '''
-TetherLRS: writes tool/src/lib/firmware/elrs-products.json from ExpressLRS's targets.json
-    python tools/tetherlrs_elrs_products.py <ExpressLRS targets clone>/targets.json
+TetherLRS: writes tool/src/lib/firmware/elrs-products.json from ExpressLRS's targets
+    python tools/tetherlrs_elrs_products.py [<ExpressLRS targets clone>] [--check]
 For each ExpressLRS product name (what an ExpressLRS image carries), the env suffix and the platform: its own hal
-here when there is one, else its hardware layout as a slug ("Generic 2400 True Diversity PA" -> generic-2400-td-pa).
+here when there is one, else its hardware layout as a slug ("Generic 2400 True Diversity PA" -> generic-2400-td-pa)
+when an env has that name, else the build tools/tetherlrs_gen_elrs.py generated for it (tools/elrs-gen.json).
+Run tetherlrs_gen_elrs.py first. --check only says whether the file is up to date (for CI).
 '''
 import json
 import os
+import re
 import sys
 
-SRC = sys.argv[1]
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'tool', 'src', 'lib', 'firmware', 'elrs-products.json')
+ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+OUT = os.path.join(ROOT, '..', 'tool', 'src', 'lib', 'firmware', 'elrs-products.json')
+GENMAP = os.path.join(ROOT, 'tools', 'elrs-gen.json')
 
 
 # ExpressLRS products with a hal of their own here: the env suffix, past the generic layout
@@ -27,6 +31,13 @@ OWN_HAL = {
     'RadioMaster XR4 Dual Band True Diversity RX': 'radiomaster-xr4',
     'Flysky PR02 2.4GHz RX': 'flysky-pr02-2400-td-esp32s3',
     'RadioMaster RP4TD True Diversity 2.4GHz RX': 'radiomaster-rp4td-2400',
+    # external Tx modules, ground radios on their USB-C (tx-<suffix> envs)
+    'BETAFPV 2.4GHz 1W Micro TX': 'betafpv-micro-1w-2400',
+    'RadioMaster Bandit 900MHz TX': 'radiomaster-bandit-900',
+    'RadioMaster Bandit Micro 900MHz TX': 'radiomaster-bandit-micro-900',
+    'RadioMaster Bandit Nano 900MHz TX': 'radiomaster-bandit-micro-900',  # the Bandit Micro's layout
+    'RadioMaster Ranger 2.4GHz TX': 'radiomaster-ranger-2400',
+    'RadioMaster Nomad 2.4/900 TX': 'radiomaster-nomad',
 }
 
 
@@ -46,32 +57,62 @@ def slug(layout):
 BAND_SPLIT = ('generic-c3-lr1121', 'generic-lr1121-td')
 
 
-def band_suffix(o):
+def band_suffix(o, targets):
     kind = 'TX' if o.get('firmware', '').endswith('_TX') else 'RX'
-    with open(os.path.join(os.path.dirname(SRC), kind, o['layout_file']), encoding='utf-8') as f:
+    with open(os.path.join(targets, kind, o['layout_file']), encoding='utf-8') as f:
         hw = {**json.load(f), **o.get('overlay', {})}
     has900, has24 = hw.get('power_values') is not None, hw.get('power_values_dual') is not None
     return '-2400' if has24 and not has900 else '-900' if has900 and not has24 else ''
 
 
-def walk(o, out):
-    if isinstance(o, dict):
-        if 'product_name' in o and 'layout_file' in o:
-            name = o['product_name']
-            env = OWN_HAL.get(name, slug(o['layout_file']))
-            if env in BAND_SPLIT: env += band_suffix(o)
-            out[name] = [env, o.get('platform', '')]
-            return
-        for v in o.values():
-            walk(v, out)
+def envs():
+    text = ''
+    for ini in ('platformio.ini', 'platformio-tetherlrs.ini'):
+        with open(os.path.join(ROOT, ini), encoding='utf-8') as f:
+            text += f.read()
+    return set(re.findall(r'^\[env:(?:rx|tx)-([^\]]+)\]', text, re.M))
 
 
-with open(SRC, encoding='utf-8') as f:
-    data = json.load(f)
-products = {}
-walk(data, products)
-products.update(SEEN_ONLY_ON_UNITS)
-with open(OUT, 'w', encoding='utf-8', newline='\n') as f:
-    rows = [f'{json.dumps(k)}:{json.dumps(v, separators=(",", ":"))}' for k, v in sorted(products.items())]
-    f.write('{\n' + ',\n'.join(rows) + '\n}\n')  # one product a line
-print(OUT, len(products), 'products')
+def products(targets):
+    with open(os.path.join(targets, 'targets.json'), encoding='utf-8') as f:
+        data = json.load(f)
+    gen = {}
+    if os.path.exists(GENMAP):
+        with open(GENMAP, encoding='utf-8') as f:
+            gen = json.load(f)['products']
+    have = envs()
+    out = {}
+
+    def walk(o):
+        if isinstance(o, dict):
+            if 'product_name' in o and 'layout_file' in o:
+                name = o['product_name']
+                env = OWN_HAL.get(name, slug(o['layout_file']))
+                if env in BAND_SPLIT:
+                    env += band_suffix(o, targets)
+                if env not in have and name in gen:
+                    env = gen[name][0]
+                out[name] = [env, o.get('platform', '')]
+                return
+            for v in o.values():
+                walk(v)
+    walk(data)
+    out.update(SEEN_ONLY_ON_UNITS)
+    rows = [f'{json.dumps(k)}:{json.dumps(v, separators=(",", ":"))}' for k, v in sorted(out.items())]
+    return '{\n' + ',\n'.join(rows) + '\n}\n', len(out)  # one product a line
+
+
+if __name__ == '__main__':
+    arg = next((a for a in sys.argv[1:] if not a.startswith('--')), os.path.join(ROOT, 'elrs-targets'))
+    targets = os.path.dirname(arg) if arg.endswith('.json') else arg
+    text, n = products(targets)
+    if '--check' in sys.argv:
+        current = open(OUT, encoding='utf-8').read() if os.path.exists(OUT) else ''
+        if current != text:
+            print('elrs-products.json is out of date: run python tools/tetherlrs_elrs_products.py')
+            sys.exit(1)
+        print('elrs-products.json up to date')
+        sys.exit(0)
+    with open(OUT, 'w', encoding='utf-8', newline='\n') as f:
+        f.write(text)
+    print(OUT, n, 'products')
