@@ -2,7 +2,7 @@
 # target; on a v* tag publishes them as a GitHub Release with manifest.json for the tool (env, chip, offsets, sizes,
 # sha256), and the web app with the firmware on GitHub Pages. Per ESP env: <env>.bin for the ELRS web page or an
 # update over TetherLRS, <env>-full.bin for the ESP ROM bootloader at 0x0. Per STM32 target: a .hex, or an .elrs for R9
-# boards with the ExpressLRS bootloader. A tag with -RC makes a pre-release.
+# boards with the ExpressLRS bootloader. An -RC tag is a normal release, so the repository page shows it.
 name: TetherLRS firmware
 
 on:
@@ -168,7 +168,6 @@ jobs:
         with:
           files: rel/*
           generate_release_notes: true
-          prerelease: ${{ contains(github.ref_name, '-RC') }}
       - uses: actions/upload-artifact@v4
         with:
           name: release-files
@@ -240,4 +239,3 @@ jobs:
         with:
           projectPath: tool
           tagName: ${{ github.ref_name }}
-          prerelease: ${{ contains(github.ref_name, '-RC') }}
