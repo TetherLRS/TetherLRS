@@ -53,7 +53,8 @@ class Radios {
   env = $state('');
   busy = $state(false); // a job on the selected radio (identify, back up, flash): the others wait
   inRom = $state(false); // the selected radio sits in its ROM bootloader, the session open
-  chip = $state('');
+  chip = $state(''); // as esptool describes it, e.g. ESP8285H16
+  family = $state(''); // ESP8266, ESP32, ESP32-C3, ESP32-S3
   log = $state<string[]>([]);
   progress = $state(0);
   phrase = $state(''); // the bind phrase for the next flash: kept while the app runs, never stored
@@ -266,6 +267,7 @@ class Radios {
       this.session = undefined;
       this.inRom = false;
       this.chip = '';
+      this.family = '';
       const started = await s.close(true);
       this.cb().log(started ? 'it runs its firmware again' : 'power it off and on to start its firmware');
     });
@@ -287,6 +289,7 @@ class Radios {
     }
     this.inRom = true;
     this.chip = this.session.chip;
+    this.family = this.session.chipName;
     this.cb().log(`${this.chip}, ${this.session.flashSize / 1048576} MB of flash (id ${this.session.flashId.toString(16)}); reading its firmware`);
     let found: Awaited<ReturnType<RomSession['identify']>>;
     try {
@@ -380,6 +383,9 @@ class Radios {
     if (!r || !s) return;
     this.progress = 0;
     await this.run(async () => {
+      if (address !== 0 && s.chipName === 'ESP8266') {
+        throw new Error('An ESP8266 or ESP8285 keeps its application right behind its boot loader: write a whole image, from the start.');
+      }
       if (address + data.length > s.flashSize) {
         throw new Error(`The file has ${data.length} bytes: from 0x${address.toString(16)} they do not fit in its ${s.flashSize / 1048576} MB.`);
       }
@@ -389,6 +395,8 @@ class Radios {
       const started = await s.close(true);
       this.session = undefined;
       this.inRom = false;
+      this.chip = '';
+      this.family = '';
       forget(r.entry); // what runs there now is not known: Identify tells
       r.found = undefined;
       this.cb().log(started ? 'done, it starts what was written' : 'done: power it off and on to start it');
@@ -425,6 +433,7 @@ class Radios {
     this.session = undefined;
     this.inRom = false;
     this.chip = '';
+    this.family = '';
     if (s) await s.close(false);
   }
 }

@@ -34,6 +34,10 @@
   const fcClosed = $derived(sel?.entry.kind === 'fc' && sel.entry.passthrough === undefined);
   let logBox = $state<HTMLPreElement>();
   let writeAt = $state(0);
+  $effect(() => {
+    void radios.family; // another radio: from the start again, the one place right on every chip
+    writeAt = 0;
+  });
   let fileInput = $state<HTMLInputElement>();
 
   $effect(() => {
@@ -223,7 +227,7 @@
           <div class="line">
             <select class="fit" bind:value={writeAt} disabled={!radios.inRom || radios.busy} aria-label="Where in its flash">
               <option value={0}>Whole flash or image</option>
-              {#if radios.chip !== 'ESP8266'}<option value={0x10000}>Application only, 0x10000</option>{/if}
+              {#if radios.family !== 'ESP8266'}<option value={0x10000}>Application only, 0x10000</option>{/if}
             </select>
             <button class="btn" onclick={() => fileInput?.click()} disabled={!radios.inRom || radios.busy}>Write a file…</button>
             <input type="file" accept=".bin,application/octet-stream" bind:this={fileInput} onchange={writeFile} hidden />

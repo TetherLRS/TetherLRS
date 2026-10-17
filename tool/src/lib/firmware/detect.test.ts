@@ -39,6 +39,11 @@ describe('what a flash holds', () => {
     expect(parseStrings(bytes(0x400, [0x200, 'TetherLRS:Rx:BAYCK UR500:v1.0:']))?.version).toBe('v1.0');
   });
 
+  it('a TetherLRS CLI line read before its marker settles nothing', () => {
+    expect(parseStrings(bytes(0x400, [0x100, '  Tx: GENERIC 2400, v1.0-RC1']), false)).toBeUndefined();
+    expect(parseStrings(bytes(0x400, [0x100, '  Tx: GENERIC 2400, v1.0-RC1'], [0x300, 'TetherLRS:Tx:GENERIC 2400:v1.0-RC1:2.4 GHz,:']), false)).toMatchObject({ family: 'TetherLRS' });
+  });
+
   it('mLRS by its CLI version line', () => {
     expect(parseStrings(bytes(0x400, [0x300, '  Tx: RM Ranger 2.4G, v1.3.07']))).toEqual({ family: 'mLRS', role: 'Tx', name: 'RM Ranger 2.4G', version: 'v1.3.07' });
   });
