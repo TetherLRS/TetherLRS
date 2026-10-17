@@ -1227,7 +1227,7 @@ def mlrs_copy_all_hex_etc():
     create_clean_dir(firmwarepath)
     for path, subdirs, files in os.walk(MLRS_BUILD_DIR):
         for file in files:
-            if 'firmware' in path:
+            if os.path.relpath(path, MLRS_BUILD_DIR).split(os.sep)[0] == 'firmware': # TetherLRS: the tree itself sits in firmware/
                 continue
             if os.path.splitext(file)[1] == '.hex':
                 shutil.copy(os.path.join(path,file), os.path.join(firmwarepath,file))
