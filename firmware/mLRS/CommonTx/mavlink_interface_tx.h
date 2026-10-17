@@ -29,7 +29,6 @@ extern bool link_task_free(void);
 extern tSetup Setup;
 extern tGlobalConfig Config;
 extern tSerialPorts Serials;
-extern tTxCrsf crsf;
 extern tStats stats;
 extern tTxTasks tasks;
 
@@ -42,22 +41,17 @@ extern tTxTasks tasks;
 
 
 // keeps info on the vehicle
-// currently only used to send vehicle state in mBridge info
 // we react only to heartbeats from ArduPilot (not yet PX4), so whenever sysid > 0 we can assume ArduPilot
 class tTxVehicle
 {
   public:
     void Init(void);
-    void Do(void);
 
     uint8_t State(void);
-    bool RequestParamBattMonitor(void); // to tell parent class to send respective message
-    bool RequestParamBattCapacity(void);
 
     bool is_seen_and_msg_is_for_autopilot(fmav_message_t* const msg);
     void handle_heartbeat(fmav_message_t* const msg, fmav_heartbeat_t* const payload);
     void handle_extended_sys_state(fmav_extended_sys_state_t* const payload);
-    void handle_param_value(fmav_message_t* const msg);
 
     uint8_t sysid; // 0 indicates autopilot not detected, indicates data is invalid
   private:
@@ -65,18 +59,13 @@ class tTxVehicle
     uint8_t is_flying;
     uint8_t type;
     uint8_t flight_mode;
-
-    // to request BATT_CAPACITY
-    int8_t param_request_cnt; // <= 0 means off
-    uint32_t param_request_tlast_ms;
-    bool trigger_param_request;
 };
 
 
 class tTxMavlink
 {
   public:
-    void Init(tSerialBase* const _crsfbridge);
+    void Init(void);
     void Do(void);
     uint8_t VehicleState(void);
     void FrameLost(void);
@@ -92,7 +81,6 @@ class tTxMavlink
     void send_msg_serial_out(void);
 
     void send_radio_status(void); // to serial_out
-    void send_param_request_read(const char* const requested_param_id); // to link_out
 
     uint16_t task_pending_mask;
     uint32_t task_pending_delay_ms;
@@ -150,38 +138,27 @@ class tTxMavlink
 };
 
 
-void tTxMavlink::Init(tSerialBase* const _crsfbridge)
+void tTxMavlink::Init(void)
 {
-    // if ChannelsSource = MBRIDGE:
-    //   SerialPort = SERIAL or SERIAL2 => router with ser = mbridge & ser2 = serial/serial2
-    //   SerialPort = MBRIDGE           => no router, only ser = mbridge (ser2 = null)
-    // => ser2 != nullptr indicates that router is to be used
+    // ser2 != nullptr indicates that router is to be used
     //
-    // 2\1      | SERIAL            | WBRIDGE/SERIAL2   | COM               | CRSF
-    // ----------------------------------------------------------------------------------------
-    // NONE     | ser = serial      | ser = serial2     | ser = com         | ser = crsfbridge
-    //          | ser2 = null       | ser2 = null       | ser2 = null       | ser2 = null
-    // ----------------------------------------------------------------------------------------
-    // SERIAL   | should not        | ser = serial2     | should not        | ser = crsfbridge
-    //          | happen            | ser2 = serial     | happen            | ser2 = serial
-    // ----------------------------------------------------------------------------------------
-    // WBRIDGE/ | ser = serial      | should not        | ser = com         | ser = crsfbridge
-    // SERIAL2  | ser2 = serial2    | happen            | ser2 = serial2    | ser2 = serial2
-    // ----------------------------------------------------------------------------------------
-    // CRSF     | ser = serial      | ser = serial2     | ser = com         | should not
-    //          | ser2 = crsfbridge | ser2 = crsfbridge | ser2 = crsfbridge | happen
-    // ----------------------------------------------------------------------------------------
+    // 2      | SERIAL            | WBRIDGE/SERIAL2   | COM
+    // ------------------------------------------------------------------
+    // NONE     | ser = serial      | ser = serial2     | ser = com
+    //          | ser2 = null       | ser2 = null       | ser2 = null
+    // ------------------------------------------------------------------
+    // SERIAL   | should not        | ser = serial2     | should not
+    //          | happen            | ser2 = serial     | happen
+    // ------------------------------------------------------------------
+    // WBRIDGE/ | ser = serial      | should not        | ser = com
+    // SERIAL2  | ser2 = serial2    | happen            | ser2 = serial2
+    // ------------------------------------------------------------------
     switch (Setup.Tx[Config.ConfigId].SerialPort) {
     case TX_SERIAL_PORT_SERIAL:
     case TX_SERIAL_PORT_SERIAL2:
     case TX_SERIAL_PORT_WIRELESS_BRIDGE:
     case TX_SERIAL_PORT_COM:
         ser = Serials.serial; // already sorted out in serialports.Init()
-//        ser2 = (Setup.Tx[Config.ConfigId].ChannelsSource == CHANNEL_SOURCE_MBRIDGE) ? _crsfbridge : nullptr;
-        ser2 = nullptr;
-        break;
-    case TX_SERIAL_PORT_CRSF_BRIDGE:
-        ser = _crsfbridge;
         ser2 = nullptr;
         break;
     default:
@@ -193,9 +170,6 @@ void tTxMavlink::Init(tSerialBase* const _crsfbridge)
     case TX_SERIAL_PORT2_SERIAL2:
     case TX_SERIAL_PORT2_WIRELESS_BRIDGE:
         ser2 = Serials.serial2; // already sorted out in serialports.Init(), can be nullptr
-        break;
-    case TX_SERIAL_PORT2_CRSF_BRIDGE: // setup sanitize() must prevent that CRSF_BRIDGE is set for both ports
-        ser2 = _crsfbridge;
         break;
     }
 
@@ -277,16 +251,10 @@ void tTxMavlink::Do(void)
         radio_status_tlast_ms = tnow_ms;
     }
 
-    vehicle.Do();
-
     if (inject_radio_status) { // && serial.tx_is_empty()) {
         inject_radio_status = false;
         send_radio_status();
         return; // only one per loop
-    }
-
-    if (vehicle.RequestParamBattCapacity()) {
-        send_param_request_read("BATT_CAPACITY"); // this goes to link_out, not serial_out
     }
 
 #ifdef USE_FEATURE_MAVLINK_COMPONENT
@@ -417,9 +385,6 @@ if (!do_router()) {
 
             fmav_frame_buf_to_msg(&msg_buf, &result, buf_link_in); // requires RESULT_OK
 
-            // allow CRSF to capture it
-            crsf.TelemetryHandleMavlinkMsg(&msg_buf);
-
             // we also want to capture it to extract some info
             handle_msg_serial_out(&msg_buf);
 
@@ -517,10 +482,6 @@ void tTxMavlink::handle_msg_serial_out(fmav_message_t* const msg)
         fmav_msg_extended_sys_state_decode(&payload, msg);
         vehicle.handle_extended_sys_state(&payload);
         }break;
-    case FASTMAVLINK_MSG_ID_PARAM_VALUE: {
-        // this is special, handling is by vehicle class, but needs to be related to passthrough class
-        vehicle.handle_param_value(msg);
-        }break;
     }
 
     // calculate MAVLink packet link quality from seq field, for stream from autopilot only
@@ -561,28 +522,6 @@ uint8_t rssi, remrssi, txbuf, noise;
         &status_serial_out);
 
     send_msg_serial_out();
-}
-
-
-void tTxMavlink::send_param_request_read(const char* const requested_param_id)
-{
-char param_id[16+1];
-
-    strbufstrcpy(param_id, requested_param_id, 16);
-
-    // goes to link out send_msg_serial_out();
-
-    fmav_msg_param_request_read_pack(
-        &msg_buf,
-        RADIO_LINK_SYSTEM_ID,
-        MAV_COMP_ID_TELEMETRY_RADIO,
-        vehicle.sysid, MAV_COMP_ID_AUTOPILOT1,
-        param_id,
-        -1,
-        //uint8_t target_system, uint8_t target_component, const char* param_id, int16_t param_index,
-        &status_serial_out);
-
-    send_msg_fifo_link_out(&msg_buf); // goes to link out
 }
 
 
@@ -956,10 +895,6 @@ void tTxVehicle::Init(void)
     is_flying = UINT8_MAX;
     type = UINT8_MAX;
     flight_mode = UINT8_MAX;
-
-    param_request_cnt = 10; // <= 0 means off
-    param_request_tlast_ms = 0;
-    trigger_param_request = false;
 }
 
 
@@ -968,74 +903,6 @@ uint8_t tTxVehicle::State(void)
     if (is_armed == UINT8_MAX) return UINT8_MAX;
     if (is_armed == 1 && is_flying == 1) return 2;
     return is_armed;
-}
-
-
-void tTxVehicle::Do(void)
-{
-    uint32_t tnow_ms = millis32(); // we need to get fresh time, since a HEARTBEAT might be received in the main Do loop
-
-    // we want to start requests only on first connection
-    // this is achieved by checking for sysid, which is valid only if the autopilot was seen
-    // request are stopped when a response is obtained
-    // TODO: should we add a counter to limit number of tries?
-
-    if (!sysid) {
-        param_request_tlast_ms = tnow_ms + 1563; // first request in ca 1.5 sec after receive of first heartbeat
-    }
-
-    if (!sysid) return; // from here on assume we have seen the vehicle's heartbeat
-
-    // we want to request for PARAM BATT_CAPACITY when
-    // sysid > 0 (which means we see a fc) and
-    // param_request_cnt > 0 (which means we don't have gotten that value yet)
-
-    if (param_request_cnt > 0) {
-        if ((tnow_ms - param_request_tlast_ms) > 1563) {
-            param_request_tlast_ms = tnow_ms;
-            param_request_cnt--;
-            trigger_param_request = true;
-        }
-    }
-}
-
-
-bool tTxVehicle::RequestParamBattCapacity(void)
-{
-    if (trigger_param_request) {
-        trigger_param_request = false;
-//dbg.puts("\nsend param request");
-        return true;
-    }
-    return false;
-}
-
-
-void tTxVehicle::handle_param_value(fmav_message_t* const msg)
-{
-    // we have checked already that msg comes from our autopilot
-    if (param_request_cnt < 0) return; // we do have it already, so let's save time and not process again
-
-    fmav_param_value_t payload;
-    fmav_msg_param_value_decode(&payload, msg);
-
-    // note: ArduPilot converts from/to float
-    // we should detect AUTOPILOT_VERSION.capabilities,
-    // but for AP we know it's MAV_PROTOCOL_CAPABILITY_PARAM_ENCODE_C_CAST
-
-    // note: 'BATT_CAPACITY' is shorter than 16 chars, so we don't need to worry using str
-    if (!strcmp(payload.param_id, "BATT_CAPACITY")) {
-        uint32_t batt_capacity = payload.param_value;
-
-        // allow the user to set BATT_CAPACITY to 0 to disable sending it to yaapu
-        if (batt_capacity > 0) {
-            // communicate to the passthrough class
-            crsf.PassthroughSetBattery0Capacity(batt_capacity);
-        }
-
-        param_request_cnt = -1; // <= 0 means off
-//dbg.puts("\nparam batt cap received");
-    }
 }
 
 
@@ -1077,7 +944,7 @@ sx_serial:
   serial2 o ---\:                      :
   wbridge o --- o <=====> transp. o --\:
   com     o ---/          msp     o -- o  sx_serial  ---> sx_serial.available() ---> transmit ~~~>
-  mbridge o --/           mavlink o --/                   sx_serial.putc()
+                          mavlink o --/                   sx_serial.putc()
                                                      <--- sx_serial.getc()      <--- receive <~~~
 
 mavlink (without router):
@@ -1087,7 +954,6 @@ mavlink (without router):
   serial2 o ---\:
   wbridge o --- o <====> o mavlink  ---> fifo_link_out ---> available(), getc() ---> sx_serial
   com     o ---/                    <--- fifo_link_in  <--- getc()              <---
-  mbridge o --/
 
   Do:
     ser->available()  --->  parse&check  --->  msg_to_buf(X)

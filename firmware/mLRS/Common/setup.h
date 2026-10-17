@@ -174,30 +174,8 @@ void setup_configure_metadata(void)
     SetupMetaData.Tx_Diversity_allowed_mask = 0b00010; // antenna1, not editable
 #endif
 
-    // Tx ChannelSource: "none,crsf,in"
-#if defined DEVICE_HAS_JRPIN5 && defined USE_IN
-    SetupMetaData.Tx_ChannelsSource_allowed_mask = 0b111; // none, crsf, in
-#elif defined DEVICE_HAS_JRPIN5
-    SetupMetaData.Tx_ChannelsSource_allowed_mask = 0b011; // none, crsf
-#elif defined USE_IN
-    SetupMetaData.Tx_ChannelsSource_allowed_mask = 0b101; // none, in
-#else
-    SetupMetaData.Tx_ChannelsSource_allowed_mask = 0b001; // none, not editable
-#endif
-
-    // Tx InMode: "sbus,sbus inv"
-#if defined DEVICE_HAS_IN || defined DEVICE_HAS_IN_ON_JRPIN5_RX || defined DEVICE_HAS_IN_ON_JRPIN5_TX
-    SetupMetaData.Tx_InMode_allowed_mask = 0b11; // all
-#elif defined DEVICE_HAS_IN_NORMAL
-    SetupMetaData.Tx_InMode_allowed_mask = 0b10; // sbus inv, not editable
-#elif defined DEVICE_HAS_IN_INVERTED
-    SetupMetaData.Tx_InMode_allowed_mask = 0b01; // sbus, not editable
-#else
-    SetupMetaData.Tx_InMode_allowed_mask = 0; // not available, do not display
-#endif
-
-    // Tx SerialPort: "serial,wbridge,serial2,com,crsf"
-    // Tx SerialPort2: "none,serial,wbridge,serial2,crsf"
+    // Tx SerialPort: "serial,wbridge,serial2,com"
+    // Tx SerialPort2: "none,serial,wbridge,serial2"
     SetupMetaData.Tx_SerialPort_allowed_mask = 0; // not available, do not display
     SetupMetaData.Tx_SerialPort2_allowed_mask = 0; // not available, do not display
 #ifdef USE_SERIAL
@@ -214,11 +192,6 @@ void setup_configure_metadata(void)
 #endif
 #ifdef USE_COM
     SetupMetaData.Tx_SerialPort_allowed_mask |= 0b01000; // add com
-#endif
-#ifdef DEVICE_HAS_JRPIN5
-    // we cannot work out all cases here, as it depends on actual serial port selections, so we here just do what we can do
-    SetupMetaData.Tx_SerialPort_allowed_mask |= 0b10000; // add crsfbridge
-//TODO    SetupMetaData.Tx_SerialPort2_allowed_mask |= 0b10000; // add crsfbridge
 #endif
 #if !((defined STM32G4 || defined ESP32) && defined USE_SERIAL && defined USE_SERIAL2)
     SetupMetaData.Tx_SerialPort2_allowed_mask = 0; // only for devices with a fast processor and two serial ports
@@ -537,11 +510,8 @@ if (!only_rx) {
     SANITIZE(Tx[config_id].Diversity, DIVERSITY_NUM, SETUP_TX_DIVERSITY, DIVERSITY_DEFAULT);
     TST_NOTALLOWED(Tx_Diversity_allowed_mask, Tx[config_id].Diversity, DIVERSITY_ANTENNA1);
 
-    SANITIZE(Tx[config_id].ChannelsSource, CHANNEL_SOURCE_NUM, SETUP_TX_CHANNELS_SOURCE, CHANNEL_SOURCE_NONE);
-    TST_NOTALLOWED(Tx_ChannelsSource_allowed_mask, Tx[config_id].ChannelsSource, CHANNEL_SOURCE_NONE);
-
-    SANITIZE(Tx[config_id].InMode, IN_CONFIG_NUM, SETUP_TX_IN_MODE, IN_CONFIG_SBUS);
-    TST_NOTALLOWED(Tx_InMode_allowed_mask, Tx[config_id].InMode, IN_CONFIG_SBUS);
+    Setup.Tx[config_id].ChannelsSource = 0; // no radio bay: no channels from a radio
+    Setup.Tx[config_id].InMode = 0;
 
     SANITIZE(Tx[config_id].SerialPort, TX_SERIAL_PORT_NUM, SETUP_TX_SERIAL_PORT, TX_SERIAL_PORT_SERIAL);
     TST_NOTALLOWED(Tx_SerialPort_allowed_mask, Tx[config_id].SerialPort, TX_SERIAL_PORT_SERIAL);
@@ -571,8 +541,6 @@ if (!only_rx) {
           (Setup.Tx[config_id].SerialPort2 == TX_SERIAL_PORT2_WIRELESS_BRIDGE)) ||
          ((Setup.Tx[config_id].SerialPort == TX_SERIAL_PORT_SERIAL2) &&
           (Setup.Tx[config_id].SerialPort2 == TX_SERIAL_PORT2_SERIAL2)) ||
-         ((Setup.Tx[config_id].SerialPort == TX_SERIAL_PORT_CRSF_BRIDGE) &&
-          (Setup.Tx[config_id].SerialPort2 == TX_SERIAL_PORT2_CRSF_BRIDGE)) ||
          ((Setup.Tx[config_id].SerialPort == TX_SERIAL_PORT_COM) &&
           (Setup.Tx[config_id].SerialPort2 == TX_SERIAL_PORT2_SERIAL)) ){
         Setup.Tx[config_id].SerialPort2 = TX_SERIAL_PORT2_NONE;
@@ -1161,33 +1129,6 @@ void setup_configure_config(uint8_t config_id)
         Config.SerialBaudrate2 = 115200;
     }
 #endif
-
-    //-- Mbridge, Crsf, In
-
-    Config.UseCrsf = false;
-    Config.UseCrsfBridge = false;
-    Config.UseIn = false;
-#ifdef DEVICE_IS_TRANSMITTER
-    // conflicts must have been sorted out before in setup_sanitize_config()
-  #ifdef DEVICE_HAS_JRPIN5
-    if (Setup.Tx[config_id].ChannelsSource == CHANNEL_SOURCE_CRSF) {
-        Config.UseCrsf = true;
-    }
-    if ((Setup.Tx[config_id].SerialPort == TX_SERIAL_PORT_CRSF_BRIDGE) ||
-        (Setup.Tx[config_id].SerialPort2 == TX_SERIAL_PORT2_CRSF_BRIDGE)) {
-        Config.UseCrsf = true;
-        Config.UseCrsfBridge = true;
-    }
-  #endif
-  #ifdef USE_IN
-    if (Setup.Tx[Config.ConfigId].ChannelsSource == CHANNEL_SOURCE_INPORT) {
-        Config.UseIn = true;
-    }
-    if (Config.UseCrsf && Config.UseIn) {
-        while(1){} // In and CRSF cannot be used simultaneously, must not happen
-    }
-  #endif
-#endif
 }
 
 
@@ -1302,7 +1243,6 @@ bool doEEPROMwrite;
                     Setup.Tx[id].SerialPort = TX_SERIAL_PORT_SERIAL2;
                     #endif
                     break;
-                case L10304_SERIAL_DESTINATION_MBRIDGE: Setup.Tx[id].SerialPort = TX_SERIAL_PORT_CRSF_BRIDGE; break;
                 default:
                     Setup.Tx[id].SerialPort = TX_SERIAL_PORT_SERIAL;
                 }

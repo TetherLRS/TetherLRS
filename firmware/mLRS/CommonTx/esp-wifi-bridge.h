@@ -155,10 +155,7 @@ class tTxEspWifiBridge
 
 void tTxEspWifiBridge::Init(void)
 {
-#ifdef DEVICE_HAS_ESP_WIFI_BRIDGE_W_PASSTHRU_VIA_JRPIN5
-    if (!Serials.jrpin5serial) while(1){}; // must not happen, play it safe
-    com = Serials.jrpin5serial;
-#elif defined DEVICE_HAS_ESP_WIFI_BRIDGE_W_PASSTHRU_VIA_SERIAL
+#if defined DEVICE_HAS_ESP_WIFI_BRIDGE_W_PASSTHRU_VIA_SERIAL
     com = Serials.uartb;
 #else
     com = Serials.com;

@@ -121,7 +121,6 @@ Which options are available is determined by a number of DEVICE_HAS_xxx defines:
   "wbridge"  available if USE_WIRELESS_BRIDGE (board has an ESP or HC04 wireless bridge)
   "serial2"  available if DEVICE_HAS_SERIAL2  (board has a serial2 port)
   "com"      available if USE_COM             (board has a separate com port)
-  "mbridge"  available if DEVICE_HAS_JRPIN5   (serial is carried over mBridge on JR pin5)
 
 The com port is on uartC, or on usb if the board has DEVICE_HAS_COM_ON_USB (call it uartC/usb).
 The assignment is done in tSerialPorts::Init():
@@ -132,11 +131,6 @@ The assignment is done in tSerialPorts::Init():
   "wbridge"       uartD           uartC/usb
   "serial2"       uartD           uartC/usb
   "com"           uartC/usb       uartB           (serial and com swapped)
-  "mbridge"       uartB           uartC/usb       (serial data is routed over JR pin5, not uartB)
-
-In addition, jrpin5serial is assigned in init_hw() and is used for ESP passthrough flashing on boards
-with DEVICE_HAS_ESP_WIFI_BRIDGE_W_PASSTHRU_VIA_JRPIN5. It is nullptr if the pin5 bridge was not
-initialized (e.g. ChannelsSource = none), and consumers must null-guard it.
 
 Two boot-time button overrides exist:
 

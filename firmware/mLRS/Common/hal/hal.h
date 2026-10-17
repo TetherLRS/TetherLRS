@@ -40,12 +40,6 @@ In tx-hal files:
 
 #define DEVICE_HAS_DIVERSITY        // board supports diversity
 #define DEVICE_HAS_ANTENNA_SWITCH   // board has one radio with an RF switch between two antennas, needs sx_antenna_switch_set()
-#define DEVICE_HAS_JRPIN5           // board has a pin for JR bay Pin5/SPort
-#define DEVICE_HAS_IN               // board has an IN port, which supports both normal and inverted UART signals
-#define DEVICE_HAS_IN_NORMAL        // board has an IN port, which supports only normal UART signals
-#define DEVICE_HAS_IN_INVERTED      // board has an IN port, which supports only inverted UART signals
-#define DEVICE_HAS_IN_ON_JRPIN5_RX  // board shares IN with JRPin5 on RX pin, implies support of normal and inverted UART signals
-#define DEVICE_HAS_IN_ON_JRPIN5_TX  // board shares IN with JRPin5 on TX pin, implies support of normal and inverted UART signals
 #define DEVICE_HAS_SERIAL_OR_COM    // board has a button or similar to force Com on power up
 #define DEVICE_HAS_NO_SERIAL        // board has no Serial port
 #define DEVICE_HAS_NO_COM           // board has no Com port
@@ -59,7 +53,6 @@ In tx-hal files:
 #define DEVICE_HAS_ESP_WIFI_BRIDGE_ESP8266    // board has ESP82xx with RESET,GPIO support
 #define DEVICE_HAS_ESP_WIFI_BRIDGE_ESP32C3    // board has ESP32-C3 with RESET,GPIO support
 #define DEVICE_HAS_ESP_WIFI_BRIDGE_CONFIGURE  // board has ESPxx which allows configuration
-#define DEVICE_HAS_ESP_WIFI_BRIDGE_W_PASSTHRU_VIA_JRPIN5  // board has ESPxx with its passthrough via JRPin5 port
 #define DEVICE_HAS_ESP_WIFI_BRIDGE_W_PASSTHRU_VIA_SERIAL  // board has ESPxx with its passthrough via Serial port
 #define DEVICE_HAS_ESP_WIFI_BRIDGE_BUTTON2_FLASH    // board has button used to enter ESP flash mode
 #define DEVICE_HAS_HC04_MODULE      // board has HC04 module
@@ -313,12 +306,6 @@ extern "C" { void delay_ms(uint16_t ms); }
 #endif
 
 
-#if defined DEVICE_HAS_IN || defined DEVICE_HAS_IN_NORMAL || defined DEVICE_HAS_IN_INVERTED || \
-    defined DEVICE_HAS_IN_ON_JRPIN5_RX || defined DEVICE_HAS_IN_ON_JRPIN5_TX
-  #define USE_IN
-#endif
-
-
 #if defined DEVICE_HAS_OUT || defined DEVICE_HAS_OUT_NORMAL || defined DEVICE_HAS_OUT_INVERTED
   #define USE_OUT
 #endif
@@ -429,16 +416,6 @@ extern "C" { void delay_ms(uint16_t ms); }
   #define SX_OR_SX2(x1,x2)          x1
 #endif
 
-#ifdef DEVICE_HAS_JRPIN5
-  #define IF_CRSF(x)                if (Config.UseCrsf) { x; }
-#else
-  #define IF_CRSF(x)
-#endif
-#ifdef USE_IN
-  #define IF_IN(x)                  if (Config.UseIn) { x; }
-#else
-  #define IF_IN(x)
-#endif
 
 
 //-- checks

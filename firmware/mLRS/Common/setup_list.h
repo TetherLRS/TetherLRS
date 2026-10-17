@@ -39,8 +39,6 @@
 #define SETUP_MSK_TX_SER_PORT         &SetupMetaData.Tx_SerialPort_allowed_mask // generated from the hal
 #define SETUP_MSK_TX_SER_PORT2        &SetupMetaData.Tx_SerialPort2_allowed_mask // generated from the hal
 #define SETUP_MSK_TX_SER_BAUDRATE2    &SetupMetaData.Tx_SerialBaudrate2_allowed_mask // generated from the hal
-#define SETUP_MSK_TX_CH_SOURCE        &SetupMetaData.Tx_ChannelsSource_allowed_mask // generated from the hal
-#define SETUP_MSK_TX_IN_MODE          &SetupMetaData.Tx_InMode_allowed_mask // generated from the hal
 #define SETUP_MSK_TX_BUZZER           &SetupMetaData.Tx_Buzzer_allowed_mask // generated from the hal
 #define SETUP_MSK_TX_WIFIPROT         &SetupMetaData.Tx_WiFiProt_allowed_mask // generated from the hal
 
@@ -70,10 +68,10 @@
 #define SETUP_OPT_RF_BAND_CLI         "2.4 GHz,915 MHz FCC,868 MHz,433 MHz,70 cm HAM,866 MHz IN,915 MHz + 2.4 GHz,868 MHz + 2.4 GHz" // used in cli
 #define SETUP_OPT_RF_BAND_DISP        "2.4 GHz,915 FCC,868 MHz,433 MHz,70 cm,866 IN,915+2.4,868+2.4" // used in display, 7 chars max
 
-#define SETUP_OPT_TX_SER_PORT         "serial,wbridge,serial2,com,crsfbridge"
-#define SETUP_OPT_TX_SER_PORT_DISP    "serial,wbridge,serial2,com,cbridge"
-#define SETUP_OPT_TX_SER_PORT2        "none,serial,wbridge,serial2,crsfbridge"
-#define SETUP_OPT_TX_SER_PORT2_DISP   "none,serial,wbridge,serial2,cbridge"
+#define SETUP_OPT_TX_SER_PORT         "serial,wbridge,serial2,com"
+#define SETUP_OPT_TX_SER_PORT_DISP    "serial,wbridge,serial2,com"
+#define SETUP_OPT_TX_SER_PORT2        "none,serial,wbridge,serial2"
+#define SETUP_OPT_TX_SER_PORT2_DISP   "none,serial,wbridge,serial2"
 
 #define MSK_ALL                       nullptr // is converted to UINT16_MAX
 
@@ -108,9 +106,7 @@
 #define SETUP_PARAMETER_LIST_TX_MAIN \
   X( Setup.Tx[0].Power,             LIST, "Tx Power",         "TX_POWER",         0,0,0,"", SETUP_OPT_TX_POWER, MSK_ALL )\
   X( Setup.Tx[0].Diversity,         LIST, "Tx Diversity",     "TX_DIVERSITY",     0,0,0,"", SETUP_OPT_DIVERSITY, SETUP_MSK_TX_DIVERSITY )\
-  XRC( Setup.Tx[0].ChannelsSource,    LIST, "Tx Ch Source",     "TX_CH_SOURCE",     0,0,0,"", "none,crsf,in", SETUP_MSK_TX_CH_SOURCE )\
   XRC( Setup.Tx[0].ChannelOrder,      LIST, "Tx Ch Order",      "TX_CH_ORDER",      0,0,0,"", SETUP_OPT_CH_ORDER, MSK_ALL )\
-  XRC( Setup.Tx[0].InMode,            LIST, "Tx In Mode",       "TX_IN_MODE",       0,0,0,"", "sbus,sbus inv", SETUP_MSK_TX_IN_MODE )\
   X( Setup.Tx[0].SerialPort,        LIST, "Tx Ser Port",      "TX_SER_PORT",      0,0,0,"", SETUP_OPT_TX_SER_PORT, SETUP_MSK_TX_SER_PORT )\
   X( Setup.Tx[0].SerialBaudrate,    LIST, "Tx Ser Baudrate",  "TX_SER_BAUD",      0,0,0,"", SETUP_OPT_TX_SERIAL_BAUDRATE, MSK_ALL )\
   X( Setup.Tx[0].SerialPort2,       LIST, "Tx Ser Port2",     "TX_SER_PORT2",     0,0,0,"", SETUP_OPT_TX_SER_PORT2, SETUP_MSK_TX_SER_PORT2 )\

@@ -47,8 +47,6 @@ class tTxTasks
     void Init(void);
     uint8_t Task(void);
 
-    void SetMBridgeTask(uint8_t task);
-    void SetCrsfTask(uint8_t task);
     void SetDisplayTask(uint8_t task);
     void SetCliTask(uint8_t task);
     void SetCliTaskConfigIdValue(uint8_t task, int32_t value);
@@ -62,7 +60,6 @@ class tTxTasks
     char* GetEspBridgeStr(void);
 
   private:
-    uint8_t mbridge_crsf_task_pending;
     uint8_t display_task_pending;
     uint8_t cli_task_pending;
     uint8_t espbridge_task_pending;

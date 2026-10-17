@@ -157,7 +157,6 @@ typedef struct
     tSerialBase* serial; // assigned according to TxSerPort
     tSerialBase* com; // assigned according to TxSerPort
     tSerialBase* serial2; // can be nullptr!
-    tSerialBase* jrpin5serial; // can be nullptr! is initialized in init_hw()
     tSerialBase* uartb; // serial port
     tSerialBase* uartd; // serial2 or wireless bridge port
     tSerialBase* uartc; // com port
@@ -257,8 +256,6 @@ void tSerialPorts::Init(uint8_t serial_port, uint32_t baud, uint8_t serial_port2
     default:
         serial2 = nullptr;
     }
-
-    jrpin5serial = nullptr;
 
     uartb = &uartb_port;
     uartc = &uartc_port;

@@ -18,7 +18,6 @@
 
 void tTxTasks::Init(void)
 {
-    mbridge_crsf_task_pending = TASK_NONE;
     display_task_pending = TASK_NONE;
     cli_task_pending = TASK_NONE;
     espbridge_task_pending = TASK_NONE;
@@ -28,12 +27,6 @@ void tTxTasks::Init(void)
 uint8_t tTxTasks::Task(void)
 {
 uint8_t task;
-
-    if (mbridge_crsf_task_pending != TASK_NONE) {
-        task = mbridge_crsf_task_pending;
-        mbridge_crsf_task_pending = TASK_NONE;
-        return task;
-    }
 
     if (display_task_pending != TASK_NONE) {
         task = display_task_pending;
@@ -63,8 +56,6 @@ uint8_t task;
 }
 
 
-void tTxTasks::SetMBridgeTask(uint8_t task) { mbridge_crsf_task_pending = task; }
-void tTxTasks::SetCrsfTask(uint8_t task) { mbridge_crsf_task_pending = task; }
 void tTxTasks::SetDisplayTask(uint8_t task) { display_task_pending = task; }
 void tTxTasks::SetCliTask(uint8_t task) { cli_task_pending = task; }
 void tTxTasks::SetCliTaskConfigIdValue(uint8_t task, int32_t value) { cli_task_pending = task; config_id_value = value;}

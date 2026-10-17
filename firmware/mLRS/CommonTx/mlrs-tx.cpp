@@ -127,9 +127,6 @@
 #include "config_id.h"
 #include "info.h"
 #include "cli.h"
-#include "mbridge_interface.h" // this includes uart.h as it needs callbacks, declares tMBridge mbridge
-#include "crsf_interface_tx.h" // this includes uart.h as it needs callbacks, declares tTxCrsf crsf
-#include "in_interface.h" // this includes uarte.h, in.h, declares tIn in
 
 
 tRDiversity rdiversity;
@@ -292,16 +289,9 @@ void init_hw(void)
 
     esp_enable(Setup.Tx[Config.ConfigId].SerialPort, Setup.Tx[Config.ConfigId].SerialPort2);
     Serials.Init(Setup.Tx[Config.ConfigId].SerialPort, Config.SerialBaudrate, Setup.Tx[Config.ConfigId].SerialPort2, Config.SerialBaudrate2);
-#ifdef DEVICE_HAS_ESP_WIFI_BRIDGE_W_PASSTHRU_VIA_JRPIN5
-    Serials.jrpin5serial = &jrpin5serial; // TODO: at some point we should make it a proper class in common.h
-#endif
 
     sx.Init(); // these take time
     sx2.Init();
-
-    mbridge.Init(Config.UseCrsf); // these affect peripherals, hence do here
-    crsf.Init(Config.UseCrsf, Config.UseCrsfBridge);
-    in.Init(Config.UseIn);
 
     __enable_irq();
 }
@@ -424,7 +414,6 @@ void link_task_tick_ms(void)
             case LINK_TASK_TX_STORE_RX_PARAMS: doParamsStore = true; break;
             }
             link_task_reset();
-            mbridge.Unlock();
         }
     }
 }
@@ -439,12 +428,6 @@ tCmdFrameHeader* head = (tCmdFrameHeader*)(frame->payload);
         // received rx setup data
         unpack_rxcmdframe_rxsetupdata(frame);
         link_task_reset();
-#ifdef DEVICE_HAS_JRPIN5
-        switch (mbridge.cmd_in_process) {
-        case MBRIDGE_CMD_REQUEST_INFO: mbridge.HandleRequestCmd(MBRIDGE_CMD_REQUEST_INFO); break;
-        }
-        mbridge.Unlock();
-#endif
         break;
     }
 }
@@ -733,7 +716,6 @@ uint16_t connect_tmo_cnt;
 uint8_t connect_sync_cnt;
 bool connect_occured_once;
 
-bool rc_data_updated;
 
 
 bool connected(void)
@@ -814,10 +796,9 @@ RESTARTCONTROLLER
     crypto.SetSessionKey(Config.SessionRandom);
 
     rcData.Init();
-    in.Configure(Setup.Tx[Config.ConfigId].InMode);
-    mavlink.Init(&crsf); // serial ports selected by SerialPort, SerialPort2, ChannelsSource
+    mavlink.Init(); // serial ports selected by SerialPort, SerialPort2
     msp.Init(); // serial port selected by SerialPort
-    sx_serial.Init(&crsf); // serial port selected by SerialPort, ChannelsSource
+    sx_serial.Init(); // serial port selected by SerialPort
     cli.Init();
     espbridge.Init();
     hc04bridge.Init();
@@ -828,7 +809,6 @@ RESTARTCONTROLLER
 
     config_id.Init();
 
-    rc_data_updated = false;
 
     tick_1hz = 0;
     tick_1hz_commensurate = 0;
@@ -926,7 +906,6 @@ INITCONTROLLER_END
         irq_status = irq2_status = 0;
         DBG_MAIN_SLIM(dbg.puts(">");)
         // auxiliaries
-        crsf.TelemetryStart();
         whileTransmit.Trigger();
         break; }
 
@@ -1179,84 +1158,6 @@ IF_SX2(
         return; // link state might have changed, process immediately
     }//end of if(doPreTransmit)
 
-    //-- Update channels, MBridge handling, Crsf handling, In handling, etc
-
-IF_CRSF(
-    crsf.Do();
-    if (crsf.ChannelsUpdated(&rcData)) {
-        rc_data_updated = true;
-    }
-    uint8_t crsftask; uint8_t crsfcmd;
-    uint8_t* buf; uint8_t len;
-    if (crsf.TelemetryUpdate(&crsftask, Config.frame_rate_ms)) {
-        switch (crsftask) {
-        case TXCRSF_SEND_LINK_STATISTICS: crsf.SendLinkStatistics(); break;
-        case TXCRSF_SEND_LINK_STATISTICS_TX: crsf.SendLinkStatisticsTx(); break;
-        case TXCRSF_SEND_LINK_STATISTICS_RX: crsf.SendLinkStatisticsRx(); break;
-        case TXCRSF_SEND_LINK_STATISTICS_ALL: crsf.SendLinkStatisticsAll(); break;
-        case TXCRSF_SEND_TELEMETRY_FRAME:
-            if (mbridge.CrsfFrameAvailable(&buf, &len)) {
-                crsf.SendMBridgeFrame(buf, len);
-            } else
-            if (connected_and_rx_setup_available() &&
-                (SERIAL_LINK_MODE_IS_MAVLINK(Setup.Rx.SerialLinkMode) || SERIAL_LINK_MODE_IS_MSP(Setup.Rx.SerialLinkMode))) {
-                crsf.SendTelemetryFrame();
-            }
-            break;
-        case TXCRSF_SEND_DEVICE_INFO: crsf.SendDeviceInfo(); break;
-        }
-    }
-    if (crsf.CommandReceived(&crsfcmd)) {
-        switch (crsfcmd) {
-        case TXCRSF_CMD_MODELID_SET:
-//dbg.puts("\ncrsf model select id "); dbg.puts(u8toBCD_s(crsf.GetCmdModelId()));
-            config_id.Change(crsf.GetCmdModelId());
-            break;
-        case TXCRSF_CMD_BIND_START: tasks.SetCrsfTask(TASK_BIND_START); break;
-        case TXCRSF_CMD_BIND_STOP: tasks.SetCrsfTask(TASK_BIND_STOP); break;
-
-        case MBRIDGE_CMD_REQUEST_INFO:
-            setup_reload();
-            if (connected()) {
-                link_task_set(LINK_TASK_TX_GET_RX_SETUPDATA_WRELOAD);
-                mbridge.Lock(MBRIDGE_CMD_REQUEST_INFO); // lock mBridge
-            } else {
-                mbridge.HandleRequestCmd(&crsfcmd);
-            }
-            break;
-        case MBRIDGE_CMD_REQUEST_CMD:
-            mbridge.HandleRequestCmd(mbridge.GetPayloadPtr());
-            break;
-        case MBRIDGE_CMD_PARAM_SET: {
-            bool rx_param_changed;
-            bool param_changed = mbridge_do_ParamSet(mbridge.GetPayloadPtr(), &rx_param_changed);
-            if (param_changed && rx_param_changed && connected()) {
-                tasks.SetCrsfTask(TASK_RX_PARAM_SET);
-            }
-            }break;
-        case MBRIDGE_CMD_PARAM_STORE: tasks.SetCrsfTask(TASK_PARAM_STORE); break;
-        case MBRIDGE_CMD_BIND_START: tasks.SetCrsfTask(TASK_BIND_START); break;
-        case MBRIDGE_CMD_BIND_STOP: tasks.SetCrsfTask(TASK_BIND_STOP); break;
-        case MBRIDGE_CMD_SYSTEM_BOOTLOADER: tasks.SetCrsfTask(TASK_SYSTEM_BOOT); break;
-        case MBRIDGE_CMD_FLASH_ESPBRIDGE: tasks.SetCrsfTask(TASK_ESPBRIDGE_FLASH); break;
-        case MBRIDGE_CMD_MODELID_SET:
-//dbg.puts("\nmbridge model id "); dbg.puts(u8toBCD_s(mbridge.GetModelId()));
-            config_id.Change(mbridge.GetModelId());
-            break;
-        }
-    }
-);
-IF_IN(
-    if (in.ChannelsUpdated(&rcData)) {
-        rc_data_updated = true;
-    }
-);
-    if (rc_data_updated) {
-        rc_data_updated = false;
-        channelOrder.SetAndApply(&rcData, Setup.Tx[Config.ConfigId].ChannelOrder);
-        rfpower.Set(&rcData, Setup.Tx[Config.ConfigId].PowerSwitchChannel, Setup.Tx[Config.ConfigId].Power);
-    }
-
     if (isInTimeGuard || link_state == LINK_STATE_TRANSMIT_SEND) return; // don't do anything else in this time slot, is important!
 
     //-- Do MAVLink & MSP
@@ -1278,13 +1179,11 @@ IF_IN(
     case TASK_RX_PARAM_SET:
         if (connected()) {
             link_task_set(LINK_TASK_TX_SET_RX_PARAMS);
-            mbridge.Lock(); // lock mBridge
         }
         break;
     case TASK_PARAM_STORE:
         if (connected()) {
             link_task_set(LINK_TASK_TX_STORE_RX_PARAMS);
-            mbridge.Lock(); // lock mBridge
         } else {
             doParamsStore = true;
         }
@@ -1293,7 +1192,6 @@ IF_IN(
         setup_reload();
         if (connected()) {
             link_task_set(LINK_TASK_TX_GET_RX_SETUPDATA_WRELOAD);
-            mbridge.Lock(); // lock mBridge
         }
         break;
     case TASK_BIND_START: bind.StartBind(); break;

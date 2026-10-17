@@ -211,7 +211,6 @@ typedef enum {
     TX_SERIAL_PORT_WIRELESS_BRIDGE,
     TX_SERIAL_PORT_SERIAL2,
     TX_SERIAL_PORT_COM,
-    TX_SERIAL_PORT_CRSF_BRIDGE,
     TX_SERIAL_PORT_NUM,
 } TX_SERIAL_PORT_ENUM;
 
@@ -229,7 +228,6 @@ typedef enum {
     TX_SERIAL_PORT2_SERIAL,
     TX_SERIAL_PORT2_WIRELESS_BRIDGE,
     TX_SERIAL_PORT2_SERIAL2,
-    TX_SERIAL_PORT2_CRSF_BRIDGE,
     TX_SERIAL_PORT2_NUM,
 } TX_SERIAL_PORT2_ENUM;
 
@@ -521,8 +519,6 @@ typedef struct
 
     char Tx_Power_optstr[67+1];
     uint16_t Tx_Diversity_allowed_mask;
-    uint16_t Tx_ChannelsSource_allowed_mask;
-    uint16_t Tx_InMode_allowed_mask;
     uint16_t Tx_SerialPort_allowed_mask;
     uint16_t Tx_SerialPort2_allowed_mask;
     uint16_t Tx_SerialBaudrate2_allowed_mask;
@@ -609,9 +605,6 @@ typedef struct
     bool TransmitUseAntenna2;
     bool IsDualBand;
 
-    bool UseCrsf;
-    bool UseCrsfBridge;
-    bool UseIn;
 
     // crypto
     uint8_t Uid[12];

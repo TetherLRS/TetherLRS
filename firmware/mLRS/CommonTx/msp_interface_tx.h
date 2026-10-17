@@ -24,7 +24,6 @@ extern bool serial_link_up(void);
 extern tSetup Setup;
 extern tGlobalConfig Config;
 extern tSerialPorts Serials;
-extern tTxCrsf crsf;
 
 
 #define MSP_BUF_SIZE  (MSP_FRAME_LEN_MAX + 16) // needs to be larger than max supported MSP frame size
@@ -69,9 +68,6 @@ void tTxMsp::Init(void)
     case TX_SERIAL_PORT_WIRELESS_BRIDGE:
     case TX_SERIAL_PORT_COM:
         ser = Serials.serial; // already sorted out in serialports.Init()
-        break;
-    case TX_SERIAL_PORT_CRSF_BRIDGE:
-        ser = nullptr; // MSP is not supported over CRSF bridge, set ser to nullptr to effectively disable it
         break;
     default:
         while(1){} // must not happen
@@ -146,11 +142,6 @@ void tTxMsp::parse_link_in_serial_out(char c)
             ser->putbuf(_buf, len);
         }
 
-        // allow crsf class to capture it
-        if (msp_msg_link_in.type == MSP_TYPE_RESPONSE) {
-            crsf.TelemetryHandleMspMsg(&msp_msg_link_in);
-        }
-
 /*
 dbg.puts("\n");
 dbg.putc(msp_msg_link_in.type);
@@ -159,13 +150,6 @@ dbg.puts(" ");
 dbg.puts(u16toBCD_s(msp_msg_link_in.len));
 if(msp_msg_link_in.len>64){
 dbg.puts(" ");for (uint16_t n=0;n<((msp_msg_link_in.len<100)?msp_msg_link_in.len:50); n++) dbg.putc(msp_msg_link_in.payload[n]);}
-*/
-/*dbg.puts(" ");
-dbg.puts(u8toHEX_s(msp_msg_link_in.checksum));
-uint16_t _len = msp_msg_to_frame_buf(_buf, &msp_msg_link_in);
-uint8_t crc8 = crsf_crc8_update(CRSF_CRC8_INIT, &(_buf[3]), _len - 4);
-dbg.puts(" ");
-dbg.puts(u8toHEX_s(crc8));
 */
     }
 }
