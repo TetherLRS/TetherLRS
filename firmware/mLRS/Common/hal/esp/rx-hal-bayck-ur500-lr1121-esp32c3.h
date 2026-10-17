@@ -11,6 +11,7 @@
 //-------------------------------------------------------
 // https://github.com/ExpressLRS/targets, bayckrc.rx_dual.ur500: as the UR1000 (layout "Generic C3 LR1121", same
 // radio_rfsw_ctrl), power_values [-7,-3,0] (900) and [-7,-2,3] (2.4 GHz) for 100 to 500 mW
+// TetherLRS: 10 to 50 mW added with the 27 dB gain of the 100 mW step, down to the LR1121's -17 dBm
 //-------------------------------------------------------
 
 #define DEVICE_HAS_SINGLE_LED_RGB
@@ -108,9 +109,18 @@ void lr11xx_rfpower_calc(const int8_t power_dbm, int8_t* sx_power, int8_t* actua
         } else if (power_dbm >= POWER_24_DBM) {
             *sx_power = -2;
             *actual_power_dbm = 24;
-        } else {
+        } else if (power_dbm >= POWER_20_DBM) {
             *sx_power = -7;
             *actual_power_dbm = 20;
+        } else if (power_dbm >= POWER_17_DBM) {
+            *sx_power = -10;
+            *actual_power_dbm = 17;
+        } else if (power_dbm >= POWER_14_DBM) {
+            *sx_power = -13;
+            *actual_power_dbm = 14;
+        } else {
+            *sx_power = -17;
+            *actual_power_dbm = 10;
         }
     } else {
         if (power_dbm >= POWER_27_DBM) {
@@ -119,16 +129,28 @@ void lr11xx_rfpower_calc(const int8_t power_dbm, int8_t* sx_power, int8_t* actua
         } else if (power_dbm >= POWER_24_DBM) {
             *sx_power = -3;
             *actual_power_dbm = 24;
-        } else {
+        } else if (power_dbm >= POWER_20_DBM) {
             *sx_power = -7;
             *actual_power_dbm = 20;
+        } else if (power_dbm >= POWER_17_DBM) {
+            *sx_power = -10;
+            *actual_power_dbm = 17;
+        } else if (power_dbm >= POWER_14_DBM) {
+            *sx_power = -13;
+            *actual_power_dbm = 14;
+        } else {
+            *sx_power = -17;
+            *actual_power_dbm = 10;
         }
     }
 }
 
-#define RFPOWER_DEFAULT           0 // index into rfpower_list array
+#define RFPOWER_DEFAULT           3 // index into rfpower_list array, 100 mW
 
 const rfpower_t rfpower_list[] = {
+    { .dbm = POWER_10_DBM, .mW = 10 },
+    { .dbm = POWER_14_DBM, .mW = 25 },
+    { .dbm = POWER_17_DBM, .mW = 50 },
     { .dbm = POWER_20_DBM, .mW = 100 },
     { .dbm = POWER_24_DBM, .mW = 250 },
     { .dbm = POWER_27_DBM, .mW = 500 },
