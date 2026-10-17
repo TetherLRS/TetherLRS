@@ -26,8 +26,11 @@ export const optionDbm = (name: string | undefined) => {
   return m ? Math.round(10 * Math.log10(Number(m[1]))) : undefined;
 };
 
-export function linkMetrics(stats: LinkStats[]): Metric[] {
-  const last = stats.at(-1);
+// a sample per half second; undefined where the stream was off (another page open), drawn as a gap
+export type History = (LinkStats | undefined)[];
+
+export function linkMetrics(stats: History): Metric[] {
+  const last = stats.findLast((s) => s !== undefined);
   const rxDbm = optionDbm(last?.rxPower);
   return [
     {
@@ -39,8 +42,8 @@ export function linkMetrics(stats: LinkStats[]): Metric[] {
         { name: 'Aircraft', text: fmt(last?.rxLq, '%') },
       ],
       series: [
-        { name: 'Ground', values: stats.map((s) => s.lq) },
-        { name: 'Aircraft', values: stats.map((s) => s.rxLq) },
+        { name: 'Ground', values: stats.map((s) => s?.lq) },
+        { name: 'Aircraft', values: stats.map((s) => s?.rxLq) },
       ],
       floor: 0,
       ceil: 100,
@@ -51,7 +54,7 @@ export function linkMetrics(stats: LinkStats[]): Metric[] {
       title: 'Valid frames',
       unit: '%',
       readout: [{ name: 'Ground', text: fmt(last?.lqValid, '%') }],
-      series: [{ name: 'Ground', values: stats.map((s) => s.lqValid) }],
+      series: [{ name: 'Ground', values: stats.map((s) => s?.lqValid) }],
       floor: 0,
       ceil: 100,
       span: 20,
@@ -65,8 +68,8 @@ export function linkMetrics(stats: LinkStats[]): Metric[] {
         { name: 'Aircraft', text: fmt(ok(last?.rxRssi), 'dBm') },
       ],
       series: [
-        { name: 'Ground', values: stats.map((s) => ok(s.rssi1)) },
-        { name: 'Aircraft', values: stats.map((s) => ok(s.rxRssi)) },
+        { name: 'Ground', values: stats.map((s) => ok(s?.rssi1)) },
+        { name: 'Aircraft', values: stats.map((s) => ok(s?.rxRssi)) },
       ],
       span: 20,
     },
@@ -75,7 +78,7 @@ export function linkMetrics(stats: LinkStats[]): Metric[] {
       title: 'SNR',
       unit: 'dB',
       readout: [{ name: 'Ground', text: fmt(ok(last?.snr1), 'dB') }],
-      series: [{ name: 'Ground', values: stats.map((s) => ok(s.snr1)) }],
+      series: [{ name: 'Ground', values: stats.map((s) => ok(s?.snr1)) }],
       span: 10,
     },
     {
@@ -90,8 +93,8 @@ export function linkMetrics(stats: LinkStats[]): Metric[] {
         },
       ],
       series: [
-        { name: 'Ground', values: stats.map((s) => s.txPower) },
-        { name: 'Aircraft', values: stats.map((s) => optionDbm(s.rxPower)) },
+        { name: 'Ground', values: stats.map((s) => s?.txPower) },
+        { name: 'Aircraft', values: stats.map((s) => optionDbm(s?.rxPower)) },
       ],
       span: 10,
     },
@@ -104,8 +107,8 @@ export function linkMetrics(stats: LinkStats[]): Metric[] {
         { name: 'Up', text: fmt(last?.bytesTx, 'B/s') },
       ],
       series: [
-        { name: 'Down', values: stats.map((s) => s.bytesRx) },
-        { name: 'Up', values: stats.map((s) => s.bytesTx) },
+        { name: 'Down', values: stats.map((s) => s?.bytesRx) },
+        { name: 'Up', values: stats.map((s) => s?.bytesTx) },
       ],
       floor: 0,
       span: 200,
@@ -133,11 +136,25 @@ export function metricRange(m: Metric): [number, number] {
 }
 
 // a polyline over the last minute, 2 points a second, newest at the right
-export function polyline(values: (number | undefined)[], lo: number, hi: number, w: number, h: number): string {
+// one line per run of samples, so a gap (no link, another page open) stays empty instead of bridged; a lone sample
+// is a dot (the same point twice, with round caps)
+export function polylines(values: (number | undefined)[], lo: number, hi: number, w: number, h: number): string[] {
   const step = w / 119;
   const x0 = w - (values.length - 1) * step;
-  return values
-    .map((v, i) => (v === undefined ? undefined : `${(x0 + i * step).toFixed(1)},${(h - ((Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo)) * h).toFixed(1)}`))
-    .filter(Boolean)
-    .join(' ');
+  const runs: string[][] = [[]];
+  values.forEach((v, i) => {
+    if (v === undefined) {
+      if (runs[runs.length - 1].length) runs.push([]);
+      return;
+    }
+    runs[runs.length - 1].push(`${(x0 + i * step).toFixed(1)},${(h - ((Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo)) * h).toFixed(1)}`);
+  });
+  return runs.filter((r) => r.length).map((r) => (r.length === 1 ? `${r[0]} ${r[0]}` : r.join(' ')));
+}
+
+// the stream starts again after another page: the last minute stays, the time without it becomes empty samples
+export function resumeHistory(stats: History, stoppedAt: number, now: number): History {
+  if (!stoppedAt) return stats;
+  const missed = Math.round((now - stoppedAt) / 500);
+  return missed >= 120 ? [] : [...stats, ...new Array<undefined>(missed).fill(undefined)].slice(-120);
 }

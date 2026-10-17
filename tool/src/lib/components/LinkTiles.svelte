@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { metricRange, polyline, type Metric } from '$lib/link-metrics';
+  import { metricRange, polylines, type Metric } from '$lib/link-metrics';
 
   // the measures as Task Manager lists them: name and values on the left, a small graph on the right
   let { metrics, selected, onselect, grid = false }: { metrics: Metric[]; selected?: string; onselect: (key: string) => void; grid?: boolean } = $props();
@@ -17,7 +17,9 @@
       </span>
       <svg viewBox="0 0 120 28" preserveAspectRatio="none" aria-hidden="true">
         {#each m.series as s, i}
-          <polyline class:second={i === 1} points={polyline(s.values, r[0], r[1], 120, 28)} />
+          {#each polylines(s.values, r[0], r[1], 120, 28) as points}
+            <polyline class:second={i === 1} {points} />
+          {/each}
         {/each}
       </svg>
     </button>
@@ -107,6 +109,7 @@
     fill: none;
     stroke: var(--accent);
     stroke-width: 1.5;
+    stroke-linecap: round;
     vector-effect: non-scaling-stroke;
   }
   polyline.second {

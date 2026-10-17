@@ -4,7 +4,7 @@
 
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import { app } from '$lib/app.svelte';
+  import { app, statsPage } from '$lib/app.svelte';
   import { forget, hasWebSerial, isDesktop, listPorts, probeable, rememberRx, rememberTx, requestPort, watchPorts, type PortEntry } from '$lib/serial/ports';
   import { recogniseRadio } from '$lib/device/identify';
   import { sleep } from '$lib/device/link';
@@ -96,7 +96,7 @@
     if (live && app.page === 'device' && !app.streaming) void app.startStats();
   });
   onDestroy(() => {
-    if (app.page !== 'device') void app.stopStats();
+    if (!statsPage(app.page)) void app.stopStats();
   });
   const metrics = $derived(linkMetrics(app.stats));
   const shown = $derived(metrics.find((m) => m.key === app.linkMetric) ?? metrics[0]);

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { app, type Page } from '$lib/app.svelte';
+  import { app, statsPage, type Page } from '$lib/app.svelte';
   import Icon from './Icon.svelte';
   import logo from '$lib/assets/logo.png';
 
@@ -16,7 +16,7 @@
   async function go(page: Page) {
     if (page === app.page) return;
     app.page = page;
-    await app.stopStats();
+    if (!statsPage(page)) await app.stopStats();
   }
 </script>
 

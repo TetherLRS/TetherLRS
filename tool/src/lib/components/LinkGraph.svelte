@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { metricRange, polyline, type Metric } from '$lib/link-metrics';
+  import { metricRange, polylines, type Metric } from '$lib/link-metrics';
 
   // one measure over the last minute, as large as its box: scale from the data, grid, values on the axis
   let { metric }: { metric: Metric } = $props();
@@ -31,7 +31,9 @@
         <line class="grid" x1="0" x2={W} y1={(H * i) / 4} y2={(H * i) / 4} />
       {/each}
       {#each metric.series as s, i}
-        <polyline class:second={i === 1} points={polyline(s.values, range[0], range[1], W, H)} />
+        {#each polylines(s.values, range[0], range[1], W, H) as points}
+          <polyline class:second={i === 1} {points} />
+        {/each}
       {/each}
     </svg>
   </div>
@@ -103,6 +105,7 @@
     fill: none;
     stroke: var(--accent);
     stroke-width: 2;
+    stroke-linecap: round;
     vector-effect: non-scaling-stroke;
   }
   polyline.second {

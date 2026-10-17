@@ -3,11 +3,14 @@
 import { DeviceLink, sleep } from './device/link';
 import { TX_BAUDS, TxSession } from './device/tx';
 import { RX_BAUDS, RxSession } from './device/rx';
-import type { DeviceVersion, LinkStats, Param, ParamOptions } from './device/cli-parse';
+import type { DeviceVersion, Param, ParamOptions } from './device/cli-parse';
+import { resumeHistory, type History } from './link-metrics';
 import { rememberRx, rememberTx, type PortEntry } from './serial/ports';
 import { loadManifest, type Manifest } from './firmware/manifest';
 
 export type Page = 'device' | 'params' | 'link' | 'terminal' | 'firmware';
+// the pages that show the link live: between them the stats stream goes on, so the graphs keep their minute
+export const statsPage = (p: Page) => p === 'device' || p === 'link';
 export type ConnState = 'idle' | 'connecting' | 'connected' | 'busy';
 
 // the web app on GitHub Pages has the firmware next to it; the desktop app and a local dev server fetch it from there
@@ -48,7 +51,7 @@ class App {
   params = $state<Param[]>([]);
   options = $state<Record<string, ParamOptions>>({});
   unsaved = $state(false);
-  stats = $state<LinkStats[]>([]);
+  stats = $state<History>([]);
   streaming = $state(false);
   linkMetric = $state('lq'); // the measure the Link page shows large
   terminal = $state<string[]>([]); // the CLI conversation on the Terminal page
@@ -156,6 +159,8 @@ class App {
     await this.link?.close();
     this.link = undefined;
     this.tx = undefined;
+    this.stats = [];
+    this.statsStopped = 0;
     this.state = 'idle';
     this.version = undefined;
     this.params = [];
@@ -173,6 +178,8 @@ class App {
     this.tx = undefined;
     this.streaming = false;
     this.statsWanted = false;
+    this.stats = [];
+    this.statsStopped = 0;
     this.state = 'idle';
     this.version = undefined;
     this.params = [];
@@ -276,6 +283,7 @@ class App {
   // start and stop come from pages opening and closing in any order: one step at a time, towards the last request
   private statsWanted = false;
   private statsMoving?: Promise<void>;
+  private statsStopped = 0; // when the stream last stopped: that time shows as a gap when it starts again
 
   startStats(): Promise<void> {
     return this.wantStats(true);
@@ -290,7 +298,7 @@ class App {
     this.statsMoving ??= (async () => {
       while (this.tx && this.streaming !== this.statsWanted) {
         if (this.statsWanted) {
-          this.stats = [];
+          this.stats = resumeHistory(this.stats, this.statsStopped, Date.now());
           this.streaming = true;
           await this.tx.startStats((s) => {
             this.stats = [...this.stats.slice(-119), s]; // one minute at 2 per second
@@ -298,6 +306,7 @@ class App {
         } else {
           this.streaming = false;
           await this.tx.stopStats();
+          this.statsStopped = Date.now();
         }
       }
     })().finally(() => (this.statsMoving = undefined));

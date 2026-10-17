@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import { app } from '$lib/app.svelte';
+  import { app, statsPage } from '$lib/app.svelte';
   import type { LinkStats } from '$lib/device/cli-parse';
   import { linkMetrics } from '$lib/link-metrics';
   import LinkGraph from './LinkGraph.svelte';
@@ -11,10 +11,10 @@
     void app.startStats();
   });
   onDestroy(() => {
-    if (app.page !== 'link') void app.stopStats(); // only when leaving, not when the page is just rebuilt
+    if (!statsPage(app.page)) void app.stopStats(); // only when leaving for a page without them, not on a rebuild
   });
 
-  const last = $derived(app.stats.at(-1));
+  const last = $derived(app.stats.findLast((s) => s !== undefined));
   const eu = $derived(app.param('Region')?.text === 'EU');
   const metrics = $derived(linkMetrics(app.stats));
   const current = $derived(metrics.find((m) => m.key === app.linkMetric) ?? metrics[0]);
