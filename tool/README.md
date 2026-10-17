@@ -10,4 +10,5 @@ a small Rust bridge (`src-tauri/src/serial.rs`) gives the same port interface. F
 - `npx vitest run`: tests, against a demo Tx that answers like the firmware's CLI
 
 The tool talks to the ground radio (Tx) through its CLI, entered with SiK's `+++`. On USB serial adapters it
-looks for TetherLRS radios by itself; it never sends anything to flight controller ports.
+looks for TetherLRS radios by itself. To a flight controller's port it sends only what opens its serial passthrough
+to a radio, when asked, and it never saves anything there.

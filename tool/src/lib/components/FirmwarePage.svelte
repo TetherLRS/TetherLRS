@@ -33,6 +33,8 @@
   // a flight controller is reached only through its passthrough
   const fcClosed = $derived(sel?.entry.kind === 'fc' && sel.entry.passthrough === undefined);
   let logBox = $state<HTMLPreElement>();
+  let writeAt = $state(0);
+  let fileInput = $state<HTMLInputElement>();
 
   $effect(() => {
     void radios.log.length;
@@ -93,6 +95,13 @@
     const data = await radios.backup();
     const name = (f?.name ?? sel?.entry.label ?? 'radio').toLowerCase().replace(/[^a-z0-9]+/g, '-');
     if (data) save(data, `${name}-${f?.family?.toLowerCase() ?? 'flash'}-backup.bin`);
+  }
+
+  async function writeFile(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = ''; // the same file can be picked again
+    if (file) await radios.writeFile(new Uint8Array(await file.arrayBuffer()), Number(writeAt));
   }
 
   async function loadList() {
@@ -205,10 +214,19 @@
       <div class="step" class:off={!radios.inRom}>
         <span class="n">3</span>
         <div class="body">
-          <span class="step-title">Back up</span>
+          <span class="step-title">Back up and go back</span>
           <span class="caption">Everything on it now, to a file, to go back to it. Before the first TetherLRS; an update can skip it.</span>
           <div class="line">
             <button class="btn" onclick={backup} disabled={!radios.inRom || radios.busy}>Back up to a file</button>
+          </div>
+          <span class="caption">Back to what it had, or to ExpressLRS or mLRS: a backup or a whole image goes from the start of its flash; on an ESP32 an application alone goes at 0x10000.</span>
+          <div class="line">
+            <select class="uart" bind:value={writeAt} disabled={!radios.inRom || radios.busy} aria-label="Where in its flash">
+              <option value={0}>Whole flash or image</option>
+              {#if radios.chip !== 'ESP8266'}<option value={0x10000}>Application only, 0x10000</option>{/if}
+            </select>
+            <button class="btn" onclick={() => fileInput?.click()} disabled={!radios.inRom || radios.busy}>Write a file…</button>
+            <input type="file" accept=".bin,application/octet-stream" bind:this={fileInput} onchange={writeFile} hidden />
           </div>
         </div>
       </div>
@@ -255,6 +273,7 @@
           <span class="caption">
             {#if info}{info.env} · {info.version} · {Math.round(info['full.bin'].size / 1024)} KB{update ? ` · only the application: settings stay${radios.phrase ? ', the bind phrase changes' : ', the bind phrase too'}` : ''}{#if f?.family === 'ExpressLRS' && f.name}<br />the hardware ExpressLRS calls {f.name}{/if}{#if f?.family === 'TetherLRS' && /^GENERIC/i.test(f.name ?? '')}<br />it runs a build for its chip, not for its board: if its board is in the list, pick that one, with the bands it really has{/if}{:else}The board is chosen from what Identify finds.{/if}
           </span>
+          <span class="caption">TetherLRS comes without warranty and flashing voids the maker's. The radio rules where you use it are yours to keep: band, power, duty cycle; the region Free applies no limits.</span>
         </div>
       </div>
 

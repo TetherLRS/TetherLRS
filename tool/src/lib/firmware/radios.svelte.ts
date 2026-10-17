@@ -10,7 +10,7 @@ import { app } from '$lib/app.svelte';
 import { identifyTx } from '$lib/device/identify';
 import { DeviceLink } from '$lib/device/link';
 import { TxSession } from '$lib/device/tx';
-import { listPorts, rememberRx, rememberTx, type PortEntry } from '$lib/serial/ports';
+import { forget, listPorts, rememberRx, rememberTx, type PortEntry } from '$lib/serial/ports';
 import { openPassthrough } from '$lib/serial/passthrough';
 import type { Running } from './detect';
 import { elrsToBootloader, romAnswers } from './elrs';
@@ -370,6 +370,28 @@ class Radios {
       else rememberRx(r.entry, info.device);
       this.cb().log(started ? 'done, it starts TetherLRS' : 'done: power it off and on to start TetherLRS');
       r.found = { family: 'TetherLRS', role: this.role, name: info.device, version: info.version, how: 'flashed' };
+    });
+  }
+
+  // a file of the user's onto the radio: a backup of all its flash, or ExpressLRS, mLRS or another image
+  async writeFile(data: Uint8Array, address: number): Promise<void> {
+    const r = this.selected;
+    const s = this.session;
+    if (!r || !s) return;
+    this.progress = 0;
+    await this.run(async () => {
+      if (address + data.length > s.flashSize) {
+        throw new Error(`The file has ${data.length} bytes: from 0x${address.toString(16)} they do not fit in its ${s.flashSize / 1048576} MB.`);
+      }
+      this.cb().log(`writing ${data.length} bytes at 0x${address.toString(16)}`);
+      await s.write(data, address, this.cb());
+      this.logRetries(s);
+      const started = await s.close(true);
+      this.session = undefined;
+      this.inRom = false;
+      forget(r.entry); // what runs there now is not known: Identify tells
+      r.found = undefined;
+      this.cb().log(started ? 'done, it starts what was written' : 'done: power it off and on to start it');
     });
   }
 
