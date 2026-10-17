@@ -8,6 +8,8 @@
 
 #define DEVICE_HAS_SINGLE_LED_RGB
 #define DEVICE_HAS_FAN_ONOFF
+#define DEVICE_HAS_TFT_DISPLAY
+#define DEVICE_HAS_DISPLAY_ROT180
 #define DEVICE_HAS_NO_DEBUG
 
 
@@ -70,6 +72,35 @@ IRAM_ATTR bool button_pressed(void) { return false; }
 #define LED_RGB                   IO_P21
 #define LED_RGB_PIXEL_NUM         1
 #include "../esp-hal-led-rgb.h"
+
+
+//-- Display
+
+#define DISP_SPI_SCK_IO           IO_P2
+#define DISP_SPI_MOSI_IO          IO_P12
+#define DISP_DC_IO                IO_P14
+#define DISP_RST_IO               IO_P33
+#define DISP_BL_IO                IO_P32
+
+
+//-- 5 Way Switch
+
+#define FIVEWAY_ADC_IO            IO_P35
+
+void fiveway_init(void)
+{
+}
+
+IRAM_ATTR uint8_t fiveway_read(void)
+{
+    int16_t adc = analogRead(FIVEWAY_ADC_IO); // as ExpressLRS: the value within half the distance to the next
+    if (adc > 1656 && adc < 2298) return (1 << KEY_UP);
+    if (adc > 2877 && adc < 3393) return (1 << KEY_DOWN);
+    if (adc > 2361 && adc < 2877) return (1 << KEY_LEFT);
+    if (adc > -661 && adc < 661) return (1 << KEY_RIGHT);
+    if (adc > 995 && adc < 1649) return (1 << KEY_CENTER);
+    return 0;
+}
 
 
 //-- Cooling Fan

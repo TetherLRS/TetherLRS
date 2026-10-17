@@ -59,6 +59,10 @@ In tx-hal files:
 #define DEVICE_HAS_I2C_DISPLAY          // board has a DISPLAY on I2C, and 5-way switch
 #define DEVICE_HAS_I2C_DISPLAY_ROT180   // board has a DISPLAY on I2C, rotated 180 degree, and 5-way switch
 #define DEVICE_HAS_FIVEWAY          // board has 5-way switch (without display)
+#define DEVICE_HAS_SPI_DISPLAY      // TetherLRS: board has an SSD1306 DISPLAY on SPI (ESP32)
+#define DEVICE_HAS_TFT_DISPLAY      // TetherLRS: board has an ST7735 80x160 TFT, showing the 128x64 picture (ESP32)
+#define DEVICE_HAS_DISPLAY_ROT180   // TetherLRS: the SPI or TFT DISPLAY is rotated 180 degree
+#define DEVICE_HAS_DISPLAY_NO_KEYS  // TetherLRS: board has a DISPLAY but no 5-way switch, the main pages take turns
 #define DEVICE_HAS_SINGLE_LED       // board has only one LED
 #define DEVICE_HAS_SINGLE_LED_RGB   // board has only one LED which is RGB WS2812, and thus can do more colors
 #define DEVICE_HAS_NO_LED           // board has no LEDs at all
@@ -315,7 +319,7 @@ extern "C" { void delay_ms(uint16_t ms); }
 #endif
 
 
-#if defined DEVICE_HAS_I2C_DISPLAY || defined DEVICE_HAS_I2C_DISPLAY_ROT180
+#if defined DEVICE_HAS_I2C_DISPLAY || defined DEVICE_HAS_I2C_DISPLAY_ROT180 || defined DEVICE_HAS_SPI_DISPLAY || defined DEVICE_HAS_TFT_DISPLAY
   #define USE_DISPLAY
 #endif
 

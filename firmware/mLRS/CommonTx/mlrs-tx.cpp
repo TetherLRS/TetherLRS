@@ -60,6 +60,8 @@
 #endif
 #ifdef USE_I2C
 #include "../modules/esp-lib/esp-i2c.h"
+#elif defined DEVICE_HAS_SPI_DISPLAY || defined DEVICE_HAS_TFT_DISPLAY
+#include "../modules/esp-lib/esp-display-spi.h"
 #endif
 #include "../Common/hal/esp-timer.h"
 

@@ -51,6 +51,7 @@ class tStatsBytes : public tStatsCount
     void Update1Hz(void) override;
     void Add(uint16_t num); // called at each cycle
     uint32_t GetBytesPerSec(void);
+    uint32_t GetTotal(void) { return count; } // TetherLRS: since power up, for the display
 };
 
 

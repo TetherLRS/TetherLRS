@@ -56,8 +56,15 @@ pin TetherLRS needs), the CoreWing Sirius Tx module (ESP32-S3) and the DIY BLE j
 radio (TX16S, Zorro, Boxer and alike) are left out on purpose: they talk only to their radio.
 
 A Tx module runs as a ground radio on its USB-C port: the data, and the CLI after `+++`. Its fan turns on from
-250 mW; its screen, joystick, WiFi backpack and radio bay pins are not used. USB alone may not power the higher levels:
-power the module the way its maker says. On some modules (HappyModel ES24 and ES900, BETAFPV Micro, NamimnoRC OLED,
+250 mW; its WiFi backpack and radio bay pins are not used. USB alone may not power the higher levels: power the module
+the way its maker says.
+
+A module with a screen shows the link and the aircraft; its joystick moves through the pages (up and down) and the
+menus (left and right), and changes settings. The pages: **Link** (RSSI and LQ both ways, power), **Aircraft** (from the
+autopilot's MAVLink: autopilot, armed, battery, GPS, height, speed, how fresh the telemetry is), **Session** (time on the
+link, links lost, data sent and received), **Radio** (mode, power, diversity), **Data** (antennas, bytes per second
+both ways), **About** (names and versions); then the Common, Tx and Rx settings and the actions (store, bind). Screens
+on I2C and SPI and the 80x160 TFT are supported; a screen without a joystick shows the pages in turn. On some modules (HappyModel ES24 and ES900, BETAFPV Micro, NamimnoRC OLED,
 QuadKopters, AXIS Thor) the WiFi backpack sits on the same serial lines as the USB-C, as mLRS also has it on the BETAFPV
 Micro 1W: whether it disturbs the data is not tested yet.
 

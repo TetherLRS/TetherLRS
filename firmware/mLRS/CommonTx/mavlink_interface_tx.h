@@ -24,6 +24,9 @@
 
 extern volatile uint32_t millis32(void);
 extern bool connected_and_rx_setup_available(void);
+#ifdef USE_DISPLAY
+#include "aircraft_info.h"
+#endif
 extern bool serial_link_up(void);
 extern bool link_task_free(void);
 extern tSetup Setup;
@@ -195,6 +198,9 @@ void tTxMavlink::Init(void)
     radio_status_tlast_ms = millis32() + 1000;
 
     vehicle.Init();
+#ifdef USE_DISPLAY
+    aircraft.Init();
+#endif
 
     msg_seq_initialized = false;
     msg_seq_last = 0;
@@ -464,6 +470,10 @@ void tTxMavlink::flush(void)
 
 void tTxMavlink::handle_msg_serial_out(fmav_message_t* const msg)
 {
+#ifdef USE_DISPLAY
+    aircraft.handle_msg(msg);
+#endif
+
     if ((msg->msgid == FASTMAVLINK_MSG_ID_HEARTBEAT) && (msg->compid == MAV_COMP_ID_AUTOPILOT1)) {
         fmav_heartbeat_t payload;
         fmav_msg_heartbeat_decode(&payload, msg);

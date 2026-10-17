@@ -6,7 +6,7 @@ external ExpressLRS Tx modules on ESP32
 From each product its hardware layout with the product's overlay, keeping only what a data link uses (radio pins and
 options, power tables, PA and antenna switches, serial, button, LED). Products with the same such hardware share one
 build. A Tx module becomes a ground radio (TLRS_RX_AS_TX) with the data and the CLI on UART0, the port its USB-C
-reaches; its fan and power control are kept, its display, joystick and backpack are not. Writes:
+reaches; its screen, joystick, fan and power control are kept, its backpack is not. Writes:
     mLRS/Common/hal/esp/gen/{rx,tx}-hal-elrs-<name>.h  one per build
     mLRS/Common/hal/esp/gen/elrs-device_conf.h       DEVICE_NAME, radio, bands
     mLRS/Common/hal/esp/gen/elrs-hal.h               includes the hal of the build
@@ -77,6 +77,8 @@ def hardware(product, kind):
     hw.update(product.get('overlay', {}))
 
     def used(k):
+        if kind == 'tx' and k.startswith(SCREEN_KEYS):
+            return True
         return k in FAN or not (IGNORED.match(k) or kind == 'tx' and TX_IGNORED.match(k))
     hw = {k: v for k, v in hw.items() if v is not None and v != -1 and used(k)}  # -1: ELRS's no pin
     if kind == 'tx':
@@ -286,6 +288,94 @@ def radio_block(plat, radio, hw, n):
     return L
 
 
+SCREEN_KEYS = ('screen_', 'joystick', 'five_way')
+SCREEN_I2C, SCREEN_SPI, SCREEN_TFT = 1, 2, 4  # ExpressLRS screen_type: SSD1306 on I2C, SSD1306 on SPI, ST7735 80x160
+
+
+def screen(hw):
+    # the screen a Tx module has and its pins are complete for, else 0
+    t = hw.get('screen_type', 0)
+    if t == SCREEN_I2C and hw.get('screen_sck') is not None and hw.get('screen_sda') is not None:
+        return t
+    if t in (SCREEN_SPI, SCREEN_TFT) and all(hw.get(k) is not None for k in ('screen_sck', 'screen_mosi', 'screen_dc')):
+        return t
+    return 0
+
+
+def fiveway(hw):
+    # 'adc', 'digital' or None, as ExpressLRS reads them
+    if hw.get('joystick') is not None and len(hw.get('joystick_values') or []) == 6:
+        return 'adc'
+    if all(hw.get(k) is not None for k in ('five_way1', 'five_way2', 'five_way3')):
+        return 'digital'
+    return None
+
+
+def display_defines(hw):
+    t = screen(hw)
+    if not t:
+        return []
+    rot = bool(hw.get('screen_reversed'))
+    if t == SCREEN_I2C:
+        d = ['#define DEVICE_HAS_I2C_DISPLAY_ROT180' if rot else '#define DEVICE_HAS_I2C_DISPLAY']
+    else:
+        d = ['#define DEVICE_HAS_TFT_DISPLAY' if t == SCREEN_TFT else '#define DEVICE_HAS_SPI_DISPLAY']
+        if rot:
+            d.append('#define DEVICE_HAS_DISPLAY_ROT180')
+    if not fiveway(hw):
+        d.append('#define DEVICE_HAS_DISPLAY_NO_KEYS')
+    return d
+
+
+def display_block(hw):
+    t = screen(hw)
+    if not t:
+        return []
+    L = ['', '', '//-- Display', '']
+    if t == SCREEN_I2C:
+        L += [define('I2C_SDA_IO', io(hw['screen_sda'])), define('I2C_SCL_IO', io(hw['screen_sck'])),
+              define('I2C_CLOCKSPEED', '1000000L') + ' // as mLRS on the Ranger']
+    else:
+        L += [define('DISP_SPI_SCK_IO', io(hw['screen_sck'])), define('DISP_SPI_MOSI_IO', io(hw['screen_mosi'])),
+              define('DISP_DC_IO', io(hw['screen_dc']))]
+        for key, name in (('screen_cs', 'DISP_CS_IO'), ('screen_rst', 'DISP_RST_IO'), ('screen_bl', 'DISP_BL_IO')):
+            if hw.get(key) is not None:
+                L.append(define(name, io(hw[key])))
+    rst = hw.get('screen_rst') if t == SCREEN_I2C else None  # the SPI driver resets its display itself
+    if rst is not None:
+        L.append(define('DISP_RST_IO', io(rst)))
+    L += ['', '', '//-- 5 Way Switch', '']
+    init = ['void fiveway_init(void)', '{']
+    if rst is not None:
+        init += ['    gpio_init(DISP_RST_IO, IO_MODE_OUTPUT_PP_LOW); // the OLED out of reset before the display starts',
+                 '    delay(10);', '    gpio_high(DISP_RST_IO);']
+    kind = fiveway(hw)
+    if kind == 'adc':
+        # ExpressLRS joystick_values: up, down, left, right, centre, idle; a key is the value within half the distance
+        # to its nearest neighbour
+        v = hw['joystick_values']
+        fuzz = [min(abs(a - b) for j, b in enumerate(v) if j != i) // 2 for i, a in enumerate(v)]
+        L += [define('FIVEWAY_ADC_IO', io(hw['joystick'])), ''] + init + ['}', '', 'IRAM_ATTR uint8_t fiveway_read(void)', '{',
+              '    int16_t adc = analogRead(FIVEWAY_ADC_IO); // as ExpressLRS: the value within half the distance to the next']
+        for i, key in enumerate(('KEY_UP', 'KEY_DOWN', 'KEY_LEFT', 'KEY_RIGHT', 'KEY_CENTER')):
+            L.append(f'    if (adc > {v[i] - fuzz[i]} && adc < {v[i] + fuzz[i]}) return (1 << {key});')
+        L += ['    return 0;', '}']
+    elif kind == 'digital':
+        L += [define('FIVEWAY_IN1_IO', io(hw['five_way1'])), define('FIVEWAY_IN2_IO', io(hw['five_way2'])),
+              define('FIVEWAY_IN3_IO', io(hw['five_way3'])), ''] + init + [
+              '    gpio_init(FIVEWAY_IN1_IO, IO_MODE_INPUT_PU);', '    gpio_init(FIVEWAY_IN2_IO, IO_MODE_INPUT_PU);',
+              '    gpio_init(FIVEWAY_IN3_IO, IO_MODE_INPUT_PU);', '}', '', 'IRAM_ATTR uint8_t fiveway_read(void)', '{',
+              '    // as ExpressLRS: the three inputs make a number, 7 is no key',
+              '    uint8_t v = (gpio_read_activehigh(FIVEWAY_IN1_IO) ? 4 : 0) | (gpio_read_activehigh(FIVEWAY_IN2_IO) ? 2 : 0) |',
+              '                (gpio_read_activehigh(FIVEWAY_IN3_IO) ? 1 : 0);',
+              '    switch (v) {', '        case 2: return (1 << KEY_LEFT);', '        case 3: return (1 << KEY_UP);',
+              '        case 4: return (1 << KEY_RIGHT);', '        case 5: return (1 << KEY_DOWN);',
+              '        case 6: return (1 << KEY_CENTER);', '    }', '    return 0;', '}']
+    else:
+        L += init + ['}', '', 'IRAM_ATTR uint8_t fiveway_read(void) { return 0; } // no keys: the main pages take turns']
+    return L
+
+
 def hal(name, kind, plat, radio, hw, products, layout, overlay):
     td = 'radio_nss_2' in hw
     rgb = hw.get('led_rgb') is not None
@@ -300,6 +390,7 @@ def hal(name, kind, plat, radio, hw, products, layout, overlay):
     fan = hw.get('misc_fan_en', hw.get('misc_fan_pwm'))
     if fan is not None:
         L.append('#define DEVICE_HAS_FAN_ONOFF')
+    L += display_defines(hw)
     if td:
         L.append('#define DEVICE_HAS_DIVERSITY_SINGLE_SPI // must be set, doesn\'t work without it')
     L += ['#define DEVICE_HAS_NO_DEBUG', '', '', '//-- UARTS', '// UARTB = serial port', '// UARTF = debug port', '',
@@ -336,6 +427,7 @@ def hal(name, kind, plat, radio, hw, products, layout, overlay):
               f'IRAM_ATTR void led_red_off(void) {{ gpio_{"high" if hw.get("led_invert") else "low"}(LED_RED); }}',
               f'IRAM_ATTR void led_red_on(void) {{ gpio_{"low" if hw.get("led_invert") else "high"}(LED_RED); }}',
               'IRAM_ATTR void led_red_toggle(void) { gpio_toggle(LED_RED); }']
+    L += display_block(hw)
     if fan is not None:
         L += ['', '', '//-- Cooling Fan', '', define('FAN_IO', io(fan)), '', 'void fan_init(void)', '{',
               '    gpio_init(FAN_IO, IO_MODE_OUTPUT_PP_LOW);', '}', '',
@@ -480,10 +572,15 @@ def files(configs, left_out):
         halh += [f'#ifdef {define}', f'#include "{fname}"', '#endif', '']
         fam = TX_FAMILY[c['plat']] if kind == 'tx' else FAMILY[c['plat']]
         ini += [f'[env:{kind}-{c["env"]}]', f'extends = {fam["common"]}', f'board = {fam["board"]}']
+        shows = kind == 'tx' and screen(c['hw'])
+        if shows and any(c['hw'].get(k) in range(6, 12) for k in c['hw'] if k.startswith('screen_') and k != 'screen_type'):
+            ini.append('board_build.flash_mode = dio  ; as ExpressLRS: the screen is on flash pins QIO would take')
         if c['hw'].get('led_rgb') is not None:
             ini += ['lib_deps =', '  makuna/NeoPixelBus@^2.8.3']
-        ini += ['build_src_filter =', f'  ${{{fam["common"]}.build_src_filter}}', f'  +<modules/sx12xx-lib/src/{RADIO[c["radio"]]["src"]}>',
-                'build_flags =', f'  ${{{fam["common"]}.build_flags}}', f'  -D {define}'] + (['  -D TLRS_RX_AS_TX'] if kind == 'tx' else []) + ['']
+        ini += ['build_src_filter =', f'  ${{{fam["common"]}.build_src_filter}}', f'  +<modules/sx12xx-lib/src/{RADIO[c["radio"]]["src"]}>']
+        if shows:
+            ini.append('  +<Common/thirdparty/gdisp.c>')
+        ini += ['build_flags =', f'  ${{{fam["common"]}.build_flags}}', f'  -D {define}'] + (['  -D TLRS_RX_AS_TX'] if kind == 'tx' else []) + ['']
         for p in c['products']:
             mapping['products'][p] = [c['env'], c['plat']]
     out[os.path.join(GEN, 'elrs-device_conf.h')] = '\n'.join(conf)

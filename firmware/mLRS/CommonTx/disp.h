@@ -33,7 +33,6 @@ class tTxDisp
 #include "../Common/thirdparty/gfxfontFreeMono12pt7b.h"
 #include "../Common/thirdparty/gfxfontFreeMono9pt7b.h"
 #include "../Common/thirdparty/gdisp.h"
-#include "../Common/thirdparty/mlrs-logo.h"
 #include "tasks.h"
 
 
@@ -79,6 +78,8 @@ typedef enum {
 
     // sub pages for main page
     SUBPAGE_MAIN_SUB0 = SUBPAGE_DEFAULT, // Main
+    SUBPAGE_MAIN_AIRCRAFT, // TetherLRS: the aircraft, from the MAVLink of its autopilot
+    SUBPAGE_MAIN_SESSION, // TetherLRS: time on the link, links lost, data both ways
     SUBPAGE_MAIN_SUB1, // Main/2, mode, power, diversity
     SUBPAGE_MAIN_SUB2, // Main/3, statistics
     SUBPAGE_MAIN_SUB3, // Main/4, tx, rx name, version
@@ -148,12 +149,19 @@ class tTxDisp
     void draw_page_main_sub2(void);
     void draw_page_main_sub3(void);
     void draw_page_main_sub4(void);
+    void draw_page_main_aircraft(void);
+    void draw_page_main_session(void);
 
     void draw_header(const char* const s);
     void draw_options(tParamList* const list);
 
     bool initialized;
     bool connected_last; // to detect connection changes
+    uint32_t connected_ms; // TetherLRS: when the link came up
+    uint16_t links_lost; // TetherLRS: since power up
+#ifdef DEVICE_HAS_DISPLAY_NO_KEYS
+    uint16_t turn_tmo; // the main pages take turns
+#endif
     bool setupmetadata_rx_available_last; // to detect changes
 
     uint16_t keys_tick;
@@ -201,12 +209,17 @@ void tTxDisp::Init(void)
 
     if (initialized) {
         gdisp_init(GDISPLAY_TYPE_SSD1306);
-#ifdef DEVICE_HAS_I2C_DISPLAY_ROT180
+#if defined DEVICE_HAS_I2C_DISPLAY_ROT180 || defined DEVICE_HAS_DISPLAY_ROT180
         gdisp_setrotation(GDISPLAY_ROTATION_180);
 #endif
     }
 
     connected_last = false;
+    connected_ms = 0;
+    links_lost = 0;
+#ifdef DEVICE_HAS_DISPLAY_NO_KEYS
+    turn_tmo = SYSTICK_DELAY_MS(4000);
+#endif
     setupmetadata_rx_available_last = false;
 
     keys_tick = 0;
@@ -335,8 +348,17 @@ uint16_t keys, i, keys_new;
     if (connected_last != connected()) { // connection state has changed
         page_modified = true; // redraws, and avoids calling gdisp_update() multiple time
         if (connected()) load_rx_list();
+        if (connected()) { connected_ms = millis32(); } else { links_lost++; }
     }
     connected_last = connected();
+
+#ifdef DEVICE_HAS_DISPLAY_NO_KEYS
+    if (page == PAGE_MAIN && !--turn_tmo) {
+        turn_tmo = SYSTICK_DELAY_MS(4000);
+        subpage = (subpage < subpage_max) ? subpage + 1 : 0;
+        page_modified = true;
+    }
+#endif
 
     if (setupmetadata_rx_available_last != SetupMetaData.rx_available) {
         page_modified = true; // redraws, and avoids calling gdisp_update() multiple time
@@ -680,7 +702,11 @@ void tTxDisp::draw_page_startup(void)
     gdisp_setcurY(48); gdisp_puts_XCentered(DEVICE_NAME);
     gdisp_setcurY(60); gdisp_puts_XCentered(VERSIONONLYSTR);
 */
-    gdisp_drawbitmap(23, 0, mlrs_logo_91x38_bw, 91, 38, 1);
+    // TetherLRS: its name, not the mLRS logo
+    gdisp_setfont(&FreeMono12pt7b);
+    gdisp_setcurY(26); gdisp_puts_XCentered("TetherLRS");
+    gdisp_unsetfont();
+    gdisp_setcurY(38); gdisp_puts_XCentered("built on mLRS");
     gdisp_setcurY(52); gdisp_puts_XCentered(DEVICE_NAME);
     gdisp_setcurY(63); gdisp_puts_XCentered(VERSIONONLYSTR);
 }
@@ -713,7 +739,7 @@ int8_t power;
 // is inefficient since background for FreeMono9pt7b needs to be cleared by rectangles
 // so we draw always full
 
-    draw_header("Main");
+    draw_header("Link");
 
     gdisp_setcurX(50);
     param_get_val_formattedstr(s, PARAM_INDEX_MODE, PARAM_FORMAT_DISPLAY); // 1 = index of Mode
@@ -773,7 +799,7 @@ void tTxDisp::draw_page_main_sub1(void)
 {
 char s[32];
 
-    draw_header("Main/2");
+    draw_header("Radio");
 
     gdisp_setcurXY(0, 0 * 10 + DISP_CONTENT_Y_BASE);
     gdisp_puts("Mode");
@@ -815,7 +841,7 @@ char s[32];
 
 if (page_modified) {
 
-    draw_header("Main/3");
+    draw_header("Data");
 
     gdisp_setcurXY(5, 0 * 10 + DISP_CONTENT_Y_BASE);
     gdisp_puts("Tx");
@@ -905,7 +931,7 @@ void tTxDisp::draw_page_main_sub3(void)
 {
 char s[32];
 
-    draw_header("Main/4");
+    draw_header("About");
 
     gdisp_setcurXY(0, 0 * 10 + DISP_CONTENT_Y_BASE);
     gdisp_puts(DEVICE_NAME);
@@ -935,7 +961,7 @@ void tTxDisp::draw_page_main_sub4(void)
 char s[48];
 uint8_t yofs = 0;
 
-    draw_header("Main/5");
+    draw_header("Network");
 
     gdisp_setcurXY(0, 0 * 10 + DISP_CONTENT_Y_BASE);
     if (!txinfo.WirelessDeviceName_cli(s)) { // e.g., TxSerDest not set to correct serial
@@ -953,9 +979,211 @@ uint8_t yofs = 0;
 }
 
 
+//-- TetherLRS pages
+
+static void _put_tenths(int32_t tenths) // 164 -> 16.4
+{
+char s[12];
+
+    if (tenths < 0) { gdisp_putc('-'); tenths = -tenths; }
+    utoBCDstr(tenths / 10, s);
+    gdisp_puts(s);
+    gdisp_putc('.');
+    gdisp_putc('0' + tenths % 10);
+}
+
+
+static void _put_uint(uint32_t n)
+{
+char s[12];
+
+    utoBCDstr(n, s);
+    gdisp_puts(s);
+}
+
+
+static void _put_bytes(uint32_t n)
+{
+    if (n < 1000) { _put_uint(n); gdisp_puts(" B"); return; }
+    if (n < 1000000) { _put_tenths(n / 100); gdisp_puts(" kB"); return; }
+    _put_tenths(n / 100000); gdisp_puts(" MB");
+}
+
+
+static void _put_time(uint32_t sec) // h:mm:ss, m:ss below an hour
+{
+    if (sec >= 3600) {
+        _put_uint(sec / 3600);
+        gdisp_putc(':');
+        sec %= 3600;
+        gdisp_putc('0' + sec / 600);
+        gdisp_putc('0' + sec / 60 % 10);
+    } else {
+        _put_uint(sec / 60);
+    }
+    gdisp_putc(':');
+    gdisp_putc('0' + sec % 60 / 10);
+    gdisp_putc('0' + sec % 10);
+}
+
+
+static const char* _autopilot_str(uint8_t autopilot)
+{
+    switch (autopilot) {
+        case MAV_AUTOPILOT_ARDUPILOTMEGA: return "ArduPilot";
+        case MAV_AUTOPILOT_PX4: return "PX4";
+        case MAV_AUTOPILOT_GENERIC: return "Generic"; // INAV unless set to ArduPilot
+    }
+    return "Autopilot";
+}
+
+
+static const char* _vehicle_str(uint8_t type)
+{
+    switch (type) {
+        case MAV_TYPE_FIXED_WING: return "plane";
+        case MAV_TYPE_QUADROTOR: return "quad";
+        case MAV_TYPE_HEXAROTOR: return "hexa";
+        case MAV_TYPE_OCTOROTOR: return "octo";
+        case MAV_TYPE_TRICOPTER: return "tri";
+        case MAV_TYPE_COAXIAL: return "copter";
+        case MAV_TYPE_HELICOPTER: return "heli";
+        case MAV_TYPE_GROUND_ROVER: return "rover";
+        case MAV_TYPE_SURFACE_BOAT: return "boat";
+        case MAV_TYPE_SUBMARINE: return "sub";
+        case MAV_TYPE_VTOL_TAILSITTER_DUOROTOR:
+        case MAV_TYPE_VTOL_TAILSITTER_QUADROTOR:
+        case MAV_TYPE_VTOL_TILTROTOR:
+        case MAV_TYPE_VTOL_FIXEDROTOR: return "VTOL";
+    }
+    return "";
+}
+
+
+static const char* _gps_fix_str(uint8_t fix_type)
+{
+    switch (fix_type) {
+        case GPS_FIX_TYPE_NO_GPS: return "none";
+        case GPS_FIX_TYPE_NO_FIX: return "no fix";
+        case GPS_FIX_TYPE_2D_FIX: return "2D";
+        case GPS_FIX_TYPE_3D_FIX: return "3D";
+        case GPS_FIX_TYPE_DGPS: return "DGPS";
+        case GPS_FIX_TYPE_RTK_FLOAT: return "RTK float";
+        case GPS_FIX_TYPE_RTK_FIXED: return "RTK";
+    }
+    return "?";
+}
+
+
+// the aircraft as its autopilot reports it through the link: battery, GPS, height, speed, how fresh
+void tTxDisp::draw_page_main_aircraft(void)
+{
+    draw_header("Aircraft");
+
+    gdisp_setcurXY(0, 0 * 10 + DISP_CONTENT_Y_BASE);
+    if (!SERIAL_LINK_MODE_IS_MAVLINK(Setup.Rx.SerialLinkMode)) {
+        gdisp_puts("read from MAVLink:");
+        gdisp_setcurXY(0, 1 * 10 + DISP_CONTENT_Y_BASE);
+        gdisp_puts("Rx Ser Link Mode");
+        gdisp_setcurXY(0, 2 * 10 + DISP_CONTENT_Y_BASE);
+        gdisp_puts("mavlink or mavlinkX");
+        return;
+    }
+    if (!aircraft.Seen()) {
+        gdisp_puts(connected() ? "no autopilot heard" : "no link");
+        return;
+    }
+
+    gdisp_puts(_autopilot_str(aircraft.autopilot));
+    gdisp_putc(' ');
+    gdisp_puts(_vehicle_str(aircraft.type));
+    gdisp_setcurX(128 - 5 * 6);
+    gdisp_puts(aircraft.armed ? "ARMED" : " safe");
+
+    gdisp_setcurXY(0, 1 * 10 + DISP_CONTENT_Y_BASE);
+    gdisp_puts("Bat ");
+    if (aircraft.voltage_mv == UINT16_MAX) {
+        gdisp_puts("-");
+    } else {
+        _put_tenths(aircraft.voltage_mv / 100); gdisp_puts("V ");
+        if (aircraft.current_ca >= 0) { _put_tenths(aircraft.current_ca / 10); gdisp_puts("A "); }
+        if (aircraft.remaining >= 0) { _put_uint(aircraft.remaining); gdisp_putc('%'); }
+    }
+
+    gdisp_setcurXY(0, 2 * 10 + DISP_CONTENT_Y_BASE);
+    gdisp_puts("GPS ");
+    if (aircraft.fix_type == UINT8_MAX) {
+        gdisp_puts("-");
+    } else {
+        gdisp_puts(_gps_fix_str(aircraft.fix_type));
+        if (aircraft.sats != UINT8_MAX) { gdisp_putc(' '); _put_uint(aircraft.sats); gdisp_puts(" sats"); }
+    }
+
+    if (aircraft.has_hud) {
+        gdisp_setcurXY(0, 3 * 10 + DISP_CONTENT_Y_BASE);
+        gdisp_puts("Alt ");
+        char s[12];
+        stoBCDstr((int32_t)aircraft.alt_m, s);
+        gdisp_puts(s);
+        gdisp_puts("m  Spd ");
+        _put_uint((uint32_t)(aircraft.groundspeed_ms + 0.5f));
+        gdisp_puts("m/s");
+    }
+
+    gdisp_setcurXY(0, 4 * 10 + DISP_CONTENT_Y_BASE);
+    uint32_t age_ms = aircraft.HeartbeatAge_ms();
+    if (age_ms > 3000) {
+        gdisp_puts("lost ");
+        _put_uint(age_ms / 1000);
+        gdisp_puts("s ago");
+    } else {
+        gdisp_puts("MAV LQ ");
+        _put_uint(stats.GetMavlinkLQ());
+        gdisp_putc('%');
+    }
+}
+
+
+// this link and the ones before: time on it, links lost, data both ways
+void tTxDisp::draw_page_main_session(void)
+{
+    draw_header("Session");
+
+    gdisp_setcurXY(0, 0 * 10 + DISP_CONTENT_Y_BASE);
+    if (connected()) {
+        gdisp_puts("Link up  ");
+        _put_time((millis32() - connected_ms) / 1000);
+    } else {
+        gdisp_puts("Link down");
+    }
+
+    gdisp_setcurXY(0, 1 * 10 + DISP_CONTENT_Y_BASE);
+    gdisp_puts("Links lost  ");
+    _put_uint(links_lost);
+
+    gdisp_setcurXY(0, 2 * 10 + DISP_CONTENT_Y_BASE);
+    gdisp_puts("Sent      ");
+    _put_bytes(stats.bytes_transmitted.GetTotal());
+
+    gdisp_setcurXY(0, 3 * 10 + DISP_CONTENT_Y_BASE);
+    gdisp_puts("Received  ");
+    _put_bytes(stats.bytes_received.GetTotal());
+
+    gdisp_setcurXY(0, 4 * 10 + DISP_CONTENT_Y_BASE);
+    gdisp_puts("On for   ");
+    _put_time(millis32() / 1000);
+}
+
+
 void tTxDisp::draw_page_main(void)
 {
     switch (subpage) {
+    case SUBPAGE_MAIN_AIRCRAFT:
+        draw_page_main_aircraft();
+        return;
+    case SUBPAGE_MAIN_SESSION:
+        draw_page_main_session();
+        return;
     case SUBPAGE_MAIN_SUB1:
         if (!page_modified) return; // has no update elements
         draw_page_main_sub1();

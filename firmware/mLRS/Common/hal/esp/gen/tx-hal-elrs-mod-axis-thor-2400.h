@@ -7,6 +7,7 @@
 //-------------------------------------------------------
 
 #define DEVICE_HAS_SINGLE_LED_RGB
+#define DEVICE_HAS_TFT_DISPLAY
 #define DEVICE_HAS_NO_DEBUG
 
 
@@ -80,6 +81,45 @@ IRAM_ATTR bool button_pressed(void) { return false; }
 #define LED_RGB                   IO_P25
 #define LED_RGB_PIXEL_NUM         1
 #include "../esp-hal-led-rgb.h"
+
+
+//-- Display
+
+#define DISP_SPI_SCK_IO           IO_P17
+#define DISP_SPI_MOSI_IO          IO_P16
+#define DISP_DC_IO                IO_P12
+#define DISP_CS_IO                IO_P22
+#define DISP_RST_IO               IO_P0
+#define DISP_BL_IO                IO_P15
+
+
+//-- 5 Way Switch
+
+#define FIVEWAY_IN1_IO            IO_P39
+#define FIVEWAY_IN2_IO            IO_P35
+#define FIVEWAY_IN3_IO            IO_P34
+
+void fiveway_init(void)
+{
+    gpio_init(FIVEWAY_IN1_IO, IO_MODE_INPUT_PU);
+    gpio_init(FIVEWAY_IN2_IO, IO_MODE_INPUT_PU);
+    gpio_init(FIVEWAY_IN3_IO, IO_MODE_INPUT_PU);
+}
+
+IRAM_ATTR uint8_t fiveway_read(void)
+{
+    // as ExpressLRS: the three inputs make a number, 7 is no key
+    uint8_t v = (gpio_read_activehigh(FIVEWAY_IN1_IO) ? 4 : 0) | (gpio_read_activehigh(FIVEWAY_IN2_IO) ? 2 : 0) |
+                (gpio_read_activehigh(FIVEWAY_IN3_IO) ? 1 : 0);
+    switch (v) {
+        case 2: return (1 << KEY_LEFT);
+        case 3: return (1 << KEY_UP);
+        case 4: return (1 << KEY_RIGHT);
+        case 5: return (1 << KEY_DOWN);
+        case 6: return (1 << KEY_CENTER);
+    }
+    return 0;
+}
 
 
 //-- POWER

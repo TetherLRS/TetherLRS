@@ -8,6 +8,7 @@
 
 #define DEVICE_HAS_SINGLE_LED_RGB
 #define DEVICE_HAS_FAN_ONOFF
+#define DEVICE_HAS_I2C_DISPLAY
 #define DEVICE_HAS_DIVERSITY_SINGLE_SPI // must be set, doesn't work without it
 #define DEVICE_HAS_NO_DEBUG
 
@@ -102,6 +103,33 @@ IRAM_ATTR bool button_pressed(void) { return false; }
 #define LED_RGB                   IO_P22
 #define LED_RGB_PIXEL_NUM         1
 #include "../esp-hal-led-rgb.h"
+
+
+//-- Display
+
+#define I2C_SDA_IO                IO_P10
+#define I2C_SCL_IO                IO_P9
+#define I2C_CLOCKSPEED            1000000L // as mLRS on the Ranger
+
+
+//-- 5 Way Switch
+
+#define FIVEWAY_ADC_IO            IO_P35
+
+void fiveway_init(void)
+{
+}
+
+IRAM_ATTR uint8_t fiveway_read(void)
+{
+    int16_t adc = analogRead(FIVEWAY_ADC_IO); // as ExpressLRS: the value within half the distance to the next
+    if (adc > 2948 && adc < 3506) return (1 << KEY_UP);
+    if (adc > -645 && adc < 645) return (1 << KEY_DOWN);
+    if (adc > 1626 && adc < 2296) return (1 << KEY_LEFT);
+    if (adc > 2389 && adc < 2947) return (1 << KEY_RIGHT);
+    if (adc > 955 && adc < 1625) return (1 << KEY_CENTER);
+    return 0;
+}
 
 
 //-- Cooling Fan

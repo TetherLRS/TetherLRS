@@ -7,6 +7,8 @@
 //-------------------------------------------------------
 
 #define DEVICE_HAS_SINGLE_LED
+#define DEVICE_HAS_I2C_DISPLAY
+#define DEVICE_HAS_DISPLAY_NO_KEYS
 #define DEVICE_HAS_NO_DEBUG
 
 
@@ -70,6 +72,22 @@ void leds_init(void)
 IRAM_ATTR void led_red_off(void) { gpio_low(LED_RED); }
 IRAM_ATTR void led_red_on(void) { gpio_high(LED_RED); }
 IRAM_ATTR void led_red_toggle(void) { gpio_toggle(LED_RED); }
+
+
+//-- Display
+
+#define I2C_SDA_IO                IO_P21
+#define I2C_SCL_IO                IO_P22
+#define I2C_CLOCKSPEED            1000000L // as mLRS on the Ranger
+
+
+//-- 5 Way Switch
+
+void fiveway_init(void)
+{
+}
+
+IRAM_ATTR uint8_t fiveway_read(void) { return 0; } // no keys: the main pages take turns
 
 
 //-- POWER
