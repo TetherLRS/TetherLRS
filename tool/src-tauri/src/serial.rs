@@ -115,10 +115,12 @@ fn port_of(ports: &Ports, id: u32) -> Result<Arc<Mutex<Box<dyn serialport::Seria
 
 // No flush: on Windows it waits, with no deadline, for a device that takes no data, as an ESP32-C3 whose firmware
 // does not read its USB. A write that makes no progress for 1 s gives up instead.
+// One USB packet at a time: a flight controller's passthrough takes the data at the UART's rate, and a larger write
+// timed out half sent, so its start went out twice when written again (a flash through a Lucid H7 at 115200)
 fn write_with_deadline(port: &mut dyn serialport::SerialPort, mut data: &[u8]) -> std::io::Result<()> {
     let mut progress = Instant::now();
     while !data.is_empty() {
-        match port.write(data) {
+        match port.write(&data[..data.len().min(64)]) {
             Ok(n) if n > 0 => {
                 data = &data[n..];
                 progress = Instant::now();

@@ -4,6 +4,7 @@
 
 import { DemoSerialPort } from './demo-port';
 import { listNativePorts, TauriSerialPort, type NativePortInfo } from './tauri-port';
+import { forgetGonePassthroughs, passthroughUart } from './passthrough';
 
 export type PortKind = 'tlrs' | 'tlrs-rx' | 'adapter' | 'esp' | 'other' | 'fc' | 'demo';
 
@@ -29,6 +30,7 @@ export interface PortEntry {
   detail: string; // product string and USB IDs
   known?: KnownTx;
   receiver?: KnownRx;
+  passthrough?: number; // a flight controller forwarding to this UART of its own
   port: SerialPort;
 }
 
@@ -82,16 +84,22 @@ export function forget(entry: PortEntry): void {
   saveMemory(memory);
 }
 
-// ports the tool may ask on its own: never flight controllers or unknown devices
-export const probeable = (entry: PortEntry) => entry.kind === 'adapter' || entry.kind === 'esp' || entry.kind === 'tlrs' || entry.kind === 'tlrs-rx';
+// ports the tool may ask on its own: never a flight controller itself or unknown devices; a radio behind a flight
+// controller only while this app has its passthrough open
+export const probeable = (entry: PortEntry) =>
+  entry.kind === 'adapter' || entry.kind === 'esp' || entry.kind === 'tlrs' || entry.kind === 'tlrs-rx' || (entry.kind === 'fc' && entry.passthrough !== undefined);
 
 function entry(key: string, label: string, vid: number | undefined, pid: number | undefined, product: string | undefined, port: SerialPort, memory: Record<string, Known>): PortEntry {
-  const known = memory[key];
   const c = classify(vid, pid);
+  // a flight controller forwards to a radio only until it is power cycled: what was found behind it counts only while
+  // this app has the passthrough open, else the FC itself would be asked
+  const passthrough = c.kind === 'fc' ? passthroughUart(key) : undefined;
+  const known = c.kind === 'fc' && passthrough === undefined ? undefined : memory[key];
+  const via = passthrough !== undefined ? `${c.name}, passthrough to UART${passthrough}` : c.name;
   const product_ = product?.replace(/\s*\(COM\d+\)\s*$/, ''); // Windows repeats the port name
   const detail = [product_, vid !== undefined ? `USB ${hex(vid)}:${hex(pid)}` : undefined].filter(Boolean).join(' · ');
-  if (known && 'rx' in known) return { key, label, kind: 'tlrs-rx', name: ['TetherLRS Rx', known.name].filter(Boolean).join(' · '), via: c.name, detail, receiver: known, port };
-  return known ? { key, label, kind: 'tlrs', name: `TetherLRS Tx · ${known.txName}`, via: c.name, detail, known, port } : { key, label, ...c, via: c.name, detail, port };
+  if (known && 'rx' in known) return { key, label, kind: 'tlrs-rx', name: ['TetherLRS Rx', known.name].filter(Boolean).join(' · '), via, detail, receiver: known, passthrough, port };
+  return known ? { key, label, kind: 'tlrs', name: `TetherLRS Tx · ${known.txName}`, via, detail, known, passthrough, port } : { key, label, ...c, via, detail, passthrough, port };
 }
 
 const demo = new DemoSerialPort();
@@ -129,7 +137,9 @@ export async function listPorts(): Promise<PortEntry[]> {
   const memory = loadMemory();
   if (isDesktop) {
     const native: NativePortInfo[] = await listNativePorts();
-    const list = native.map((p) => entry(`${p.path}|${hex(p.vid)}:${hex(p.pid)}|${p.serial ?? ''}`, p.path, p.vid ?? undefined, p.pid ?? undefined, p.product ?? p.manufacturer ?? undefined, new TauriSerialPort(p) as unknown as SerialPort, memory));
+    const keyOf = (p: NativePortInfo) => `${p.path}|${hex(p.vid)}:${hex(p.pid)}|${p.serial ?? ''}`;
+    forgetGonePassthroughs(new Set(native.map(keyOf)));
+    const list = native.map((p) => entry(keyOf(p), p.path, p.vid ?? undefined, p.pid ?? undefined, p.product ?? p.manufacturer ?? undefined, new TauriSerialPort(p) as unknown as SerialPort, memory));
     return [...sorted(list), demoEntry];
   }
   const granted = hasWebSerial ? await navigator.serial.getPorts() : [];

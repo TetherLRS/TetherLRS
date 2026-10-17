@@ -135,14 +135,16 @@
     <span class="status caption">
       {probing
         ? 'Looking for TetherLRS radios on the USB serial adapters…'
-        : current?.kind === 'tlrs-rx' && !app.connected
+        : current?.kind === 'fc' && current.passthrough === undefined && !app.connected
+          ? `${current.label} is a flight controller: the Firmware page opens a passthrough to the UART of its radio.`
+          : current?.kind === 'tlrs-rx' && !app.connected
           ? `${current.label} is an aircraft radio. Connect opens its settings while it hears no Tx; linked, they come through the ground radio.`
           : app.status}
     </span>
     {#if app.connected}
       <button class="btn" onclick={() => app.disconnect()} disabled={app.state === 'busy'}>Disconnect</button>
     {:else}
-      <button class="btn accent" onclick={connect} disabled={!current || app.state !== 'idle' || checking.has(selected)}>
+      <button class="btn accent" onclick={connect} disabled={!current || (current.kind === 'fc' && current.passthrough === undefined) || app.state !== 'idle' || checking.has(selected)}>
         {app.state === 'connecting' ? 'Connecting…' : 'Connect'}
       </button>
     {/if}

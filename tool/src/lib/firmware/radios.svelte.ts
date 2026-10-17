@@ -11,6 +11,7 @@ import { identifyTx } from '$lib/device/identify';
 import { DeviceLink } from '$lib/device/link';
 import { TxSession } from '$lib/device/tx';
 import { listPorts, rememberRx, rememberTx, type PortEntry } from '$lib/serial/ports';
+import { openPassthrough } from '$lib/serial/passthrough';
 import type { Running } from './detect';
 import { elrsToBootloader, romAnswers } from './elrs';
 import { randomStamp, writeBindPhrase } from './bindphrase';
@@ -34,6 +35,13 @@ export const byCommand = (f?: Found) => f?.family === 'TetherLRS' && f.role === 
 export const byMavlink = (f?: Found) => f?.how === 'mavlink' || (f?.role === 'Rx' && (f.family === 'TetherLRS' || f.family === 'mLRS'));
 
 const RX_BAUD = 115200; // the receiver's serial as it leaves the factory, and what a flight controller passes through
+
+// a flight controller is never asked itself: only the radio behind its passthrough
+function closedFc(e: PortEntry): void {
+  if (e.kind === 'fc' && e.passthrough === undefined) {
+    throw new Error('A flight controller: open the passthrough to the UART of its radio first (step 0).');
+  }
+}
 
 const within = <T>(p: Promise<T>, ms: number) =>
   Promise.race([p.catch(() => undefined), new Promise<undefined>((r) => setTimeout(() => r(undefined), ms))]);
@@ -79,7 +87,7 @@ class Radios {
     if (this.stale) void this.portsChanged();
   }
 
-  private ports = async () => (await listPorts()).filter((p) => p.kind !== 'fc' && p.kind !== 'demo');
+  private ports = async () => (await listPorts()).filter((p) => p.kind !== 'demo');
 
   // the ports, nothing asked: what each one runs comes out of Identify, on the user's click
   async scan(): Promise<void> {
@@ -147,6 +155,7 @@ class Radios {
     await this.run(async () => {
       await this.release();
       const e = r.entry;
+      closedFc(e);
       if (e.kind === 'esp') return this.openRom(r, 115200);
       if (app.connected && app.portKey === e.key && app.version) {
         this.seed(r);
@@ -213,6 +222,7 @@ class Radios {
     await this.run(async () => {
       await this.release();
       const e = r.entry;
+      closedFc(e);
       let romBaud = 115200;
       if (e.kind !== 'esp') {
         if (app.connected && app.portKey === e.key) {
@@ -231,6 +241,20 @@ class Radios {
         }
       }
       await this.openRom(r, romBaud);
+    });
+  }
+
+  // a flight controller made a pipe to the UART of its radio; it forwards until it is powered off and on
+  async passthrough(uart: number): Promise<void> {
+    const r = this.selected;
+    if (!r) return;
+    this.log = [];
+    await this.run(async () => {
+      this.cb().log(`asking the flight controller to forward UART${uart} at 115200, by its CLI; nothing is saved`);
+      const how = await openPassthrough(r.entry.key, r.entry.port, uart);
+      this.cb().log(how === 'already' ? 'it forwards already: a radio talks through it' : 'it forwards now, until it is powered off and on');
+      const entry = (await this.ports()).find((p) => p.key === r.entry.key);
+      if (entry) r.entry = entry;
     });
   }
 

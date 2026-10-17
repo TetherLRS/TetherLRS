@@ -29,6 +29,9 @@
   // a new install needs one; an update may keep the phrase the radio has
   const phraseOk = $derived(radios.phrase ? validPhrase(radios.phrase) : update);
   let editSource = $state(false);
+  let ptUart = $state(7);
+  // a flight controller is reached only through its passthrough
+  const fcClosed = $derived(sel?.entry.kind === 'fc' && sel.entry.passthrough === undefined);
   let logBox = $state<HTMLPreElement>();
 
   $effect(() => {
@@ -46,6 +49,9 @@
   function describe(r: Radio): string {
     if (r.checking) return 'Asking what it runs…';
     const x = r.found;
+    if (!x && r.entry.kind === 'fc') {
+      return r.entry.passthrough !== undefined ? `Forwards UART${r.entry.passthrough}: Identify finds out what runs there` : 'A flight controller: its passthrough reaches a radio on one of its UARTs';
+    }
     if (!x) return r.entry.kind === 'esp' ? 'Its own USB: Identify reads what it runs' : 'Identify finds out what it runs';
     if (x.how === 'rom') return 'In its bootloader, firmware not recognised';
     if (x.how === 'seen') return `TetherLRS ${x.role === 'Rx' ? 'receiver' : 'ground radio'}, found by the Device page`;
@@ -150,13 +156,33 @@
         <span class="caption">{describe(sel)}{radios.chip ? ` · ${radios.chip}` : ''}</span>
       </div>
 
+      {#if sel.entry.kind === 'fc'}
+        <div class="step">
+          <span class="n">0</span>
+          <div class="body">
+            <span class="step-title">Passthrough</span>
+            <span class="caption">
+              {sel.entry.passthrough !== undefined
+                ? `It forwards UART${sel.entry.passthrough} at 115200 until it is powered off and on: the radio there is reached as on an adapter.`
+                : "Its CLI's serialpassthrough makes it a pipe to the UART of the radio, at 115200. Nothing is saved; it forwards until it is powered off and on."}
+            </span>
+            <div class="line">
+              <select class="uart" bind:value={ptUart} disabled={radios.busy || sel.entry.passthrough !== undefined} aria-label="UART">
+                {#each [1, 2, 3, 4, 5, 6, 7, 8] as u (u)}<option value={u}>UART{u}</option>{/each}
+              </select>
+              <button class="btn" class:accent={fcClosed} onclick={() => radios.passthrough(ptUart)} disabled={radios.busy || !fcClosed}>Open passthrough</button>
+            </div>
+          </div>
+        </div>
+      {/if}
+
       <div class="step">
         <span class="n">1</span>
         <div class="body">
           <span class="step-title">Identify</span>
           <span class="caption">{identifyHow}</span>
           <div class="line">
-            <button class="btn" class:accent={!f} onclick={() => radios.identify()} disabled={radios.busy || radios.inRom}>Identify</button>
+            <button class="btn" class:accent={!f} onclick={() => radios.identify()} disabled={radios.busy || radios.inRom || fcClosed}>Identify</button>
           </div>
         </div>
       </div>
@@ -170,7 +196,7 @@
             {#if radios.inRom}
               <button class="btn" onclick={() => radios.restart()} disabled={radios.busy}>Restart</button>
             {:else}
-              <button class="btn" class:accent={!!f} onclick={() => radios.connect()} disabled={radios.busy}>Connect</button>
+              <button class="btn" class:accent={!!f} onclick={() => radios.connect()} disabled={radios.busy || fcClosed}>Connect</button>
             {/if}
           </div>
         </div>
@@ -404,6 +430,11 @@
     align-items: center;
     gap: var(--space-3);
     flex-wrap: wrap;
+  }
+  select.uart {
+    min-width: 0;
+    flex: none;
+    width: 9em;
   }
   select {
     min-width: 240px;
