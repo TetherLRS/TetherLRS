@@ -221,7 +221,7 @@
           </div>
           <span class="caption">Back to what it had, or to ExpressLRS or mLRS: a backup or a whole image goes from the start of its flash; on an ESP32 an application alone goes at 0x10000.</span>
           <div class="line">
-            <select class="uart" bind:value={writeAt} disabled={!radios.inRom || radios.busy} aria-label="Where in its flash">
+            <select class="fit" bind:value={writeAt} disabled={!radios.inRom || radios.busy} aria-label="Where in its flash">
               <option value={0}>Whole flash or image</option>
               {#if radios.chip !== 'ESP8266'}<option value={0x10000}>Application only, 0x10000</option>{/if}
             </select>
@@ -454,6 +454,11 @@
     min-width: 0;
     flex: none;
     width: 9em;
+  }
+  select.fit {
+    min-width: 0;
+    flex: none;
+    width: auto; /* as wide as its longest choice */
   }
   select {
     min-width: 240px;
