@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import { app } from '$lib/app.svelte';
+  import { app, DEFAULT_FIRMWARE_BASE } from '$lib/app.svelte';
   import { randomPhrase, validPhrase } from '$lib/firmware/bindphrase';
   import { byCommand, byMavlink, radios, type Found, type Radio } from '$lib/firmware/radios.svelte';
   import { hasWebSerial, isDesktop, requestPort, watchPorts } from '$lib/serial/ports';
@@ -112,6 +112,11 @@
     await app.loadFirmwareList();
     radios.pickEnv();
     editSource = false;
+  }
+
+  function defaultList() {
+    app.firmwareBase = DEFAULT_FIRMWARE_BASE;
+    void loadList();
   }
 </script>
 
@@ -297,6 +302,7 @@
     {#if editSource}
       <input type="url" bind:value={app.firmwareBase} spellcheck="false" aria-label="Firmware source" />
       <button class="btn" onclick={loadList}>Load</button>
+      <button class="btn" onclick={defaultList} disabled={app.firmwareBase === DEFAULT_FIRMWARE_BASE}>Default</button>
     {:else}
       <span class="url" title={app.firmwareBase}>{app.firmwareBase}</span>
       {#if app.manifest}<span class="caption">{Object.keys(app.manifest).length} builds</span>{/if}

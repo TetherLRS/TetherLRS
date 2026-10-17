@@ -306,6 +306,8 @@ class App {
 
   async loadFirmwareList(): Promise<void> {
     this.manifestError = '';
+    // back to the default: forget the other source even while the site cannot be reached
+    if (this.firmwareBase === DEFAULT_FIRMWARE_BASE) saveSource(this.firmwareBase);
     try {
       this.manifest = await loadManifest(this.firmwareBase);
       saveSource(this.firmwareBase);
