@@ -298,7 +298,7 @@
       <input type="url" bind:value={app.firmwareBase} spellcheck="false" aria-label="Firmware source" />
       <button class="btn" onclick={loadList}>Load</button>
     {:else}
-      <span class="url">{app.firmwareBase}</span>
+      <span class="url" title={app.firmwareBase}>{app.firmwareBase}</span>
       {#if app.manifest}<span class="caption">{Object.keys(app.manifest).length} builds</span>{/if}
       <button class="btn" onclick={() => (editSource = true)}>Change</button>
       {#if !app.manifest}<span class="caption note" class:err={app.manifestError}>{app.manifestError || 'Loading the list…'}</span>{/if}
