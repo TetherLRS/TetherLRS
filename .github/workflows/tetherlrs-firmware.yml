@@ -1,14 +1,17 @@
 # TetherLRS: runs the host tests and the tool's tests, builds every PlatformIO (ESP) environment and every STM32
 # target; on a v* tag publishes them as a GitHub Release with manifest.json for the tool (env, chip, offsets, sizes,
 # sha256), and the web app with the firmware on GitHub Pages. Per ESP env: <env>.bin for the ELRS web page or an
-# update over TetherLRS, <env>-full.bin for the ESP ROM bootloader at 0x0. Per STM32 target: a .hex.
+# update over TetherLRS, <env>-full.bin for the ESP ROM bootloader at 0x0. Per STM32 target: a .hex, or an .elrs for R9
+# boards with the ExpressLRS bootloader. A tag with -RC makes a pre-release.
 name: TetherLRS firmware
 
 on:
   push:
     branches: [main, dev] # dev: the updates under test, built and checked like main, no release
-    tags: ['v*']
+    tags: ['v*'] # a tag always runs: GitHub does not apply the paths filter to tags
+    paths-ignore: ['**.md', '.github/ISSUE_TEMPLATE/**'] # documentation alone builds nothing
   pull_request:
+    paths-ignore: ['**.md', '.github/ISSUE_TEMPLATE/**']
   workflow_dispatch:
 
 permissions:
@@ -165,6 +168,7 @@ jobs:
         with:
           files: rel/*
           generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-RC') }}
       - uses: actions/upload-artifact@v4
         with:
           name: release-files
@@ -236,3 +240,4 @@ jobs:
         with:
           projectPath: tool
           tagName: ${{ github.ref_name }}
+          prerelease: ${{ contains(github.ref_name, '-RC') }}

@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://github.com/TetherLRS/TetherLRS/wiki
+    about: Getting started, hardware, parameters, troubleshooting.

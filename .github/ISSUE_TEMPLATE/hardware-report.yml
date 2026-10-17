@@ -1,0 +1,57 @@
+name: Hardware report
+description: TetherLRS tried on a board, working or not. Every report helps the next person with that board.
+labels: ["hardware report"]
+body:
+  - type: input
+    id: product
+    attributes:
+      label: Product
+      description: As ExpressLRS or the maker names it, e.g. "RadioMaster Ranger Micro 2.4GHz TX" or "DAKEFPV Nano 2.4GHz RX".
+    validations:
+      required: true
+  - type: input
+    id: build
+    attributes:
+      label: Build
+      description: The build the tool flashed, as on the Firmware page, e.g. tx-elrs-mod-radiomaster-ranger-micro-v1.
+    validations:
+      required: true
+  - type: dropdown
+    id: role
+    attributes:
+      label: Role
+      options:
+        - Ground radio (Tx)
+        - Aircraft radio (Rx)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: TetherLRS version
+      description: "`v` on the command line, or the Device page."
+      placeholder: v1.0-RC1
+    validations:
+      required: true
+  - type: input
+    id: other
+    attributes:
+      label: The other radio of the pair
+      description: Product and role.
+  - type: checkboxes
+    id: works
+    attributes:
+      label: What works
+      options:
+        - label: Flashing with the tool
+        - label: The link comes up
+        - label: Telemetry reaches the ground station
+        - label: Settings change from the tool
+        - label: The LED
+        - label: The screen and joystick (Tx modules)
+        - label: The fan (Tx modules)
+  - type: textarea
+    id: details
+    attributes:
+      label: What did not work, and anything else
+      description: Flight controller and ground station used, mode and band, range if you measured it, photos of the board if it differs from the product page.

@@ -1,0 +1,42 @@
+name: Bug report
+description: Something in TetherLRS or the tool does not do what it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Check the [Troubleshooting](https://github.com/TetherLRS/TetherLRS/wiki/Troubleshooting) page first.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to make it happen again
+  - type: input
+    id: radios
+    attributes:
+      label: Radios
+      description: Both products and builds, and which is ground and which aircraft.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: TetherLRS version, and tool version if it is the tool
+      placeholder: v1.0-RC1, tool 1.0.0-rc.1 (Windows)
+    validations:
+      required: true
+  - type: input
+    id: setup
+    attributes:
+      label: Flight controller and ground station
+      placeholder: INAV 9 on a SpeedyBee F405, QGroundControl 4.4
+  - type: textarea
+    id: log
+    attributes:
+      label: Log or output
+      description: The tool's log, the command line output (`v`, `pl`, `stats`), or the ground station's message.
+      render: text
