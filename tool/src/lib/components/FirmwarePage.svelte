@@ -147,7 +147,7 @@
         {@render row(r)}
       {:else}
         <p class="caption empty">
-          {others.length ? 'None identified yet: pick a port below and Identify.' : 'No ports. Plug a radio in by its own USB, or on a USB serial adapter: TX to RX, RX to TX, 5 V and GND.'}
+          {others.length ? 'None identified yet: pick a port below and Identify.' : 'No ports. Plug a radio in by its own USB, or through a USB serial adapter.'}
         </p>
       {/each}
       {#if others.length}

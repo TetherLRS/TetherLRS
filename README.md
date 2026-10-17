@@ -63,10 +63,9 @@ Micro 1W: whether it disturbs the data is not tested yet.
 
 1. Get the tool: the desktop app from [Releases](../../releases), or the web app (Chrome or Edge) on this
    repository's GitHub Pages.
-2. Connect a radio to the computer: a receiver through a USB serial adapter (3.3 V, TX to RX, RX to TX, GND, 5 V), a
-   Tx module or a board with USB directly, or a receiver already wired to a flight controller, through the flight
-   controller's USB (the tool opens the INAV or Betaflight serial passthrough; nothing is saved on the flight
-   controller).
+2. Connect a radio to the computer: a receiver through a USB serial adapter, a Tx module or a board with USB directly,
+   or a receiver already wired to a flight controller, through the flight controller's USB (the tool opens the INAV or
+   Betaflight serial passthrough; nothing is saved on the flight controller).
 3. On the **Firmware** page: Identify, Back up, choose ground radio (Tx) or aircraft radio (Rx), type a bind phrase
    (six characters, the same on both radios), Flash. Do the other radio the same way.
 4. Wire the aircraft radio to a free UART of the flight controller and set that UART to MAVLink telemetry at 115200:
