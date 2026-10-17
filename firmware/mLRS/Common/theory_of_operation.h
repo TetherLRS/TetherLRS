@@ -115,7 +115,7 @@ which allows us to check if it's a "old" or "new" frame, i.e., a frame carrying 
 
 The hardware peripherals are named UART, UARTB, ..., UARTF or USB. These peripherals are assigned to
 serial ports and a com port. The assignment is controlled by the Tx_Ser_Dest parameter, which has the options
-"serial", "wbridge", "serial2", "com" and "mbridge".
+"serial", "wbridge", "serial2" and "com".
 Which options are available is determined by a number of DEVICE_HAS_xxx defines:
   "serial"   available if USE_SERIAL          (board has a serial port)
   "wbridge"  available if USE_WIRELESS_BRIDGE (board has an ESP or HC04 wireless bridge)

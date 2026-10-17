@@ -199,20 +199,20 @@ tSerialBase* tSerialPorts::ser_or_com_set_to_com(void)
 }
 #endif
 
-// 2\1      | SERIAL          | WBRIDGE/SERIAL2 | COM                | MBRIDGE
-// --------------------------------------------------------------------------------------------
-// NONE     | serial = uartb  | serial = uartd  | serial = uartc/usb | serial = is not used, assign uartb
-//          | com = uartc/usb | com = uartc/usb | com = uartb        | com = uartc/usb
-//          | serial2 = null  | serial2 = null  | serial2 = null     | serial2 = null
-// --------------------------------------------------------------------------------------------
-// SERIAL   | should not      | serial = uartd  | should not         | serial = is not used, assign any
-//          | happen          | com = uartc/usb | happen             | com = uartc/usb
-//          |                 | serial2 = uartb |                    | serial2 = uartb
-// --------------------------------------------------------------------------------------------
-// WBRIDGE/ | serial = uartb  | should not      | serial = uartc/usb | serial = is not used, assign uartb
-// SERIAL2  | com = uartc/usb | happen          | com = uartb        | com = uartc/usb
-//          | serial2 = uartd |                 | serial2 = uartd    | serial2 = uartd
-// --------------------------------------------------------------------------------------------
+// 2\1      | SERIAL          | WBRIDGE/SERIAL2 | COM
+// -----------------------------------------------------------------
+// NONE     | serial = uartb  | serial = uartd  | serial = uartc/usb
+//          | com = uartc/usb | com = uartc/usb | com = uartb
+//          | serial2 = null  | serial2 = null  | serial2 = null
+// -----------------------------------------------------------------
+// SERIAL   | should not      | serial = uartd  | should not
+//          | happen          | com = uartc/usb | happen
+//          |                 | serial2 = uartb |
+// -----------------------------------------------------------------
+// WBRIDGE/ | serial = uartb  | should not      | serial = uartc/usb
+// SERIAL2  | com = uartc/usb | happen          | com = uartb
+//          | serial2 = uartd |                 | serial2 = uartd
+// -----------------------------------------------------------------
 
 void tSerialPorts::Init(uint8_t serial_port, uint32_t baud, uint8_t serial_port2, uint32_t baud2)
 {

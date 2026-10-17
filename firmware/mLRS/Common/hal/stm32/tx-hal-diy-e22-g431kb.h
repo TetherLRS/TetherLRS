@@ -12,7 +12,6 @@
 //-------------------------------------------------------
 
 //#define DEVICE_HAS_DIVERSITY
-//#define DEVICE_HAS_IN
 #define DEVICE_HAS_NO_DEBUG
 
 

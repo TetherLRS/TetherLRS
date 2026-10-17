@@ -142,7 +142,7 @@ void tTxMavlink::Init(void)
 {
     // ser2 != nullptr indicates that router is to be used
     //
-    // 2      | SERIAL            | WBRIDGE/SERIAL2   | COM
+    // 2\1      | SERIAL            | WBRIDGE/SERIAL2   | COM
     // ------------------------------------------------------------------
     // NONE     | ser = serial      | ser = serial2     | ser = com
     //          | ser2 = null       | ser2 = null       | ser2 = null

@@ -39,7 +39,7 @@ manufacturers set.
 |---|---|---|
 | ExpressLRS receivers, ESP8285, ESP32, ESP32-C3, ESP32-S3 | 213 of 216 products | 4 boards, below |
 | ExpressLRS Tx modules, external, ESP32, as ground radio on their USB-C | 53 of 55 products | none yet |
-| mLRS STM32 receivers and Tx boards: FrSky R9, Matek mR900 and mR24, Wio-E5, E77, DIY E22/E28/LR2021 | 49 images | none yet |
+| mLRS STM32 receivers and Tx boards: FrSky R9, Matek mR900 and mR24, Wio-E5, E77, DIY E22/E28/LR2021 | 49 images, and 4 for R9 boards with the ExpressLRS bootloader | none yet |
 
 Tested on the bench:
 
@@ -50,12 +50,14 @@ Tested on the bench:
 
 Everything else is built but not tested on the real board yet: **testers are welcome**, open an issue with what worked
 and what did not. Not supported yet: two ESP8285 PWM receivers and the HappyModel EPW6 (their layouts lack a radio
-pin TetherLRS needs) and the CoreWing Sirius Tx module (ESP32-S3). Modules inside a radio (TX16S, Zorro, Boxer and
-alike) are left out on purpose: they talk only to their radio.
+pin TetherLRS needs), the CoreWing Sirius Tx module (ESP32-S3) and the DIY BLE joystick (no radio). Modules inside a
+radio (TX16S, Zorro, Boxer and alike) are left out on purpose: they talk only to their radio.
 
 A Tx module runs as a ground radio on its USB-C port: the data, and the CLI after `+++`. Its fan turns on from
 250 mW; its screen, joystick, WiFi backpack and radio bay pins are not used. USB alone may not power the higher levels:
-power the module the way its maker says.
+power the module the way its maker says. On some modules (HappyModel ES24 and ES900, BETAFPV Micro, NamimnoRC OLED,
+QuadKopters, AXIS Thor) the WiFi backpack sits on the same serial lines as the USB-C, as mLRS also has it on the BETAFPV
+Micro 1W: whether it disturbs the data is not tested yet.
 
 ## Getting started
 

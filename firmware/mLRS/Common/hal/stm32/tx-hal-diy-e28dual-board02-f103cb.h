@@ -7,8 +7,6 @@
 // hal
 //********************************************************
 
-//#define MLRS_FEATURE_JRPIN5
-//#define MLRS_FEATURE_IN
 //#define MLRS_FEATURE_DIVERSITY
 //#define MLRS_FEATURE_NO_DIVERSITY
 
@@ -17,18 +15,9 @@
 //-------------------------------------------------------
 
 #define DEVICE_HAS_DIVERSITY
-//#define DEVICE_HAS_IN
 #define DEVICE_HAS_DEBUG_SWUART
 
 
-#ifdef MLRS_FEATURE_JRPIN5
-  #undef DEVICE_HAS_IN
-  #define DEVICE_HAS_JRPIN5
-#endif
-#ifdef MLRS_FEATURE_IN
-  #undef DEVICE_HAS_JRPIN5
-  #define DEVICE_HAS_IN
-#endif
 #ifdef MLRS_FEATURE_DIVERSITY
   #define DEVICE_HAS_DIVERSITY
 #endif
@@ -68,12 +57,6 @@
 #define UARTC_USE_TX_ISR
 #define UARTC_USE_RX
 #define UARTC_RXBUFSIZE           TX_COM_RXBUFSIZE
-
-#ifdef DEVICE_HAS_IN
-#endif
-#ifdef DEVICE_HAS_JRPIN5
-
-#endif
 
 #define SWUART_USE_TIM2 // debug
 #define SWUART_TX_IO              IO_PB7 // is the BUZZER/EXT pad
