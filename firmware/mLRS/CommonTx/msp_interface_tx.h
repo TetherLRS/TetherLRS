@@ -1,0 +1,210 @@
+//*******************************************************
+// Copyright (c) MLRS project
+// GPL3
+// https://www.gnu.org/licenses/gpl-3.0.de.html
+// OlliW @ www.olliw.eu
+//*******************************************************
+// MSP Interface TX Side
+//*******************************************************
+#ifndef MSP_INTERFACE_TX_H
+#define MSP_INTERFACE_TX_H
+#pragma once
+
+
+// TODO: share fixed buffers with mavlink interface
+
+
+#include "../Common/protocols/msp_protocol.h"
+#include "../Common/thirdparty/mspx.h"
+
+
+extern volatile uint32_t millis32(void);
+extern bool connected_and_rx_setup_available(void);
+extern tSetup Setup;
+extern tGlobalConfig Config;
+extern tSerialPorts Serials;
+extern tTxCrsf crsf;
+
+
+#define MSP_BUF_SIZE  (MSP_FRAME_LEN_MAX + 16) // needs to be larger than max supported MSP frame size
+
+
+class tTxMsp
+{
+  public:
+    void Init(void);
+    void Do(void);
+    void FrameLost(void);
+
+    void putc(char c);
+    bool available(void);
+    uint8_t getc(void);
+    void flush(void);
+
+  private:
+
+    tSerialBase* ser;
+
+    // fields for link in -> parser -> serial out
+    msp_status_t status_link_in;
+    msp_message_t msp_msg_link_in;
+    void parse_link_in_serial_out(char c);
+
+    // fields for serial in -> parser -> link out
+    msp_status_t status_ser_in;
+    msp_message_t msp_msg_ser_in;
+    tFifo<char,2*512> fifo_link_out; // needs to be at least ??
+    void parse_serial_in_link_out(void);
+
+    uint8_t _buf[MSP_BUF_SIZE]; // temporary working buffer, to not burden stack
+};
+
+
+void tTxMsp::Init(void)
+{
+    switch (Setup.Tx[Config.ConfigId].SerialPort) {
+    case TX_SERIAL_PORT_SERIAL:
+    case TX_SERIAL_PORT_SERIAL2:
+    case TX_SERIAL_PORT_WIRELESS_BRIDGE:
+    case TX_SERIAL_PORT_COM:
+        ser = Serials.serial; // already sorted out in serialports.Init()
+        break;
+    case TX_SERIAL_PORT_CRSF_BRIDGE:
+        ser = nullptr; // MSP is not supported over CRSF bridge, set ser to nullptr to effectively disable it
+        break;
+    default:
+        while(1){} // must not happen
+    }
+
+    msp_init();
+
+    status_link_in = {};
+    status_ser_in = {};
+    fifo_link_out.Init();
+}
+
+
+void tTxMsp::FrameLost(void)
+{
+    msp_parse_reset(&status_link_in);
+}
+
+
+void tTxMsp::Do(void)
+{
+    if (!connected_and_rx_setup_available()) {
+        fifo_link_out.Flush();
+    }
+
+    if (!SERIAL_LINK_MODE_IS_MSP(Setup.Rx.SerialLinkMode)) return; // not selected
+
+    if (!ser) return; // needs a serial
+
+    // parse serial in -> link out
+    parse_serial_in_link_out();
+}
+
+
+void tTxMsp::parse_serial_in_link_out(void)
+{
+    // parse serial in -> link out
+    if (fifo_link_out.HasSpace(MSP_FRAME_LEN_MAX + 16)) { // we have space for a full MSP message, so can safely parse
+        while (ser->available()) {
+            char c = ser->getc();
+            if (msp_parse_to_msg(&msp_msg_ser_in, &status_ser_in, c)) {
+                uint16_t len = msp_msg_to_frame_bufX(_buf, &msp_msg_ser_in); // converting to mspX
+                fifo_link_out.PutBuf(_buf, len);
+            }
+        }
+    }
+}
+
+
+void tTxMsp::parse_link_in_serial_out(char c)
+{
+    // parse link in -> serial out
+    if (msp_parseX_to_msg(&msp_msg_link_in, &status_link_in, c)) { // converting from mspX
+        bool send = true;
+
+        if (msp_msg_link_in.type == MSP_TYPE_RESPONSE) {
+            switch (msp_msg_link_in.function) {
+            case MSPX_STATUS:
+                // it's our home brew, catch it
+                send = false;
+                break;
+            }
+
+            if (msp_msg_link_in.flag & MSP_FLAG_SOURCE_ID_RC_LINK) {
+                // it's requested by the receiver, catch it
+                send = false;
+            }
+        }
+
+        if (send) {
+            uint16_t len = msp_msg_to_frame_buf(_buf, &msp_msg_link_in);
+            ser->putbuf(_buf, len);
+        }
+
+        // allow crsf class to capture it
+        if (msp_msg_link_in.type == MSP_TYPE_RESPONSE) {
+            crsf.TelemetryHandleMspMsg(&msp_msg_link_in);
+        }
+
+/*
+dbg.puts("\n");
+dbg.putc(msp_msg_link_in.type);
+char s[32]; msp_function_str_from_msg(s, &msp_msg_link_in); dbg.puts(s);
+dbg.puts(" ");
+dbg.puts(u16toBCD_s(msp_msg_link_in.len));
+if(msp_msg_link_in.len>64){
+dbg.puts(" ");for (uint16_t n=0;n<((msp_msg_link_in.len<100)?msp_msg_link_in.len:50); n++) dbg.putc(msp_msg_link_in.payload[n]);}
+*/
+/*dbg.puts(" ");
+dbg.puts(u8toHEX_s(msp_msg_link_in.checksum));
+uint16_t _len = msp_msg_to_frame_buf(_buf, &msp_msg_link_in);
+uint8_t crc8 = crsf_crc8_update(CRSF_CRC8_INIT, &(_buf[3]), _len - 4);
+dbg.puts(" ");
+dbg.puts(u8toHEX_s(crc8));
+*/
+    }
+}
+
+
+void tTxMsp::putc(char c)
+{
+    if (!ser) return;
+
+    // parse link in -> serial out
+    parse_link_in_serial_out(c);
+}
+
+
+bool tTxMsp::available(void)
+{
+    if (!ser) return false;
+
+    return fifo_link_out.Available();
+    //return ser->available();
+}
+
+
+uint8_t tTxMsp::getc(void)
+{
+    if (!ser) return 0;
+
+    return fifo_link_out.Get();
+    //return ser->getc();
+}
+
+
+void tTxMsp::flush(void)
+{
+    if (!ser) return;
+
+    fifo_link_out.Flush();
+    ser->flush();
+}
+
+
+#endif // MSP_INTERFACE_TX_H
+
