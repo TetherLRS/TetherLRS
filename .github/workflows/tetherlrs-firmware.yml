@@ -6,7 +6,7 @@ name: TetherLRS firmware
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev] # dev: the updates under test, built and checked like main, no release
     tags: ['v*']
   pull_request:
   workflow_dispatch:
