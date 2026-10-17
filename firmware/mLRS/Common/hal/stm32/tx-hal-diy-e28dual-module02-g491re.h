@@ -12,7 +12,6 @@
 //-------------------------------------------------------
 
 #define DEVICE_HAS_DIVERSITY
-#define DEVICE_HAS_JRPIN5
 #define DEVICE_HAS_I2C_DISPLAY_ROT180
 #define DEVICE_HAS_BUZZER
 #define DEVICE_HAS_ESP_WIFI_BRIDGE_ESP32
@@ -33,8 +32,6 @@
 // UARTB = serial port
 // UARTC (or USB) = com (CLI) port
 // UARTD = serial2 port or wireless bridge port
-// UART  = JR bay pin5
-// UARTE = in port, SBus or whatever
 // UARTF or SWUART = debug port
 
 #define UARTB_USE_UART4_PC10PC11 // serial
@@ -61,16 +58,6 @@
 #define UARTD_USE_RX
 #define UARTD_RXBUFSIZE           TX_SERIAL_RXBUFSIZE
 
-#define UART_USE_UART2_PB3PB4 // JR pin5, MBridge
-#define UART_BAUD                 400000
-#define UART_USE_TX
-#define UART_TXBUFSIZE            512
-#define UART_USE_TX_ISR
-#define UART_USE_RX
-#define UART_RXBUFSIZE            512
-
-//#define JRPIN5_RX_TX_INVERT_INTERNAL // requires external diode from Tx to Rx, gives issues on H7
-#define JRPIN5_FULL_INTERNAL_ON_RX // does not require an external diode
 
 #define UARTF_USE_LPUART1_PC1PC0 // debug
 #define UARTF_BAUD                115200
@@ -356,12 +343,5 @@ uint32_t portc[] = {
     LL_GPIO_PIN_8, LL_GPIO_PIN_9, LL_GPIO_PIN_10, LL_GPIO_PIN_11,
     LL_GPIO_PIN_12, LL_GPIO_PIN_13, LL_GPIO_PIN_14,
 };
-
-
-
-
-
-
-
 
 

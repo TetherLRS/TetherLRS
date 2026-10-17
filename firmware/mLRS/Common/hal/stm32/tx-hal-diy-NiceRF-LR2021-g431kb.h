@@ -11,8 +11,6 @@
 // TX_DIY_NICERF_LR2021_G431KB v002 STM32G431KB
 //-------------------------------------------------------
 
-#define DEVICE_HAS_JRPIN5
-#define DEVICE_HAS_IN_ON_JRPIN5_TX
 //#define DEVICE_HAS_NO_DEBUG
 #define DEVICE_HAS_NO_COM
 
@@ -31,8 +29,6 @@
 // UARTB = serial port
 // UARTC = COM (CLI)
 // UARTD = serial2 BT/ESP port
-// UART  = JR bay pin5
-// UARTE = in port, SBus or whatever
 // UARTF = -
 
 #define UARTB_USE_UART1_PA9PA10 // serial
@@ -53,15 +49,6 @@
 #define UARTC_RXBUFSIZE           TX_COM_RXBUFSIZE
 #endif
 
-#define UART_USE_UART2_PB3PA15 // JR pin5, MBridge
-#define UART_BAUD                 400000
-#define UART_USE_TX
-#define UART_TXBUFSIZE            512
-#define UART_USE_TX_ISR
-#define UART_USE_RX
-#define UART_RXBUFSIZE            512
-
-#define JRPIN5_FULL_INTERNAL_ON_TX // does not require an external diode
 
 #ifndef DEVICE_HAS_NO_DEBUG
 #define UARTF_USE_LPUART1_PA2PA3 // debug

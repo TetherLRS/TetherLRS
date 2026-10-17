@@ -15,8 +15,6 @@
 // many THX to the ExpressLRS project !
 // note: these sources are not always correct in features ELRS doesn't use and not complete for what we need
 
-#define DEVICE_HAS_IN_INVERTED
-#define DEVICE_HAS_JRPIN5
 #define DEVICE_HAS_COM_ON_SERIAL // is selected in device specific ways, here: dip switch
 #define DEVICE_HAS_DEBUG_SWUART
 #define DEVICE_HAS_BUZZER
@@ -41,8 +39,6 @@
 // UARTB = serial port
 // UARTC (or USB) = com (CLI) port
 // UARTD = serial2 port or wireless bridge port
-// UART  = JR bay pin5
-// UARTE = in port, SBus or whatever
 // UARTF or SWUART = debug port
 
 #define UARTB_USE_UART1_PA9PA10 // serial or com (CLI) // goes via inverter to RX/TX of RS232 port
@@ -53,25 +49,6 @@
 #define UARTB_USE_RX
 #define UARTB_RXBUFSIZE           TX_SERIAL_RXBUFSIZE
 
-#define UART_USE_UART3_PB10PB11 // JR pin5, MBridge
-#define UART_BAUD                 400000
-#define UART_USE_TX
-#define UART_TXBUFSIZE            512
-#define UART_USE_TX_ISR
-#define UART_USE_RX
-#define UART_RXBUFSIZE            512
-
-#define JRPIN5_TX_OE              IO_PA5 // high = enabled
-#define JRPIN5_TX_OE_DISABLED     gpio_low(JRPIN5_TX_OE)
-#define JRPIN5_TX_OE_ENABLED      gpio_high(JRPIN5_TX_OE)
-
-#define UARTE_USE_UART2_PA2PA3 // in port // PA3
-#define UARTE_BAUD                100000 // SBus normal baud rate, is being set later anyhow
-//#define UARTE_USE_TX
-//#define UARTE_TXBUFSIZE           512
-//#define UARTE_USE_TX_ISR
-#define UARTE_USE_RX
-#define UARTE_RXBUFSIZE           512
 
 #define SWUART_USE_TIM4 // debug // goes via an inverter to JR Pin2, solder to R15 for TTL UART signal, C23 provides GND
 #define SWUART_TX_IO              IO_PA2
@@ -156,22 +133,6 @@ void sx_dio_enable_exti_isr(void)
 void sx_dio_exti_isr_clearflag(void)
 {
     LL_EXTI_ClearFlag_0_31(SX_DIO_EXTI_LINE_x);
-}
-
-
-//-- In port
-// is on IO_PA2, UART2 RX, inverted
-
-void in_init_gpio(void)
-{
-}
-
-void in_set_normal(void)
-{
-}
-
-void in_set_inverted(void)
-{
 }
 
 

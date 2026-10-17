@@ -20,8 +20,6 @@
 //-------------------------------------------------------
 // USB-C = com, Tx1/Rx1 = serial2 w HC04, LPTx1/LPRx1 = serial
 
-#define DEVICE_HAS_JRPIN5
-#define DEVICE_HAS_IN_ON_JRPIN5_TX
 #define DEVICE_HAS_FAN_ONOFF
 
 #define DEVICE_HAS_COM_ON_USB
@@ -53,8 +51,6 @@
 // UARTB = serial port
 // UARTC (or USB) = com (CLI) port
 // UARTD = serial2 port or wireless bridge port
-// UART  = JR bay pin5
-// UARTE = in port, SBus or whatever
 // UARTF or SWUART = debug port
 
 #define UARTB_USE_LPUART1_PA2PA3 // serial
@@ -81,23 +77,6 @@
 #define UARTD_USE_RX
 #define UARTD_RXBUFSIZE           TX_SERIAL_RXBUFSIZE
 
-#define UART_USE_UART2_PB3PB4 // JR pin5, MBridge
-#define UART_BAUD                 400000
-#define UART_USE_TX
-#define UART_TXBUFSIZE            512
-#define UART_USE_TX_ISR
-#define UART_USE_RX
-#define UART_RXBUFSIZE            512
-
-#define JRPIN5_FULL_INTERNAL_ON_TX // does not require an external diode
-
-#define UARTE_USE_UART2_PB3PB4 // in pin
-#define UARTE_BAUD                100000 // SBus normal baud rate, is being set later anyhow
-//#define UARTE_USE_TX
-//#define UARTE_TXBUFSIZE           512
-//#define UARTE_USE_TX_ISR
-#define UARTE_USE_RX
-#define UARTE_RXBUFSIZE           512
 
 #define UARTF_USE_LPUART1_PA2PA3 // debug
 #define UARTF_BAUD                115200
@@ -111,35 +90,6 @@
 //-- SX1: SX12xx & SPI
 
 #define SX_USE_REGULATOR_MODE_DCDC
-
-
-//-- In port
-// this is nasty, UARTE defines not yet known, but cumbersome to add, so we include the lib
-#ifdef DEVICE_HAS_IN
-#include "../../../modules/stm32ll-lib/src/stdstm32-uarte.h"
-
-void in_init_gpio(void)
-{
-}
-
-void in_set_normal(void)
-{
-    LL_USART_Disable(UARTE_UARTx);
-    LL_USART_SetTXRXSwap(UARTE_UARTx, LL_USART_TXRX_SWAPPED);
-    LL_USART_SetRXPinLevel(UARTE_UARTx, LL_USART_RXPIN_LEVEL_STANDARD);
-    LL_USART_Enable(UARTE_UARTx);
-    gpio_init_af(UARTE_TX_IO, IO_MODE_INPUT_PU, UARTE_IO_AF, IO_SPEED_VERYFAST);
-}
-
-void in_set_inverted(void)
-{
-    LL_USART_Disable(UARTE_UARTx);
-    LL_USART_SetTXRXSwap(UARTE_UARTx, LL_USART_TXRX_SWAPPED);
-    LL_USART_SetRXPinLevel(UARTE_UARTx, LL_USART_RXPIN_LEVEL_INVERTED);
-    LL_USART_Enable(UARTE_UARTx);
-    gpio_init_af(UARTE_TX_IO, IO_MODE_INPUT_PD, UARTE_IO_AF, IO_SPEED_VERYFAST);
-}
-#endif
 
 
 //-- Button

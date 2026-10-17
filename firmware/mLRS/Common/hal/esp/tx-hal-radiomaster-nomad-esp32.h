@@ -21,8 +21,6 @@
 //-------------------------------------------------------
 // https://github.com/ExpressLRS/targets/blob/master/TX/Radiomaster%20Nomad.json
 
-#define DEVICE_HAS_JRPIN5
-#define DEVICE_HAS_IN
 #define DEVICE_HAS_DIVERSITY_SINGLE_SPI
 #define DEVICE_HAS_SINGLE_LED_RGB
 #define DEVICE_HAS_FAN_ONOFF
@@ -37,8 +35,6 @@
 // UARTB = serial port
 // UARTC (or USB) = com (CLI) port
 // UARTD = serial2 port or wireless bridge port
-// UART  = JR bay pin5
-// UARTE = in port, SBus or whatever
 // UARTF or SWUART = debug port
 
 #define UARTB_USE_SERIAL // serial or com, is connected to USB-C via USB<>UART
@@ -61,19 +57,6 @@
 #define UARTD_USE_RX_IO           IO_P18
 #define UARTD_TXBUFSIZE           TX_SERIAL_TXBUFSIZE
 #define UARTD_RXBUFSIZE           TX_SERIAL_RXBUFSIZE
-
-#define UART_USE_SERIAL1 // JR bay pin5
-#define UART_BAUD                 400000
-#define UART_USE_TX_IO            IO_P4
-#define UART_USE_RX_IO            IO_P4
-#define UART_TXBUFSIZE            0  // TX FIFO = 128
-#define UART_RXBUFSIZE            0  // RX FIFO = 128 + 1
-
-#define UARTE_USE_SERIAL1 // in port, uses JRPin5
-#define UARTE_BAUD                 100000
-#define UARTE_USE_TX_IO            -1
-#define UARTE_USE_RX_IO            IO_P4
-#define UARTE_RXBUFSIZE            0  // RX FIFO = 128 + 1
 
 
 //-- SX1: LR11xx & SPI
@@ -138,13 +121,6 @@ IRAM_ATTR void sx2_amp_receive(void) {}
 void sx2_dio_init_exti_isroff(void) { detachInterrupt(SX2_DIO); }
 void sx2_dio_enable_exti_isr(void) { attachInterrupt(SX2_DIO, SX2_DIO_EXTI_IRQHandler, RISING); }
 IRAM_ATTR void sx2_dio_exti_isr_clearflag(void) {}
-
-
-//-- In port
-
-void in_init_gpio(void) {}
-void in_set_normal(void) { gpio_matrix_in((gpio_num_t)UARTE_USE_RX_IO, U1RXD_IN_IDX, false); }
-void in_set_inverted(void) { gpio_matrix_in((gpio_num_t)UARTE_USE_RX_IO, U1RXD_IN_IDX, true); }
 
 
 //-- Button

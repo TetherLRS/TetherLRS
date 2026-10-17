@@ -14,9 +14,7 @@
 // TX Seeedstudio Wio-E5 Mini Dev board STM32WLE5JC, https://wiki.seeedstudio.com/LoRa_E5_mini
 //-------------------------------------------------------
 
-#define DEVICE_HAS_JRPIN5
 //#define DEVICE_HAS_IN
-#define DEVICE_HAS_IN_ON_JRPIN5_RX
 #define DEVICE_HAS_DEBUG_SWUART
 #define DEVICE_HAS_SINGLE_LED
 
@@ -36,8 +34,6 @@
 // UARTB = serial port
 // UARTC (or USB) = com (CLI) port
 // UARTD = serial2 port or wireless bridge port
-// UART  = JR bay pin5
-// UARTE = in port, SBus or whatever
 // UARTF or SWUART = debug port
 
 #define UARTB_USE_UART2_PA2PA3 // serial
@@ -56,23 +52,6 @@
 #define UARTC_USE_RX
 #define UARTC_RXBUFSIZE           TX_COM_RXBUFSIZE
 
-#define UART_USE_LPUART1_PC1PC0 // JR pin5, MBridge
-#define UART_BAUD                 400000
-#define UART_USE_TX
-#define UART_TXBUFSIZE            512
-#define UART_USE_TX_ISR
-#define UART_USE_RX
-#define UART_RXBUFSIZE            512
-
-#define JRPIN5_FULL_INTERNAL_ON_RX // does not require an external diode
-
-#define UARTE_USE_LPUART1_PC1PC0 // in port // PC0
-#define UARTE_BAUD                100000 // SBus normal baud rate, is being set later anyhow
-//#define UARTE_USE_TX
-//#define UARTE_TXBUFSIZE           512
-//#define UARTE_USE_TX_ISR
-#define UARTE_USE_RX
-#define UARTE_RXBUFSIZE           512
 
 #define SWUART_USE_TIM17 // debug
 #define SWUART_TX_IO              IO_PB3
@@ -148,33 +127,6 @@ void sx_dio_exti_isr_clearflag(void)
 {
     // there is no EXTI_LINE_44 interrupt flag
 }
-
-
-//-- In port
-// this is nasty, UARTE defines not yet known, but cumbersome to add, so we include the lib
-#ifdef DEVICE_HAS_IN
-#include "../../../modules/stm32ll-lib/src/stdstm32-uarte.h"
-
-void in_init_gpio(void)
-{
-}
-
-void in_set_normal(void)
-{
-    LL_USART_Disable(UARTE_UARTx);
-    LL_USART_SetRXPinLevel(UARTE_UARTx, LL_USART_RXPIN_LEVEL_STANDARD);
-    LL_USART_Enable(UARTE_UARTx);
-    gpio_init_af(UARTE_RX_IO, IO_MODE_INPUT_PU, UARTE_IO_AF, IO_SPEED_VERYFAST);
-}
-
-void in_set_inverted(void)
-{
-    LL_USART_Disable(UARTE_UARTx);
-    LL_USART_SetRXPinLevel(UARTE_UARTx, LL_USART_RXPIN_LEVEL_INVERTED);
-    LL_USART_Enable(UARTE_UARTx);
-    gpio_init_af(UARTE_RX_IO, IO_MODE_INPUT_PD, UARTE_IO_AF, IO_SPEED_VERYFAST);
-}
-#endif
 
 
 //-- Button
@@ -286,12 +238,5 @@ uint32_t portb[] = {
 uint32_t portc[] = {
     LL_GPIO_PIN_0, LL_GPIO_PIN_1,
 };
-
-
-
-
-
-
-
 
 

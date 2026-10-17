@@ -22,8 +22,6 @@
 // Bandit, "big" Bandit: https://github.com/ExpressLRS/targets/blob/master/TX/Radiomaster%20Bandit.json
 // Bandit Micro: https://github.com/ExpressLRS/targets/blob/master/TX/Radiomaster%20Bandit%20Micro.json
 
-#define DEVICE_HAS_JRPIN5
-#define DEVICE_HAS_IN
 #define DEVICE_HAS_FAN_ONOFF
 
 #ifdef TX_ELRS_RADIOMASTER_BANDIT_900_ESP32 // Bandit, "big" Bandit
@@ -50,8 +48,6 @@
 // UARTB = serial port
 // UARTC (or USB) = com (CLI) port
 // UARTD = serial2 port or wireless bridge port
-// UART  = JR bay pin5
-// UARTE = in port, SBus or whatever
 // UARTF or SWUART = debug port
 
 #define UARTB_USE_SERIAL // serial or com, is connected to USB-C via USB<>UART also RT connector
@@ -75,18 +71,6 @@
 #define UARTD_TXBUFSIZE           TX_SERIAL_TXBUFSIZE
 #define UARTD_RXBUFSIZE           TX_SERIAL_RXBUFSIZE
 
-#define UART_USE_SERIAL1 // JR bay pin5
-#define UART_BAUD                 400000
-#define UART_USE_TX_IO            IO_P13
-#define UART_USE_RX_IO            IO_P13
-#define UART_TXBUFSIZE            0 // TX FIFO = 128
-#define UART_RXBUFSIZE            0 // RX FIFO = 128 + 1
-
-#define UARTE_USE_SERIAL1 // in port, uses JRPin5
-#define UARTE_BAUD                 100000
-#define UARTE_USE_TX_IO            -1
-#define UARTE_USE_RX_IO            IO_P13
-#define UARTE_RXBUFSIZE            0 // RX FIFO = 128 + 1
 
 #define UARTF_USE_SERIAL // debug, if needed, debug is either on the "RT" pad or on USB; need to disable serial and com
 #define UARTF_BAUD                115200
@@ -123,13 +107,6 @@ IRAM_ATTR void sx_amp_receive(void) { gpio_low(SX_TX_EN); }
 void sx_dio_enable_exti_isr(void) { attachInterrupt(SX_DIO, SX_DIO_EXTI_IRQHandler, RISING); }
 void sx_dio_init_exti_isroff(void) { detachInterrupt(SX_DIO); }
 IRAM_ATTR void sx_dio_exti_isr_clearflag(void) {}
-
-
-//-- In port
-
-void in_init_gpio(void) {}
-void in_set_normal(void) { gpio_matrix_in((gpio_num_t)UARTE_USE_RX_IO, U1RXD_IN_IDX, false); }
-void in_set_inverted(void) { gpio_matrix_in((gpio_num_t)UARTE_USE_RX_IO, U1RXD_IN_IDX, true); }
 
 
 //-- Button

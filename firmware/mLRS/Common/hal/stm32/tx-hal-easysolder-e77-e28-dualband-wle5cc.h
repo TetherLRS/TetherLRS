@@ -16,8 +16,6 @@
 // TX DIY "easy-to-solder" E77 E28 dualband, STM32WLE5CC
 //-------------------------------------------------------
 
-#define DEVICE_HAS_JRPIN5
-#define DEVICE_HAS_IN_ON_JRPIN5_TX
 #define DEVICE_HAS_COM_ON_SERIAL // serial or com is selected by pressing BUTTON during power on
 #define DEVICE_HAS_DEBUG_SWUART
 
@@ -41,8 +39,6 @@
 // UARTB = serial port
 // UARTC (or USB) = com (CLI) port
 // UARTD = serial2 port or wireless bridge port
-// UART  = JR bay pin5
-// UARTE = in port, SBus or whatever
 // UARTF or SWUART = debug port
 
 #define UARTB_USE_UART1_PB6PB7 // serial or com
@@ -61,23 +57,6 @@
 #define UARTC_USE_RX
 #define UARTC_RXBUFSIZE           TX_COM_RXBUFSIZE */
 
-#define UART_USE_UART2_PA2PA3 // JR pin5, MBridge // PA2
-#define UART_BAUD                 400000
-#define UART_USE_TX
-#define UART_TXBUFSIZE            512
-#define UART_USE_TX_ISR
-#define UART_USE_RX
-#define UART_RXBUFSIZE            512
-
-#define JRPIN5_FULL_INTERNAL_ON_TX // does not require an external diode
-
-/* #define UARTE_USE_UART2_PA2PA3 // in port
-#define UARTE_BAUD                100000 // SBus normal baud rate, is being set later anyhow
-//#define UARTE_USE_TX
-//#define UARTE_TXBUFSIZE           512
-//#define UARTE_USE_TX_ISR
-#define UARTE_USE_RX
-#define UARTE_RXBUFSIZE           512 */
 
 #define SWUART_USE_TIM17 // debug
 #define SWUART_TX_IO              IO_PA9 // STx pad on board
@@ -311,9 +290,6 @@ void sx2_dio_exti_isr_clearflag(void)
 }
 
 
-//-- In port
-
-
 //-- Button
 
 #define BUTTON                    IO_PA15
@@ -394,12 +370,5 @@ uint32_t portb[] = {
 uint32_t portc[] = {
     //LL_GPIO_PIN_13,
 };
-
-
-
-
-
-
-
 
 

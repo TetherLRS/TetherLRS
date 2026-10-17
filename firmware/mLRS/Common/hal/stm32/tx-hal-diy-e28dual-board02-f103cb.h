@@ -17,7 +17,6 @@
 //-------------------------------------------------------
 
 #define DEVICE_HAS_DIVERSITY
-#define DEVICE_HAS_JRPIN5 // requires diode from Tx to Rx soldered on the board
 //#define DEVICE_HAS_IN
 #define DEVICE_HAS_DEBUG_SWUART
 
@@ -52,8 +51,6 @@
 // UARTB = serial port
 // UARTC (or USB) = com (CLI) port
 // UARTD = serial2 port or wireless bridge port
-// UART  = JR bay pin5
-// UARTE = in port, SBus or whatever
 // UARTF or SWUART = debug port
 
 #define UARTB_USE_UART3_PB10PB11 // serial
@@ -73,29 +70,9 @@
 #define UARTC_RXBUFSIZE           TX_COM_RXBUFSIZE
 
 #ifdef DEVICE_HAS_IN
-#define UARTE_USE_UART2_PA2PA3 // in pin
-#define UARTE_BAUD                100000 // SBus normal baud rate, is being set later anyhow
-//#define UARTE_USE_TX
-//#define UARTE_TXBUFSIZE           512
-//#define UARTE_USE_TX_ISR
-#define UARTE_USE_RX
-#define UARTE_RXBUFSIZE           512
 #endif
 #ifdef DEVICE_HAS_JRPIN5
-#define UART_USE_UART2_PA2PA3 // JR pin5, MBridge
-#define UART_BAUD                 400000
-#define UART_USE_TX
-#define UART_TXBUFSIZE            512
-#define UART_USE_TX_ISR
-#define UART_USE_RX
-#define UART_RXBUFSIZE            512
 
-#define JRPIN5_TX_XOR             IO_PB9
-#define JRPIN5_TX_SET_NORMAL      gpio_low(JRPIN5_TX_XOR)
-#define JRPIN5_TX_SET_INVERTED    gpio_high(JRPIN5_TX_XOR)
-#define JRPIN5_RX_XOR             IO_PC15
-#define JRPIN5_RX_SET_NORMAL      gpio_low(JRPIN5_RX_XOR)
-#define JRPIN5_RX_SET_INVERTED    gpio_high(JRPIN5_RX_XOR)
 #endif
 
 #define SWUART_USE_TIM2 // debug
@@ -233,27 +210,6 @@ void sx2_dio_enable_exti_isr(void)
 void sx2_dio_exti_isr_clearflag(void)
 {
     exti_clearisrflag(SX2_DIO_EXTI);
-}
-
-
-//-- In port
-
-#define IN_XOR                    IO_PC15
-
-void in_init_gpio(void)
-{
-    gpio_init(IN_XOR, IO_MODE_OUTPUT_PP_LOW, IO_SPEED_VERYFAST);
-    gpio_low(IN_XOR);
-}
-
-void in_set_normal(void)
-{
-    gpio_low(IN_XOR);
-}
-
-void in_set_inverted(void)
-{
-    gpio_high(IN_XOR);
 }
 
 
