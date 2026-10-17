@@ -80,13 +80,21 @@ jobs:
       run:
         working-directory: firmware
     outputs:
-      list: ${{ steps.list.outputs.list }}
+      groups: ${{ steps.list.outputs.groups }}
     steps:
       - uses: actions/checkout@v4
-      - name: Receivers as Tx up to date
-        run: python3 tools/tetherlrs_tx_envs.py --check
+      - name: ExpressLRS targets
+        run: git submodule update --init --depth 1 elrs-targets
+      - name: Generated files up to date
+        run: |
+          python3 tools/tetherlrs_gen_elrs.py --check
+          python3 tools/tetherlrs_tx_envs.py --check
+          python3 tools/tetherlrs_elrs_products.py --check
+      # every env, in groups of 8: one setup of PlatformIO and its toolchains serves a group
       - id: list
-        run: echo "list=$(grep -ohP '^\[env:\K[^\]]+' platformio.ini platformio-tetherlrs.ini | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "groups=$(grep -ohP '^\[env:\K[^\]]+' platformio.ini platformio-tetherlrs-elrs.ini platformio-tetherlrs.ini \
+            | jq -R . | jq -cs '[_nwise(8) | join(" ")]')" >> "$GITHUB_OUTPUT"
 
   build:
     needs: envs
@@ -97,7 +105,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        env: ${{ fromJSON(needs.envs.outputs.list) }}
+        envs: ${{ fromJSON(needs.envs.outputs.groups) }}
     steps:
       - uses: actions/checkout@v4
       - name: Submodules the ESP builds use
@@ -108,18 +116,23 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/.platformio
-          key: pio-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini', 'firmware/platformio-tetherlrs.ini') }}
+          key: pio-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini') }}
       - run: pip install platformio==6.1.19 esptool==4.8.1
       - name: MAVLink library
         working-directory: firmware/mLRS/Common/mavlink
         run: python fmav_generate_c_library.py
-      - run: pio run -e ${{ matrix.env }}
-      - name: Package
-        run: python tools/tetherlrs_package.py ${{ matrix.env }} out ${{ github.ref_name }}
+      - name: Build and package
+        run: |
+          for e in ${{ matrix.envs }}; do
+            pio run -e "$e"
+            python tools/tetherlrs_package.py "$e" out ${{ github.ref_name }}
+          done
+      - id: name
+        run: echo "name=fw-$(echo '${{ matrix.envs }}' | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
-          name: fw-${{ matrix.env }}
-          path: firmware/out/${{ matrix.env }}
+          name: ${{ steps.name.outputs.name }}
+          path: firmware/out
 
   release:
     needs: [tests, build, stm32]
@@ -135,14 +148,13 @@ jobs:
       - name: Release files and manifest
         run: |
           mkdir rel
-          for d in fw/fw-*; do
-            [ "$d" = fw/fw-stm32 ] && continue
-            e=${d#fw/fw-}
+          for d in fw/fw-*/*/; do
+            e=$(basename "$d")
             cp "$d/firmware.bin" "rel/$e.bin"
             cp "$d/full.bin" "rel/$e-full.bin"
           done
           cp fw/fw-stm32/*.hex rel/
-          jq -s 'map({(.env): .}) | add' $(ls fw/fw-*/info.json) > rel/manifest.json
+          jq -s 'map({(.env): .}) | add' fw/fw-*/*/info.json > rel/manifest.json
       - uses: softprops/action-gh-release@v2
         with:
           files: rel/*
