@@ -11,7 +11,7 @@
 #pragma once
 
 
-extern bool connected_and_rx_setup_available(void);
+extern bool serial_link_up(void);
 extern tSetup Setup;
 extern tGlobalConfig Config;
 extern tSerialPorts Serials;
@@ -58,7 +58,7 @@ void tTxSxSerial::Init(tSerialBase* const _crsfbridge)
 
 bool tTxSxSerial::available(void)
 {
-    if (!connected_and_rx_setup_available()) return 0;
+    if (!serial_link_up()) return 0;
 
     if (SERIAL_LINK_MODE_IS_MAVLINK(Setup.Rx.SerialLinkMode)) {
         return mavlink.available(); // get from serial via MAVLink parser
@@ -72,7 +72,7 @@ bool tTxSxSerial::available(void)
 
 char tTxSxSerial::getc(void)
 {
-    if (!connected_and_rx_setup_available()) return 0; // not needed as done already by available()
+    if (!serial_link_up()) return 0; // not needed as done already by available()
 
     if (SERIAL_LINK_MODE_IS_MAVLINK(Setup.Rx.SerialLinkMode)) {
         return mavlink.getc(); // get from serial via MAVLink parser
@@ -86,7 +86,7 @@ char tTxSxSerial::getc(void)
 
 void tTxSxSerial::putbuf(uint8_t* const buf, uint16_t len)
 {
-    if (!connected_and_rx_setup_available()) return;
+    if (!serial_link_up()) return;
 
     if (SERIAL_LINK_MODE_IS_MAVLINK(Setup.Rx.SerialLinkMode)) { // this has to go via the parser
         for (uint16_t i = 0; i < len; i++) mavlink.putc(buf[i]);

@@ -233,6 +233,7 @@ void SX2_DIO_EXTI_IRQHandler(void)
 
 uint8_t link_rx1_status;
 uint8_t link_rx2_status;
+bool rx_silent; // the Tx's last frame said Downlink off; frames keep saying it, so nothing is stored
 
 
 //-- Tx/Rx cmd frame handling
@@ -396,6 +397,7 @@ void process_received_frame(bool do_payload, tTxFrame* const frame)
     stats.received_fhss_index = frame->status.fhss_index;
 
     stats.received_LQ_serial = frame->status.LQ_serial;
+    rx_silent = frame->status.rx_silent;
 
     // copy rc1 data
     if (!do_payload) {
@@ -704,6 +706,11 @@ INITCONTROLLER_END
         break;
 
     case LINK_STATE_TRANSMIT:
+        if (rx_silent && !bind.IsInBind()) {
+            sx_serial.flush(); // or the autopilot's old data would go out once the downlink is back
+            link_state = LINK_STATE_RECEIVE;
+            break;
+        }
         rfpower.Update();
         if (!regulatory.TxGo(tdiversity.Antenna(), fhss.GetCurrFreq())) { // not this frame, the ARQ resends its data
             link_state = LINK_STATE_RECEIVE;

@@ -45,6 +45,7 @@ typedef struct
     uint8_t antenna;
     uint8_t transmit_antenna;
     uint8_t power_code; // Rx: its power index + 1, for the Tx to show
+    uint8_t rx_silent; // Tx: tells the receiver not to transmit
     // not stats but needed
     uint8_t tx_fhss_index_band;
     uint8_t tx_fhss_index;
@@ -73,7 +74,8 @@ typedef struct
     uint32_t fhss_index : 6; // older versions have set that field to 63
     uint32_t LQ_serial : 7;
     uint32_t transmit_antenna : 1;
-    uint32_t spare : 2;
+    uint32_t rx_silent : 1; // TetherLRS: the receiver does not transmit (Tx Downlink off), 0 from an mLRS transmitter
+    uint32_t spare : 1;
     uint32_t payload_len : 7;
 }) tTxFrameStatus; // 5 bytes
 

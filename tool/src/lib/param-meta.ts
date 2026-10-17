@@ -38,6 +38,10 @@ const META: Record<string, ParamMeta> = {
   'Tx Ser Port2': { label: 'Second serial port' },
   'Tx Ser Baudrate2': { label: 'Second serial baud rate' },
   'Tx Buzzer': { label: 'Buzzer' },
+  'Tx Downlink': {
+    label: 'Aircraft radio transmits',
+    help: 'Off: the aircraft radio stays silent, data goes only from the ground to the aircraft (corrections, commands). No telemetry, no link quality on the ground, and the receiver cannot be read or changed until it is back on, which takes effect at once. Receivers without TetherLRS ignore it.',
+  },
   'Rx Power': { label: 'Transmit power' },
   'Rx Diversity': { label: 'Antennas' },
   'Rx Ser Port': { label: 'Serial port' },

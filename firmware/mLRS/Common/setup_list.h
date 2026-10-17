@@ -118,7 +118,8 @@
   X( Setup.Tx[0].SendRadioStatus,   LIST, "Tx Snd RadioStat", "TX_SND_RADIOSTAT", 0,0,0,"", "off,1 Hz", MSK_ALL )\
   X( Setup.Tx[0].MavlinkComponent,  LIST, "Tx Mav Component", "TX_MAV_COMPONENT", 0,0,0,"", "off,enabled", MSK_ALL )\
   XRC( Setup.Tx[0].PowerSwitchChannel,LIST, "Tx Power Sw Ch",   "TX_POWER_SW_CH",   0,0,0,"", "off,5,6,7,8,9,10,11,12,13,14,15,16", MSK_ALL )\
-  X( Setup.Tx[0].Buzzer,            LIST, "Tx Buzzer",        "TX_BUZZER",        0,0,0,"", "off,LP,rxLQ", SETUP_MSK_TX_BUZZER )
+  X( Setup.Tx[0].Buzzer,            LIST, "Tx Buzzer",        "TX_BUZZER",        0,0,0,"", "off,LP,rxLQ", SETUP_MSK_TX_BUZZER )\
+  X( Setup.Tx[0].Downlink,          LIST, "Tx Downlink",      "TX_DOWNLINK",      0,0,0,"", "on,off", MSK_ALL )
 
 #define SETUP_PARAMETER_LIST_TX_ESP_WIFI_BRIDGE \
   X( Setup.Tx[0].WifiProtocol,      LIST, "Tx Wifi Protocol", "TX_WIFI_PROT",     0,0,0,"", "TCP,UDP,BT,UDP STA,BLE,ESPNOW", SETUP_MSK_TX_WIFIPROT )\

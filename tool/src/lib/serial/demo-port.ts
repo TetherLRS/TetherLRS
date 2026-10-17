@@ -59,6 +59,7 @@ export class DemoSerialPort {
       { name: 'Tx Snd RadioStat', kind: 'list', options: ['off', '1 Hz'], value: 0 },
       { name: 'Tx Mav Component', kind: 'list', options: ['off', 'enabled'], value: 0 },
       { name: 'Tx Buzzer', kind: 'list', options: ['off', 'LP', 'rxLQ'], value: 0, allowed: () => [] },
+      { name: 'Tx Downlink', kind: 'list', options: ['on', 'off'], value: 0 },
       { name: 'Rx Power', kind: 'list', options: ['10 mW', '25 mW', '50 mW', '100 mW', '250 mW', '500 mW'], value: 1 },
       { name: 'Rx Diversity', kind: 'list', options: ['enabled', 'antenna1', 'antenna2', 'r:en. t:ant1', 'r:en. t:ant2'], value: 1, allowed: () => [1] },
       { name: 'Rx Ser Port', kind: 'list', options: ['serial', 'can', 'canfd'], value: 0, allowed: () => [0] },

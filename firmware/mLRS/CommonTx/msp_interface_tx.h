@@ -20,6 +20,7 @@
 
 extern volatile uint32_t millis32(void);
 extern bool connected_and_rx_setup_available(void);
+extern bool serial_link_up(void);
 extern tSetup Setup;
 extern tGlobalConfig Config;
 extern tSerialPorts Serials;
@@ -92,7 +93,7 @@ void tTxMsp::FrameLost(void)
 
 void tTxMsp::Do(void)
 {
-    if (!connected_and_rx_setup_available()) {
+    if (!serial_link_up()) {
         fifo_link_out.Flush();
     }
 

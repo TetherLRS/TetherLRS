@@ -495,8 +495,8 @@ bool tx_payload_held = false; // the frame with it was not sent (region rules), 
 void prepare_transmit_frame(uint8_t antenna, uint8_t fhss1_curr_i, uint8_t fhss2_curr_i)
 {
     if (transmit_frame_type == TRANSMIT_FRAME_TYPE_NORMAL) {
-        // read data from serial port
-        if (connected()) {
+        // read data from serial port; a silent receiver is never heard, the data goes one way
+        if (connected() || Setup.Tx[Config.ConfigId].Downlink == TX_DOWNLINK_OFF) {
             if (!tx_payload_held) {
                 tx_payload_len = 0;
                 for (uint8_t i = 0; i < FRAME_TX_PAYLOAD_LEN - crypto.NonceLen(); i++) {
@@ -535,6 +535,7 @@ void prepare_transmit_frame(uint8_t antenna, uint8_t fhss1_curr_i, uint8_t fhss2
 if (!Config.IsDualBand && (fhss1_curr_i != fhss2_curr_i)) while(1){} // must not happen, catch it
 
     frame_stats.LQ_serial = stats.GetLQ_serial();
+    frame_stats.rx_silent = (Setup.Tx[Config.ConfigId].Downlink == TX_DOWNLINK_OFF) ? 1 : 0;
 
     if (transmit_frame_type == TRANSMIT_FRAME_TYPE_NORMAL) {
         pack_txframe(&txFrame, &frame_stats, &rcData, tx_payload, tx_payload_len);
@@ -743,6 +744,13 @@ bool connected(void)
 bool connected_and_rx_setup_available(void)
 {
     return (connected() && SetupMetaData.rx_available);
+}
+
+// a silent receiver (Downlink off) is never heard: the data goes one way, with the receiver's serial setup the Tx
+// read and stored last
+bool serial_link_up(void)
+{
+    return connected_and_rx_setup_available() || (Setup.Tx[Config.ConfigId].Downlink == TX_DOWNLINK_OFF);
 }
 
 
@@ -1113,7 +1121,10 @@ IF_SX2(
 
         if (!connected()) rarq.Disconnected();
 
-        if (connect_state == CONNECT_STATE_LISTEN) {
+        // a silent receiver never answers the setup request, which would take every frame from the data
+        if (connect_state == CONNECT_STATE_LISTEN && Setup.Tx[Config.ConfigId].Downlink == TX_DOWNLINK_OFF) {
+            link_task_reset();
+        } else if (connect_state == CONNECT_STATE_LISTEN) {
             link_task_reset(); // to ensure that the following set is enforced
             if (connect_occured_once && crypto.IsAuthenticated()) {
                 link_task_set(LINK_TASK_TX_GET_RX_SETUPDATA);

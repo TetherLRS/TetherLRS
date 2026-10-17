@@ -373,6 +373,7 @@ void setup_default(uint8_t config_id)
     Setup.Tx[config_id].Buzzer = SETUP_TX_BUZZER;
     Setup.Tx[config_id].MavlinkComponent = SETUP_TX_MAV_COMPONENT;
     Setup.Tx[config_id].PowerSwitchChannel = POWER_SWITCH_CHANNEL_OFF;
+    Setup.Tx[config_id].Downlink = TX_DOWNLINK_ON;
 
     Setup.Tx[config_id].WifiProtocol = WIFI_PROTOCOL_UDP;
     Setup.Tx[config_id].WifiChannel = WIFI_CHANNEL_6;
@@ -558,6 +559,7 @@ if (!only_rx) {
 
     SANITIZE(Tx[config_id].Buzzer, BUZZER_NUM, SETUP_TX_BUZZER, BUZZER_OFF);
     TST_NOTALLOWED(Tx_Buzzer_allowed_mask, Tx[config_id].Buzzer, BUZZER_OFF);
+    SANITIZE(Tx[config_id].Downlink, TX_DOWNLINK_NUM, TX_DOWNLINK_ON, TX_DOWNLINK_ON); // a former spare byte, 0xFF
 
     SANITIZE(Tx[config_id].PowerSwitchChannel, POWER_SWITCH_CHANNEL_NUM, POWER_SWITCH_CHANNEL_OFF, POWER_SWITCH_CHANNEL_OFF);
 

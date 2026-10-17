@@ -141,6 +141,7 @@ uint16_t crc;
     frame->status.fhss_index_band = frame_stats->tx_fhss_index_band;
     frame->status.fhss_index = frame_stats->tx_fhss_index;
     frame->status.LQ_serial = frame_stats->LQ_serial;
+    frame->status.rx_silent = frame_stats->rx_silent;
     frame->status.is_32channels = (rc->do_32channels) ? 1 : 0;
     frame->status.payload_len = payload_len;
 

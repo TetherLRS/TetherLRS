@@ -24,6 +24,7 @@
 
 extern volatile uint32_t millis32(void);
 extern bool connected_and_rx_setup_available(void);
+extern bool serial_link_up(void);
 extern bool link_task_free(void);
 extern tSetup Setup;
 extern tGlobalConfig Config;
@@ -251,7 +252,7 @@ void tTxMavlink::Do(void)
     uint32_t tnow_ms = millis32();
     bool inject_radio_status = false;
 
-    if (!connected_and_rx_setup_available()) {
+    if (!serial_link_up()) {
         //Init();
         radio_status_tlast_ms = tnow_ms;
         fifo_link_in.Flush();

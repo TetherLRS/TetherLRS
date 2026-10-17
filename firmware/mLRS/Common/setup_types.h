@@ -256,6 +256,12 @@ typedef enum {
     BUZZER_NUM,
 } TX_BUZZER_END_ENUM;
 
+typedef enum {
+    TX_DOWNLINK_ON = 0,
+    TX_DOWNLINK_OFF, // the receiver stays silent: data only to the aircraft, no telemetry, no link stats on the ground
+    TX_DOWNLINK_NUM,
+} TX_DOWNLINK_ENUM;
+
 
 typedef enum {
     WIFI_PROTOCOL_TCP = 0,
@@ -425,8 +431,9 @@ typedef struct
     uint8_t WifiProtocol;
     uint8_t WifiChannel;
     uint8_t WifiPower;
+    uint8_t Downlink;
 
-    uint8_t spare[4];
+    uint8_t spare[3];
 } tTxSetup; // 20 bytes
 
 
