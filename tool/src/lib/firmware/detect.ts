@@ -64,13 +64,16 @@ export function parseTail(tail: Uint8Array): Pick<Running, 'name' | 'role'> | un
 
 export const elrsVersion = (data: Uint8Array) => /\b(\d+\.\d+\.\d+) \([0-9a-f]{6}\)/.exec(text(data))?.[1];
 
+// mLRS's v1.4.05, TetherLRS's v1.0 and v1.0-RC1
+const VERSION = String.raw`v\d+\.\d+(?:\.\d+)?(?:-RC\d+)?`;
+
 // done: only the TetherLRS marker or an mLRS version line settle it before all the data is read
 export function parseStrings(data: Uint8Array, done = true): Running | undefined {
   const s = text(data);
-  const t = /TetherLRS:(Tx|Rx):([^:\0]*):(v\d+\.\d+\.\d+):/.exec(s);
+  const t = new RegExp(String.raw`TetherLRS:(Tx|Rx):([^:\0]*):(${VERSION}):`).exec(s);
   if (t) return { family: 'TetherLRS', role: t[1] as 'Tx' | 'Rx', name: t[2], version: t[3] };
   // its Tx CLI answers "v" with "  Tx: <device>, <version>"
-  const m = / {2}(Tx|Rx): ([^,\0]+), (v\d+\.\d+\.\d+)/.exec(s);
+  const m = new RegExp(String.raw` {2}(Tx|Rx): ([^,\0]+), (${VERSION})`).exec(s);
   if (m) return { family: 'mLRS', role: m[1] as 'Tx' | 'Rx', name: m[2], version: m[3] };
   if (done && /mLRS/.test(s)) return { family: 'mLRS', version: /\bv1\.\d+\.\d+\b/.exec(s)?.[0] };
   return undefined;
