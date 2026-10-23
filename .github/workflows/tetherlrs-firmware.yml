@@ -164,10 +164,21 @@ jobs:
           done
           cp fw/fw-stm32/*.hex fw/fw-stm32/*.elrs rel/
           jq -s 'map({(.env): .}) | add' fw/fw-*/*/info.json > rel/manifest.json
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: rel/*
-          generate_release_notes: true
+      # one upload a second and nothing twice: 500 assets at full speed trip GitHub's secondary rate limit, which
+      # left v1.0 a draft without its last jobs
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=${{ github.ref_name }}
+          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --draft --generate-notes --title "$tag"
+          have=$(gh release view "$tag" --json assets --jq '.assets[].name')
+          for f in rel/*; do
+            grep -qx "$(basename "$f")" <<<"$have" && continue
+            gh release upload "$tag" "$f"
+            sleep 1
+          done
+          gh release edit "$tag" --draft=false --latest
       - uses: actions/upload-artifact@v4
         with:
           name: release-files

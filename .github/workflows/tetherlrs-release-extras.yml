@@ -1,0 +1,82 @@
+# TetherLRS: the parts of a release that come after its firmware files, for a tag whose run did not reach them (the
+# v1.0 run stopped on GitHub's secondary rate limit while it uploaded 510 assets): the desktop app for Windows, macOS
+# and Linux attached to that release, and the web app with the release's firmware on GitHub Pages.
+#   gh workflow run tetherlrs-release-extras.yml -f tag=v1.0
+name: TetherLRS release extras
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag (v1.0)
+        required: true
+        type: string
+
+jobs:
+  desktop:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, macos-14, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Linux libraries for the webview and the serial ports
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libudev-dev
+      - working-directory: tool
+        run: npm ci
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: tool
+          tagName: ${{ inputs.tag }}
+
+  pages:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Web app
+        working-directory: tool
+        env:
+          BASE_PATH: /${{ github.event.repository.name }}
+        run: |
+          npm ci
+          npm run build
+      - name: The release's firmware files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "${{ inputs.tag }}" --dir rel --pattern '*.bin' --pattern '*.hex' --pattern '*.elrs' --pattern 'manifest.json'
+      - name: Firmware next to the web app
+        run: |
+          mkdir -p "tool/build/firmware/${{ inputs.tag }}" tool/build/firmware/latest
+          cp rel/* "tool/build/firmware/${{ inputs.tag }}/"
+          cp rel/* tool/build/firmware/latest/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: tool/build
+      - id: deploy
+        uses: actions/deploy-pages@v4
