@@ -1,6 +1,6 @@
 [package]
 name = "tetherlrs-tool"
-version = "1.0.0-rc.1"
+version = "1.0.0"
 description = "TetherLRS configuration and firmware tool"
 authors = ["TetherLRS contributors"]
 edition = "2021"

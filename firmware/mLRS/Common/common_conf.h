@@ -13,8 +13,8 @@
 
 // TetherLRS: major * 10000 + minor * 100 + patch; a patch of 51 to 63 is release candidate 1 to 13 of major.minor
 // (version_to_str), so the 6 bits the link carries it in show it as such on the other end too
-#define VERSION             10051 // leading zero makes it octal!
-#define VERSIONONLYSTR      "v1.0-RC1"
+#define VERSION             10000 // leading zero makes it octal!
+#define VERSIONONLYSTR      "v1.0"
 #define SETUPLAYOUT         10401 // this should be changed then Setup struct and/or serial changes
 
 // Note: The setup layout version does not need to be changed when parameter option lists

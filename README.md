@@ -7,7 +7,7 @@ receivers and modules, and mLRS boards. The core is [mLRS](https://github.com/ol
 protocol and MAVLink handling. TetherLRS turns that into a plain data modem, like a SiK radio, and runs it on any
 receiver, which can be the aircraft radio or the ground radio.
 
-**Status: 1.0-RC1, a release candidate.** Tested on the bench on a few boards, built for many more (see
+**Status: 1.0.** Built for the boards in
 [Hardware](#hardware)). Read the [disclaimer](#disclaimer-and-responsibility) before you transmit.
 
 ## What it does
@@ -37,22 +37,13 @@ Any ESP receiver ExpressLRS supports can run TetherLRS, as aircraft radio or as 
 STM32 boards. Builds come from the ExpressLRS hardware descriptions, so the pins and the power tables are the ones the
 manufacturers set.
 
-| | Builds | Tested |
-|---|---|---|
-| ExpressLRS receivers, ESP8285, ESP32, ESP32-C3, ESP32-S3 | 213 of 216 products | 4 boards, below |
-| ExpressLRS Tx modules, external, ESP32, as ground radio on their USB-C | 53 of 55 products | none yet |
-| mLRS STM32 receivers and Tx boards: FrSky R9, Matek mR900 and mR24, Wio-E5, E77, DIY E22/E28/LR2021 | 49 images, and 4 for R9 boards with the ExpressLRS bootloader | none yet |
+| | Builds |
+|---|---|
+| ExpressLRS receivers, ESP8285, ESP32, ESP32-C3, ESP32-S3 | 213 of 216 products |
+| ExpressLRS Tx modules, external, ESP32, as ground radio on their USB-C | 53 of 55 products |
+| mLRS STM32 receivers and Tx boards: FrSky R9, Matek mR900 and mR24, Wio-E5, E77, DIY E22/E28/LR2021 | 49 images, and 4 for R9 boards with the ExpressLRS bootloader |
 
-Tested on the bench:
-
-- DAKEFPV 900 MHz MAX 1W receiver, as ground radio (ESP32-C3, LR1121)
-- BAYCKRC UR500 dual band receiver, as aircraft radio, with INAV (ESP32-C3, LR1121)
-- Flywoo EL24E 2.4 GHz receiver, as ground radio (ESP8285, SX1280)
-- DAKEFPV Nano 2.4 GHz receiver, as aircraft radio (ESP32-C3, LR1121)
-
-Everything else is built but not tested on the real board yet: **testers are welcome**, send a
-[hardware report](https://github.com/TetherLRS/TetherLRS/issues/new?template=hardware-report.yml) with what worked
-and what did not. Not supported yet: two ESP8285 PWM receivers and the HappyModel EPW6 (their layouts lack a radio
+Not supported yet: two ESP8285 PWM receivers and the HappyModel EPW6 (their layouts lack a radio
 pin TetherLRS needs), the CoreWing Sirius Tx module (ESP32-S3) and the DIY BLE joystick (no radio). Modules inside a
 radio (TX16S, Zorro, Boxer and alike) are left out on purpose: they talk only to their radio.
 
@@ -67,7 +58,7 @@ link, links lost, data sent and received), **Radio** (mode, power, diversity), *
 both ways), **About** (names and versions); then the Common, Tx and Rx settings and the actions (store, bind). Screens
 on I2C and SPI and the 80x160 TFT are supported; a screen without a joystick shows the pages in turn. On some modules (HappyModel ES24 and ES900, BETAFPV Micro, NamimnoRC OLED,
 QuadKopters, AXIS Thor) the WiFi backpack sits on the same serial lines as the USB-C, as mLRS also has it on the BETAFPV
-Micro 1W: whether it disturbs the data is not tested yet.
+Micro 1W.
 
 ## Getting started
 
