@@ -695,21 +695,11 @@ void tTxDisp::draw_page_startup(void)
     if (!page_modified) return;
 
     gdisp_clear();
-/*
-    gdisp_setcurXY(0, 6);
     gdisp_setfont(&FreeMono12pt7b);
-    gdisp_setcurY(33-10); gdisp_puts_XCentered("mLRS");
+    gdisp_setcurY(28); gdisp_puts_XCentered("TetherLRS");
     gdisp_unsetfont();
     gdisp_setcurY(48); gdisp_puts_XCentered(DEVICE_NAME);
     gdisp_setcurY(60); gdisp_puts_XCentered(VERSIONONLYSTR);
-*/
-    // TetherLRS: its name, not the mLRS logo
-    gdisp_setfont(&FreeMono12pt7b);
-    gdisp_setcurY(26); gdisp_puts_XCentered("TetherLRS");
-    gdisp_unsetfont();
-    gdisp_setcurY(38); gdisp_puts_XCentered("built on mLRS");
-    gdisp_setcurY(52); gdisp_puts_XCentered(DEVICE_NAME);
-    gdisp_setcurY(63); gdisp_puts_XCentered(VERSIONONLYSTR);
 }
 
 

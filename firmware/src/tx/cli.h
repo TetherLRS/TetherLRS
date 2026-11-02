@@ -1230,7 +1230,7 @@ void tTxCli::sik_at(tSikAtCmd* const c)
             puts("SiK 2.2 on TetherLRS ");
             putsn((c->remote) ? SetupMetaData.rx_device_name : DEVICE_NAME);
             break;
-        case 1: putsn("TetherLRS, mLRS " VERSIONONLYSTR); break;
+        case 1: putsn("TetherLRS " VERSIONONLYSTR); break;
         case 2: putsn("0"); break; // no SiK board id
         case 3: // SiK's board frequency codes
             switch (Config.FrequencyBand) {
