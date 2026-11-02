@@ -3,6 +3,7 @@ name = "tetherlrs-tool"
 version = "1.0.0"
 description = "TetherLRS configuration and firmware tool"
 authors = ["TetherLRS contributors"]
+license = "GPL-3.0-only"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

@@ -3,6 +3,7 @@
 // GPL3
 // https://www.gnu.org/licenses/gpl-3.0.de.html
 // OlliW @ www.olliw.eu
+// TetherLRS changes: Copyright (c) TetherLRS project
 //*******************************************************
 // Mavlink Interface RX Side
 //*******************************************************

@@ -1,0 +1,39 @@
+TetherLRS
+Copyright (c) TetherLRS project
+Licensed under the GNU General Public License v3.0 (LICENSE).
+
+TetherLRS is built on other people's work. The notices below are kept as the licences require; the credits are in
+the README.
+
+mLRS
+    https://github.com/olliw42/mLRS, Copyright (c) MLRS project, OlliW, GPL-3.0.
+    firmware/ started from mLRS at commit 1eca7374 (v1.4.05 dev). Files that came from mLRS keep its copyright
+    header; those TetherLRS changed carry the line "TetherLRS changes: Copyright (c) TetherLRS project". Files
+    headed "Copyright (c) TetherLRS project" alone were written for TetherLRS.
+    Also from the same author, under the same licence: the sx12xx-lib, stm32ll-lib, esp-lib, stm32-usb-device
+    and stm32-dronecan-lib modules, and mavlinkX, mspX, gdisp and the stdstm32 files in firmware/mLRS/Common/thirdparty.
+
+ExpressLRS
+    https://github.com/ExpressLRS/ExpressLRS and https://github.com/ExpressLRS/targets, GPL-3.0.
+    The hardware files in firmware/mLRS/Common/hal/esp/gen are generated from the ExpressLRS targets
+    (firmware/elrs-targets, a submodule) by firmware/tools/tetherlrs_gen_elrs.py; the single-radio antenna diversity
+    follows ExpressLRS.
+
+fastMavlink
+    https://github.com/olliw42/fastmavlink, MIT licence. The MAVLink C library in firmware/mLRS/Common/mavlink is
+    generated from it and from the MAVLink message definitions (https://github.com/mavlink/mavlink, MIT).
+
+Monocypher
+    https://monocypher.org, Copyright (c) Loup Vaillant and contributors, 2-clause BSD or CC0 (dual-licensed),
+    in firmware/mLRS/Common/thirdparty/monocypher.
+
+Adafruit GFX fonts
+    https://github.com/adafruit/Adafruit-GFX-Library, BSD licence, the FreeMono fonts in
+    firmware/mLRS/Common/thirdparty.
+
+STMicroelectronics
+    The CMSIS and HAL device drivers under firmware/tools/st-drivers (submodules) and the USB device files in
+    firmware/mLRS/modules/stm32-usb-device, under their own licences (BSD-3-Clause and ST's).
+
+The TetherLRS tool (tool/) depends on esptool-js (Apache-2.0), Tauri (MIT or Apache-2.0) and Svelte (MIT); their
+notices come with the packages.

@@ -1,5 +1,7 @@
 //*******************************************************
-// TetherLRS
+// Copyright (c) TetherLRS project
+// GPL3
+// https://www.gnu.org/licenses/gpl-3.0.html
 //*******************************************************
 // The bind phrase the tool writes into the image before flashing
 //*******************************************************

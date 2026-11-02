@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# Copyright (c) TetherLRS project, GPL3, https://www.gnu.org/licenses/gpl-3.0.html
 '''
 TetherLRS: writes platformio-tetherlrs.ini, one [env:tx-<name>] for every ESP [env:rx-<name>] in platformio.ini
     python tools/tetherlrs_tx_envs.py [--check]

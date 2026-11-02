@@ -1,7 +1,7 @@
 //*******************************************************
-// TetherLRS
+// Copyright (c) TetherLRS project
 // GPL3
-// https://www.gnu.org/licenses/gpl-3.0.de.html
+// https://www.gnu.org/licenses/gpl-3.0.html
 //*******************************************************
 // What the display shows of the aircraft: read from the MAVLink its autopilot sends down the link, any autopilot
 //********************************************************

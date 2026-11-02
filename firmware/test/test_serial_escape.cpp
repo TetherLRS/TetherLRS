@@ -1,3 +1,8 @@
+//*******************************************************
+// Copyright (c) TetherLRS project
+// GPL3
+// https://www.gnu.org/licenses/gpl-3.0.html
+//*******************************************************
 // Host test of tSerialEscapeCore (mLRS/Common/serial_escape.h, TetherLRS). Run with test/run_tests.sh.
 #define SERIAL_ESCAPE_CORE_ONLY
 #include <cstdio>

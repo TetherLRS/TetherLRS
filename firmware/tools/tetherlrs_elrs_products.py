@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# Copyright (c) TetherLRS project, GPL3, https://www.gnu.org/licenses/gpl-3.0.html
 '''
 TetherLRS: writes tool/src/lib/firmware/elrs-products.json from ExpressLRS's targets
     python tools/tetherlrs_elrs_products.py [<ExpressLRS targets clone>] [--check]

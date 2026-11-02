@@ -1,5 +1,7 @@
 //*******************************************************
-// TetherLRS
+// Copyright (c) TetherLRS project
+// GPL3
+// https://www.gnu.org/licenses/gpl-3.0.html
 //*******************************************************
 // The receiver's settings from the tool, on its own serial, only while no Tx is heard
 //*******************************************************

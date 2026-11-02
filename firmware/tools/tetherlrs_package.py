@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# Copyright (c) TetherLRS project, GPL3, https://www.gnu.org/licenses/gpl-3.0.html
 '''
 TetherLRS: packages the PlatformIO build of one environment for the release and the tool
     python tools/tetherlrs_package.py <env> <out dir> [<version>]

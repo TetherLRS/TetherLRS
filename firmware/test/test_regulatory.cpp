@@ -1,3 +1,8 @@
+//*******************************************************
+// Copyright (c) TetherLRS project
+// GPL3
+// https://www.gnu.org/licenses/gpl-3.0.html
+//*******************************************************
 // Host test of tRegulatory (mLRS/Common/regulatory.h, TetherLRS EU region). Run with test/run_tests.sh.
 #include <cstdio>
 #include <cstdint>

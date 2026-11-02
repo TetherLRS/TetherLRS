@@ -4,6 +4,7 @@
  Copyright (c) MLRS project
  GPL3
  https://www.gnu.org/licenses/gpl-3.0.de.html
+ TetherLRS changes: Copyright (c) TetherLRS project
  OlliW @ www.olliw.eu
 *******************************************************
  run_make_firmwares.py

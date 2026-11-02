@@ -1,7 +1,7 @@
 //*******************************************************
-// TetherLRS
+// Copyright (c) TetherLRS project
 // GPL3
-// https://www.gnu.org/licenses/gpl-3.0.de.html
+// https://www.gnu.org/licenses/gpl-3.0.html
 //*******************************************************
 // The text every image carries for the tool, read from its flash: role, board, version and the board's bands
 //********************************************************
