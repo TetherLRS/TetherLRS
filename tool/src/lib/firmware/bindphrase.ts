@@ -1,4 +1,4 @@
-// The bind phrase goes into the image just before flashing (mLRS/Common/tlrs_bind.h), so no image on the web carries
+// The bind phrase goes into the image just before flashing (src/common/tlrs_bind.h), so no image on the web carries
 // one anyone could link with. The radio takes it at its first start after that flash. The image's checksum, and the
 // SHA-256 an ESP32 image carries, are made again for the changed bytes.
 

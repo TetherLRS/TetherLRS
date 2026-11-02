@@ -7,7 +7,7 @@ cd "$(dirname "$0")"
 OUT=$(mktemp -d)
 status=0
 for t in test_*.cpp; do
-    if ! g++ -std=c++17 -Wall -I../mLRS/Common -I../mLRS/CommonTx "$t" -o "$OUT/${t%.cpp}"; then
+    if ! g++ -std=c++17 -Wall -I../src/common -I../src/tx "$t" -o "$OUT/${t%.cpp}"; then
         echo "$t: does not build"; status=1; continue
     fi
     if "$OUT/${t%.cpp}" > "$OUT/${t%.cpp}.log" 2>&1; then

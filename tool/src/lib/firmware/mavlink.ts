@@ -37,7 +37,7 @@ export function commandLong(seq: number, confirmation: number, targetSystem = 51
   return commandLongFrame(seq, 246, [0, 0, 3, 68, 0, 0, MAGIC], confirmation, targetSystem); // MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN
 }
 
-// opens a TetherLRS receiver's settings session (CommonRx/rx_cli.h): MAV_CMD_USER_1, "TLRS" in param1-4, the magic in
+// opens a TetherLRS receiver's settings session (src/rx/rx_cli.h): MAV_CMD_USER_1, "TLRS" in param1-4, the magic in
 // param7; it answers COMMAND_ACK with result_param2 = magic + 1, and only while it hears no Tx
 export const RXCLI_CMD = 31010;
 export const RXCLI_ANSWER = MAGIC + 1;

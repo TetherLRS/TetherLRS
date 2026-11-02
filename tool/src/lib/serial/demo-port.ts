@@ -1,5 +1,5 @@
 // A pretend TetherLRS Tx (DAKEFPV 915 Pro as ground radio) behind a Web Serial style port. It answers like the
-// firmware's CLI (mLRS/CommonTx/cli.h), with the SiK-style escape, so the tool can be tried without hardware.
+// firmware's CLI (src/tx/cli.h), with the SiK-style escape, so the tool can be tried without hardware.
 
 const GUARD_MS = 1000;
 
@@ -161,7 +161,7 @@ export class DemoSerialPort {
     this.cli(line);
   }
 
-  // a few of cli.h's SiK answers (CommonTx/sik_at.h), enough to try the Terminal page
+  // a few of cli.h's SiK answers (src/tx/sik_at.h), enough to try the Terminal page
   private sikAt(cmd: string) {
     const regs = ['FORMAT=26', 'SERIAL_SPEED=115', 'AIR_SPEED=19', 'NETID=137', 'TXPOWER=14', 'ECC=0', 'MAVLINK=0', 'OPPRESEND=0',
       'MIN_FREQ=863275', 'MAX_FREQ=868000', 'NUM_CHANNELS=6', 'DUTY_CYCLE=100', 'LBT_RSSI=0', 'MANCHESTER=0', 'RTSCTS=0', 'MAX_WINDOW=32'];

@@ -18,7 +18,7 @@ import sys
 
 
 mLRSProjectdirectory = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
-mLRSdirectory = os.path.join(mLRSProjectdirectory,'mLRS')
+mLRSdirectory = os.path.join(mLRSProjectdirectory,'src')
 
 
 #-- helper

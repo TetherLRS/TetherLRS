@@ -1,4 +1,4 @@
-// Parsers for the text the TetherLRS Tx CLI prints (mLRS/CommonTx/cli.h). Pure functions, no I/O.
+// Parsers for the text the TetherLRS Tx CLI prints (src/tx/cli.h). Pure functions, no I/O.
 
 export type ParamGroup = 'common' | 'tx' | 'rx';
 export type ParamKind = 'list' | 'value' | 'phrase';

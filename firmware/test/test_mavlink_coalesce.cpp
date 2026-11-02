@@ -3,7 +3,7 @@
 // GPL3
 // https://www.gnu.org/licenses/gpl-3.0.html
 //*******************************************************
-// Host test of tMavlinkCoalesce (mLRS/Common/mavlink_coalesce.h, TetherLRS). Run with test/run_tests.sh.
+// Host test of tMavlinkCoalesce (src/common/mavlink_coalesce.h, TetherLRS). Run with test/run_tests.sh.
 #include <cstdio>
 #include <cstdlib>
 #include <deque>

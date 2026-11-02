@@ -1,5 +1,5 @@
 // A TetherLRS receiver on its own serial: one MAVLink command opens its settings session, which the receiver allows only
-// while it hears no Tx (CommonRx/rx_cli.h); after that the same text CLI as the Tx's, on a copy of its setup.
+// while it hears no Tx (src/rx/rx_cli.h); after that the same text CLI as the Tx's, on a copy of its setup.
 
 import { findAcks, RXCLI_ANSWER, RXCLI_CMD, rxCliUnlock } from '$lib/firmware/mavlink';
 import { parseRxVersion, type DeviceVersion } from './cli-parse';

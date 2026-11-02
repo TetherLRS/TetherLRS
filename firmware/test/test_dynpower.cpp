@@ -3,7 +3,7 @@
 // GPL3
 // https://www.gnu.org/licenses/gpl-3.0.html
 //*******************************************************
-// Host test of the dynamic RF power (mLRS/Common/dynamic_power.h, TetherLRS). Run with test/run_tests.sh.
+// Host test of the dynamic RF power (src/common/dynamic_power.h, TetherLRS). Run with test/run_tests.sh.
 #include <cstdio>
 #include "dynamic_power.h"
 

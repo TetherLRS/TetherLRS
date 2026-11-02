@@ -8,9 +8,9 @@ From each product its hardware layout with the product's overlay, keeping only w
 options, power tables, PA and antenna switches, serial, button, LED). Products with the same such hardware share one
 build. A Tx module becomes a ground radio (TLRS_RX_AS_TX) with the data and the CLI on UART0, the port its USB-C
 reaches; its screen, joystick, fan and power control are kept, its backpack is not. Writes:
-    mLRS/Common/hal/esp/gen/{rx,tx}-hal-elrs-<name>.h  one per build
-    mLRS/Common/hal/esp/gen/elrs-device_conf.h       DEVICE_NAME, radio, bands
-    mLRS/Common/hal/esp/gen/elrs-hal.h               includes the hal of the build
+    src/common/hal/esp/gen/{rx,tx}-hal-elrs-<name>.h  one per build
+    src/common/hal/esp/gen/elrs-device_conf.h       DEVICE_NAME, radio, bands
+    src/common/hal/esp/gen/elrs-hal.h               includes the hal of the build
     platformio-tetherlrs-elrs.ini                    the [env:rx-elrs-<name>] and [env:tx-elrs-mod-<name>] sections
     tools/elrs-gen.json                              product name -> env name, and what was left out and why
 The power tables are ExpressLRS's: its levels (10 mW to 2 W) with the radio values of the layout, which the
@@ -23,7 +23,7 @@ import sys
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 TARGETS = next((a for a in sys.argv[1:] if not a.startswith('--')), os.path.join(ROOT, 'elrs-targets'))
-GEN = os.path.join(ROOT, 'mLRS', 'Common', 'hal', 'esp', 'gen')
+GEN = os.path.join(ROOT, 'src', 'common', 'hal', 'esp', 'gen')
 INI = os.path.join(ROOT, 'platformio-tetherlrs-elrs.ini')
 MAP = os.path.join(ROOT, 'tools', 'elrs-gen.json')
 
@@ -531,7 +531,7 @@ def hand_names():
     # the DEVICE_NAMEs of the ESP hals written by hand that an env of platformio.ini builds
     with open(os.path.join(ROOT, 'platformio.ini'), encoding='utf-8') as f:
         built = set(re.findall(r'^\s*-D\s+(\w+)', f.read(), re.M))
-    with open(os.path.join(ROOT, 'mLRS', 'Common', 'hal', 'esp', 'esp-device_conf.h'), encoding='utf-8') as f:
+    with open(os.path.join(ROOT, 'src', 'common', 'hal', 'esp', 'esp-device_conf.h'), encoding='utf-8') as f:
         blocks = re.findall(r'#ifdef (\w+)\s+#define DEVICE_NAME\s+"([^"]+)"', f.read())
     return {n.upper() for d, n in blocks if d in built}
 
@@ -580,7 +580,7 @@ def files(configs, left_out):
             ini += ['lib_deps =', '  makuna/NeoPixelBus@^2.8.3']
         ini += ['build_src_filter =', f'  ${{{fam["common"]}.build_src_filter}}', f'  +<modules/sx12xx-lib/src/{RADIO[c["radio"]]["src"]}>']
         if shows:
-            ini.append('  +<Common/thirdparty/gdisp.c>')
+            ini.append('  +<common/thirdparty/gdisp.c>')
         ini += ['build_flags =', f'  ${{{fam["common"]}.build_flags}}', f'  -D {define}'] + (['  -D TLRS_RX_AS_TX'] if kind == 'tx' else []) + ['']
         for p in c['products']:
             mapping['products'][p] = [c['env'], c['plat']]

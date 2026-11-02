@@ -21,7 +21,7 @@ import sys
 
 
 mLRSProjectdirectory = os.path.dirname(os.path.abspath(__file__))
-mLRSdirectory = os.path.join(mLRSProjectdirectory,'mLRS')
+mLRSdirectory = os.path.join(mLRSProjectdirectory,'src')
 
 python_cmd = '' # 'python' or 'python3' depending on installation
 silent = False
@@ -83,7 +83,7 @@ def generate_mavlink_c_library():
     print('----------------------------------------')
     print(' run fmav_generate_c_library.py')
     print('----------------------------------------')
-    os.chdir(os.path.join(mLRSdirectory,'Common','mavlink'))
+    os.chdir(os.path.join(mLRSdirectory,'common','mavlink'))
     os_system([python_cmd, os.path.join('.','fmav_generate_c_library.py')])
     print('# DONE #')
 
@@ -92,7 +92,7 @@ def generate_dronecan_c_library():
     print('----------------------------------------')
     print(' run dronecan_generate_c_library.py')
     print('----------------------------------------')
-    os.chdir(os.path.join(mLRSdirectory,'Common','dronecan'))
+    os.chdir(os.path.join(mLRSdirectory,'common','dronecan'))
     os_system([python_cmd, os.path.join('.','dronecan_generate_c_library.py'), '-np'])
     print('# DONE #')
 

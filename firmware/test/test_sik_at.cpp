@@ -3,7 +3,7 @@
 // GPL3
 // https://www.gnu.org/licenses/gpl-3.0.html
 //*******************************************************
-// Host test of the SiK AT parser and mappings (mLRS/CommonTx/sik_at.h, TetherLRS). Run with test/run_tests.sh.
+// Host test of the SiK AT parser and mappings (src/tx/sik_at.h, TetherLRS). Run with test/run_tests.sh.
 #include <cstdio>
 #include <cstring>
 #include "sik_at.h"

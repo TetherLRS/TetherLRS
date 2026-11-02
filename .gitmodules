@@ -1,14 +1,14 @@
-[submodule "firmware/mLRS/modules/mavlink"]
-	path = firmware/mLRS/modules/mavlink
+[submodule "firmware/src/modules/mavlink"]
+	path = firmware/src/modules/mavlink
 	url = https://github.com/mavlink/mavlink.git
-[submodule "firmware/mLRS/modules/fastmavlink"]
-	path = firmware/mLRS/modules/fastmavlink
+[submodule "firmware/src/modules/fastmavlink"]
+	path = firmware/src/modules/fastmavlink
 	url = https://github.com/olliw42/fastmavlink.git
-[submodule "firmware/mLRS/modules/stm32ll-lib"]
-	path = firmware/mLRS/modules/stm32ll-lib
+[submodule "firmware/src/modules/stm32ll-lib"]
+	path = firmware/src/modules/stm32ll-lib
 	url = https://github.com/olliw42/stm32ll-lib.git
-[submodule "firmware/mLRS/modules/sx12xx-lib"]
-	path = firmware/mLRS/modules/sx12xx-lib
+[submodule "firmware/src/modules/sx12xx-lib"]
+	path = firmware/src/modules/sx12xx-lib
 	url = https://github.com/olliw42/sx12xx-lib.git
 [submodule "firmware/tools/st-drivers/stm32f1xx_hal_driver"]
 	path = firmware/tools/st-drivers/stm32f1xx_hal_driver
@@ -40,11 +40,11 @@
 [submodule "firmware/tools/st-drivers/stm32f3xx_hal_driver"]
 	path = firmware/tools/st-drivers/stm32f3xx_hal_driver
 	url = https://github.com/STMicroelectronics/stm32f3xx_hal_driver.git
-[submodule "firmware/mLRS/modules/dronecan/dronecan_dsdlc"]
-	path = firmware/mLRS/modules/dronecan/dronecan_dsdlc
+[submodule "firmware/src/modules/dronecan/dronecan_dsdlc"]
+	path = firmware/src/modules/dronecan/dronecan_dsdlc
 	url = https://github.com/dronecan/dronecan_dsdlc.git
-[submodule "firmware/mLRS/modules/dronecan/DSDL"]
-	path = firmware/mLRS/modules/dronecan/DSDL
+[submodule "firmware/src/modules/dronecan/DSDL"]
+	path = firmware/src/modules/dronecan/DSDL
 	url = https://github.com/dronecan/DSDL.git
 [submodule "firmware/elrs-targets"]
 	path = firmware/elrs-targets

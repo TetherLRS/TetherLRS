@@ -44,8 +44,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Submodules the STM32 builds use
         run: |
-          git submodule update --init --depth 1 mLRS/modules/mavlink mLRS/modules/fastmavlink mLRS/modules/stm32ll-lib \
-            mLRS/modules/sx12xx-lib mLRS/modules/dronecan/DSDL mLRS/modules/dronecan/dronecan_dsdlc
+          git submodule update --init --depth 1 src/modules/mavlink src/modules/fastmavlink src/modules/stm32ll-lib \
+            src/modules/sx12xx-lib src/modules/dronecan/DSDL src/modules/dronecan/dronecan_dsdlc
           git submodule update --init --depth 1 $(git config -f ../.gitmodules --get-regexp 'path' | awk '{print $2}' | grep '^firmware/tools/st-drivers/' | sed 's#^firmware/##')
       - uses: actions/cache@v4
         id: arm
@@ -65,8 +65,8 @@ jobs:
       - name: ST drivers, MAVLink and DroneCAN libraries
         run: |
           (cd tools && python run_copy_st_drivers.py -silent)
-          (cd mLRS/Common/mavlink && python fmav_generate_c_library.py)
-          (cd mLRS/Common/dronecan && python dronecan_generate_c_library.py -np)
+          (cd src/common/mavlink && python fmav_generate_c_library.py)
+          (cd src/common/dronecan && python dronecan_generate_c_library.py -np)
       - name: Build
         run: |
           set -o pipefail
@@ -118,7 +118,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Submodules the ESP builds use
-        run: git submodule update --init --recursive --depth 1 mLRS/modules/mavlink mLRS/modules/fastmavlink mLRS/modules/sx12xx-lib mLRS/modules/stm32ll-lib
+        run: git submodule update --init --recursive --depth 1 src/modules/mavlink src/modules/fastmavlink src/modules/sx12xx-lib src/modules/stm32ll-lib
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -128,7 +128,7 @@ jobs:
           key: pio-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini') }}
       - run: pip install platformio==6.1.19 esptool==4.8.1
       - name: MAVLink library
-        working-directory: firmware/mLRS/Common/mavlink
+        working-directory: firmware/src/common/mavlink
         run: python fmav_generate_c_library.py
       - name: Build and package
         run: |

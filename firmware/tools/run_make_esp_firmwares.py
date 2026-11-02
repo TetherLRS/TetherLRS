@@ -47,7 +47,7 @@ def find_pio_exe():
 
 MLRS_PROJECT_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
-MLRS_DIR = os.path.join(MLRS_PROJECT_DIR,'mLRS')
+MLRS_DIR = os.path.join(MLRS_PROJECT_DIR,'src')
 
 MLRS_TOOLS_DIR = os.path.join(MLRS_PROJECT_DIR,'tools')
 MLRS_BUILD_DIR = os.path.join(MLRS_PROJECT_DIR,'tools','build3')
@@ -65,7 +65,7 @@ HASHSTR = ''
 
 def mlrs_set_version():
     global VERSIONONLYSTR
-    F = open(os.path.join(MLRS_DIR,'Common','common_conf.h'), mode='r')
+    F = open(os.path.join(MLRS_DIR,'common','common_conf.h'), mode='r')
     content = F.read()
     F.close()
 

@@ -108,11 +108,11 @@ Firmware, in `firmware/` (mLRS's tree, as a git subtree):
 
 ```
 git submodule update --init --recursive
-cd firmware/mLRS/Common/mavlink && python fmav_generate_c_library.py && cd -
+cd firmware/src/common/mavlink && python fmav_generate_c_library.py && cd -
 cd firmware
 pio run -e rx-bayck-ur500                    # an ESP build, every env is in platformio*.ini
 (cd tools && python run_copy_st_drivers.py -silent)              # STM32: the ST drivers into each target
-(cd mLRS/Common/dronecan && python dronecan_generate_c_library.py -np)  # needs empy 3.3.4, pexpect, dronecan
+(cd src/common/dronecan && python dronecan_generate_c_library.py -np)  # needs empy 3.3.4, pexpect, dronecan
 python tools/run_make_firmwares.py --nopause # every STM32 build, arm-none-eabi-gcc on the PATH
 test/run_tests.sh                            # host tests
 ```

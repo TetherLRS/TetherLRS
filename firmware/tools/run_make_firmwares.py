@@ -115,7 +115,7 @@ if __name__ == "__main__":
 
 MLRS_PROJECT_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
-MLRS_DIR = os.path.join(MLRS_PROJECT_DIR,'mLRS')
+MLRS_DIR = os.path.join(MLRS_PROJECT_DIR,'src')
 
 MLRS_TOOLS_DIR = os.path.join(MLRS_PROJECT_DIR,'tools')
 MLRS_BUILD_DIR = os.path.join(MLRS_PROJECT_DIR,'tools','build')
@@ -129,7 +129,7 @@ HASHSTR = ''
 
 def mlrs_set_version():
     global VERSIONONLYSTR
-    F = open(os.path.join(MLRS_DIR,'Common','common_conf.h'), mode='r')
+    F = open(os.path.join(MLRS_DIR,'common','common_conf.h'), mode='r')
     content = F.read()
     F.close()
 
@@ -427,40 +427,40 @@ MLRS_SOURCES_MODULES = [
     ]
 
 MLRS_SOURCES_COMMON = [
-    os.path.join('Common','thirdparty','gdisp.c'),
-    os.path.join('Common','thirdparty','thirdparty.cpp'),
-    os.path.join('Common','libs','filters.cpp'),
-    os.path.join('Common','libs','utils.cpp'),
-    os.path.join('Common','channel_order.cpp'),
-    os.path.join('Common','common_stats.cpp'),
-    os.path.join('Common','common_types.cpp'),
-    os.path.join('Common','setup_types.cpp'),
-    os.path.join('Common','diversity.cpp'),
-    os.path.join('Common','fhss.cpp'),
-    os.path.join('Common','link_types.cpp'),
-    os.path.join('Common','lq_counter.cpp'),
-    os.path.join('Common','while.cpp'),
-    os.path.join('Common','crypto.cpp'),
-    os.path.join('Common','thirdparty','monocypher','src','monocypher.c'),
-    os.path.join('Common','thirdparty','monocypher','src','optional','monocypher-ed25519.c'),
+    os.path.join('common','thirdparty','gdisp.c'),
+    os.path.join('common','thirdparty','thirdparty.cpp'),
+    os.path.join('common','libs','filters.cpp'),
+    os.path.join('common','libs','utils.cpp'),
+    os.path.join('common','channel_order.cpp'),
+    os.path.join('common','common_stats.cpp'),
+    os.path.join('common','common_types.cpp'),
+    os.path.join('common','setup_types.cpp'),
+    os.path.join('common','diversity.cpp'),
+    os.path.join('common','fhss.cpp'),
+    os.path.join('common','link_types.cpp'),
+    os.path.join('common','lq_counter.cpp'),
+    os.path.join('common','while.cpp'),
+    os.path.join('common','crypto.cpp'),
+    os.path.join('common','thirdparty','monocypher','src','monocypher.c'),
+    os.path.join('common','thirdparty','monocypher','src','optional','monocypher-ed25519.c'),
     ]
 
 # add all Common/dronecan/out/src/*.c (auto-generated dronecan message sources), if present
-_dronecan_src_dir = os.path.join('Common','dronecan','out','src')
+_dronecan_src_dir = os.path.join('common','dronecan','out','src')
 if os.path.isdir(os.path.join(MLRS_DIR, _dronecan_src_dir)):
     for _f in sorted(os.listdir(os.path.join(MLRS_DIR, _dronecan_src_dir))):
         if _f.endswith('.c'):
             MLRS_SOURCES_COMMON.append(os.path.join(_dronecan_src_dir, _f))
 
 MLRS_SOURCES_RX = [
-    os.path.join('CommonRx','mlrs-rx.cpp'),
-    os.path.join('CommonRx','out.cpp'),
+    os.path.join('rx','rx_main.cpp'),
+    os.path.join('rx','out.cpp'),
     ]
 
 MLRS_SOURCES_TX = [
-    os.path.join('CommonTx','tasks.cpp'),
-    os.path.join('CommonTx','config_id.cpp'),
-    os.path.join('CommonTx','mlrs-tx.cpp'),
+    os.path.join('tx','tasks.cpp'),
+    os.path.join('tx','config_id.cpp'),
+    os.path.join('tx','tx_main.cpp'),
     ]
 
 
