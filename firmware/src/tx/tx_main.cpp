@@ -139,8 +139,8 @@ tTDiversity tdiversity;
 #ifdef DEVICE_HAS_ANTENNA_SWITCH
 tAntennaSwitch antsw;
 #endif
-tReceiveArq rarq;
-tTransmitArq tarq;
+tReceiveArq rarq[RX_SLOT_NUM]; // one per receiver
+tTransmitArq tarq; // one for all: a new payload once every connected receiver acked the last
 tCrypto crypto;
 tConfigId config_id;
 tTxInfo txinfo;
@@ -347,23 +347,111 @@ void SX2_DIO_EXTI_IRQHandler(void)
 #endif
 
 
-uint8_t link_rx1_status;
+uint8_t link_rx1_status; // the best this cycle on each antenna, for the transmit diversity
 uint8_t link_rx2_status;
+
+uint16_t tx_tick; // counts the cycle down, in sys ticks
+
+
+//-- the receivers: one reply slot each, the frame of each lands in its own buffer
+
+typedef struct {
+    uint8_t rx_status; // RX_STATUS_NONE/INVALID/VALID this cycle
+    bool decrypt_ok; // and it could be read
+    uint8_t antenna; // the antenna its frame was taken from
+    int8_t rssi;
+    int8_t snr;
+    uint8_t ack; // the ack bit of its last valid frame
+    uint8_t connect_state;
+    uint16_t connect_tmo_cnt;
+    uint8_t connect_sync_cnt;
+    bool connect_occured_once;
+    bool key_fresh; // its receive key was drawn since it was last seen dropping
+    bool setup_known; // it answered a setup request since it connected
+    char device_name[20+1];
+    uint32_t firmware_version;
+    tStatsLQ lq; // its valid frames
+} tRxSlot;
+
+tRxSlot rxslot[RX_SLOT_NUM];
+tRxFrame rxFrames[RX_SLOT_NUM];
+uint8_t rx_selected; // the slot the parameters, the setup data and the stats are of
+uint8_t link_rx_last_slot; // the slot of the last frame read, for re-arming the receiver
+
+
+bool slot_connected(uint8_t slot)
+{
+    return (slot < Config.RxCount && rxslot[slot].connect_state == CONNECT_STATE_CONNECTED);
+}
+
+
+void slot_init(uint8_t slot)
+{
+    tRxSlot* rs = &rxslot[slot];
+    rs->rx_status = RX_STATUS_NONE;
+    rs->decrypt_ok = false;
+    rs->antenna = ANTENNA_1;
+    rs->rssi = RSSI_INVALID;
+    rs->snr = SNR_INVALID;
+    rs->ack = 0;
+    rs->connect_state = CONNECT_STATE_LISTEN;
+    rs->connect_tmo_cnt = 0;
+    rs->connect_sync_cnt = 0;
+    rs->connect_occured_once = false;
+    rs->key_fresh = false;
+    rs->setup_known = false;
+    rs->device_name[0] = '\0';
+    rs->firmware_version = 0;
+    rs->lq.Init(Config.frame_rate_hz);
+    rarq[slot].Init();
+}
+
+
+// the slot a frame that could not be read belongs to: the reply window the cycle is in
+uint8_t slot_from_time(void)
+{
+    if (Config.RxCount <= 1) return 0;
+    uint16_t elapsed_ms = SYSTICK_DELAY_MS(Config.frame_rate_ms) - tx_tick; // 1 ms ticks
+    if (elapsed_ms + Config.SlotPeriod_ms / 2 < Config.FirstReplyEnd_ms) return 0;
+    uint16_t slot = (elapsed_ms + Config.SlotPeriod_ms / 2 - Config.FirstReplyEnd_ms) / Config.SlotPeriod_ms;
+    return (slot < Config.RxCount) ? slot : Config.RxCount - 1;
+}
+
+
+// for the CLI: what is known of a receiver
+uint8_t tx_rx_selected(void) { return rx_selected; }
+
+bool tx_rx_slot_info(uint8_t slot, char* const name_21, uint32_t* const version, uint8_t* const lq, int8_t* const rssi)
+{
+    if (slot >= Config.RxCount) return false;
+    tRxSlot* rs = &rxslot[slot];
+    strbufstrcpy(name_21, rs->device_name, 21);
+    *version = rs->firmware_version;
+    *lq = rs->lq.GetLQ();
+    *rssi = rs->rssi;
+    return slot_connected(slot);
+}
 
 
 //-- Tx/Rx cmd frame handling
 
 uint8_t link_task;
+uint8_t link_task_slot; // the receiver the command is for
 uint8_t transmit_frame_type;
 uint16_t link_task_delay_ms;
+bool link_task_sent; // the command went out at least once
 bool doParamsStore;
+uint8_t link_startup_cnt; // cycles since the last setup request to a receiver that is not connected
 
 
 void link_task_init(void)
 {
     link_task = LINK_TASK_NONE;
+    link_task_slot = 0;
     link_task_delay_ms = 0;
+    link_task_sent = false;
     transmit_frame_type = TRANSMIT_FRAME_TYPE_NORMAL;
+    link_startup_cnt = 0;
 
     doParamsStore = false;
 }
@@ -376,11 +464,14 @@ bool link_task_free(void)
 }
 
 
-bool link_task_set(uint8_t task)
+bool link_task_set(uint8_t task, uint8_t slot = 0xFF) // 0xFF: the selected receiver
 {
     if (link_task != LINK_TASK_NONE) return false; // a task is running
+    if (slot >= RX_SLOT_NUM) slot = rx_selected;
 
     link_task = task;
+    link_task_slot = slot;
+    link_task_sent = false;
     transmit_frame_type = TRANSMIT_FRAME_TYPE_CMD;
 
     link_task_delay_ms = 0;
@@ -388,11 +479,14 @@ bool link_task_set(uint8_t task)
     // set a timeout if relevant, or do other things as needed
     switch (link_task) {
     case LINK_TASK_TX_GET_RX_SETUPDATA_STARTUP:
-        crypto.SetReceiveKey(0, setup_new_random()); // the receiver gets a fresh key of its own with every connect
+        if (!rxslot[slot].key_fresh) { // a fresh key once per connect, the repeats of the command carry the same one
+            crypto.SetReceiveKey(slot, setup_new_random());
+            rxslot[slot].key_fresh = true;
+        }
         // fall through
     case LINK_TASK_TX_GET_RX_SETUPDATA:
     case LINK_TASK_TX_GET_RX_SETUPDATA_WRELOAD:
-        SetupMetaData.rx_available = false;
+        if (slot == rx_selected) SetupMetaData.rx_available = false;
         break;
     case LINK_TASK_TX_STORE_RX_PARAMS: // store rx parameters
         link_task_delay_ms = 500; // we set a delay, the actual store is triggered when it expires
@@ -407,6 +501,7 @@ void link_task_reset(void)
 {
     link_task = LINK_TASK_NONE;
     link_task_delay_ms = 0;
+    link_task_sent = false;
     transmit_frame_type = TRANSMIT_FRAME_TYPE_NORMAL;
 }
 
@@ -426,15 +521,48 @@ void link_task_tick_ms(void)
 }
 
 
-void process_received_rxcmdframe(tRxFrame* const frame)
+// called each cycle with no task running: which receiver gets a setup request. A connected one that has not answered
+// since it connected comes first, and the request stays until it answers. One that is not connected gets a STARTUP
+// with its key: every cycle while no receiver at all is connected, else one cycle in eight so the data keeps flowing.
+void link_task_pick(void)
 {
-tCmdFrameHeader* head = (tCmdFrameHeader*)(frame->payload);
+    if (link_task != LINK_TASK_NONE || bind.IsInBind()) return;
+    if (Setup.Tx[Config.ConfigId].Downlink == TX_DOWNLINK_OFF) return; // a silent receiver never answers
+
+    for (uint8_t s = 0; s < Config.RxCount; s++) {
+        if (slot_connected(s) && !rxslot[s].setup_known) { link_task_set(LINK_TASK_TX_GET_RX_SETUPDATA_STARTUP, s); return; }
+    }
+
+    bool any_connected = connected();
+    link_startup_cnt++;
+    if (any_connected && link_startup_cnt < 8) return;
+    for (uint8_t n = 0; n < Config.RxCount; n++) {
+        uint8_t s = (link_task_slot + 1 + n) % Config.RxCount; // in turn, from the one after the last asked
+        if (!slot_connected(s)) {
+            link_startup_cnt = 0;
+            link_task_set(LINK_TASK_TX_GET_RX_SETUPDATA_STARTUP, s);
+            return;
+        }
+    }
+}
+
+
+void process_received_rxcmdframe(tRxFrame* const frame, uint8_t slot)
+{
+tCmdFrameHeader* head = (tCmdFrameHeader*)FRAME_DATA(frame);
 
     switch (head->cmd) {
     case FRAME_CMD_RX_SETUPDATA:
         // received rx setup data
-        unpack_rxcmdframe_rxsetupdata(frame);
-        link_task_reset();
+        rxslot[slot].setup_known = true;
+        if (slot == rx_selected) {
+            unpack_rxcmdframe_rxsetupdata(frame);
+            strbufstrcpy(rxslot[slot].device_name, SetupMetaData.rx_device_name, 21);
+            rxslot[slot].firmware_version = SetupMetaData.rx_firmware_version;
+        } else {
+            unpack_rxcmdframe_rxsetupdata_brief(frame, rxslot[slot].device_name, &rxslot[slot].firmware_version);
+        }
+        if (link_task_slot == slot) link_task_reset();
         break;
     }
 }
@@ -442,24 +570,38 @@ tCmdFrameHeader* head = (tCmdFrameHeader*)(frame->payload);
 
 void pack_txcmdframe(tTxFrame* const frame, tFrameStats* const frame_stats)
 {
+    link_task_sent = true;
+
     switch (link_task) {
     case LINK_TASK_TX_GET_RX_SETUPDATA:
-        pack_txcmdframe_cmd(frame, frame_stats, FRAME_CMD_GET_RX_SETUPDATA, 0);
+        pack_txcmdframe_cmd(frame, frame_stats, FRAME_CMD_GET_RX_SETUPDATA, link_task_slot);
         break;
     case LINK_TASK_TX_GET_RX_SETUPDATA_WRELOAD:
-        pack_txcmdframe_cmd(frame, frame_stats, FRAME_CMD_GET_RX_SETUPDATA_WRELOAD, 0);
+        pack_txcmdframe_cmd(frame, frame_stats, FRAME_CMD_GET_RX_SETUPDATA_WRELOAD, link_task_slot);
         break;
     case LINK_TASK_TX_GET_RX_SETUPDATA_STARTUP:
-        pack_txcmdframe_cmd(frame, frame_stats, FRAME_CMD_GET_RX_SETUPDATA_STARTUP, 0);
+        pack_txcmdframe_cmd(frame, frame_stats, FRAME_CMD_GET_RX_SETUPDATA_STARTUP, link_task_slot);
         break;
     case LINK_TASK_TX_SET_RX_PARAMS:
         pack_txcmdframe_setrxparams(frame, frame_stats);
         break;
     case LINK_TASK_TX_STORE_RX_PARAMS:
-        pack_txcmdframe_cmd(frame, frame_stats, FRAME_CMD_STORE_RX_PARAMS, 0);
+        pack_txcmdframe_cmd(frame, frame_stats, FRAME_CMD_STORE_RX_PARAMS, link_task_slot);
         transmit_frame_type = TRANSMIT_FRAME_TYPE_NORMAL;
         break;
     }
+}
+
+
+// the receiver whose parameters, setup data and stats the Tx shows and sets
+void tx_select_rx(uint8_t slot)
+{
+    if (slot >= Config.RxCount || slot == rx_selected) return;
+    rx_selected = slot;
+    SetupMetaData.rx_available = false;
+    rxslot[slot].setup_known = false; // its setup is fetched for the parameters
+    link_task_reset();
+    stats.Clear();
 }
 
 
@@ -493,7 +635,7 @@ uint8_t payload_len = 0;
         if (transmit_frame_type == TRANSMIT_FRAME_TYPE_NORMAL) {
             // read data from serial port
             if (connected() || one_way) {
-                uint8_t len_max = FRAME_PAYLOAD_LEN(Config.FrameLenTx) - crypto.NonceLen();
+                uint8_t len_max = FRAME_PAYLOAD_LEN(Config.FrameLenTx) - FRAME_HDR_LEN - crypto.NonceLen();
                 while (payload_len < len_max && sx_serial.available()) payload[payload_len++] = sx_serial.getc();
 
                 stats.bytes_transmitted.Add(payload_len);
@@ -506,12 +648,33 @@ uint8_t payload_len = 0;
 
     stats.last_transmit_antenna = antenna;
 
+    // whose stats the status fields carry: the command's receiver, else the connected ones in turn
+    static uint8_t stats_slot = 0;
+    if (transmit_frame_type != TRANSMIT_FRAME_TYPE_NORMAL) {
+        stats_slot = link_task_slot;
+    } else if (Config.RxCount > 1) {
+        for (uint8_t n = 0; n < Config.RxCount; n++) {
+            uint8_t s = (stats_slot + 1 + n) % Config.RxCount;
+            if (slot_connected(s)) { stats_slot = s; break; }
+        }
+    } else {
+        stats_slot = 0;
+    }
+
     tFrameStats frame_stats;
     frame_stats.seq_no = tarq.SeqNo();
-    frame_stats.ack = rarq.AckSeqNo();
-    frame_stats.antenna = stats.last_antenna;
+    frame_stats.ack = rarq[0].AckSeqNo();
+    frame_stats.antenna = rxslot[stats_slot].antenna;
     frame_stats.transmit_antenna = antenna;
-    frame_stats.rssi = stats.GetLastRssi();
+    frame_stats.rssi = rxslot[stats_slot].rssi;
+
+    frame_stats.link_header = 0;
+    if (Config.LinkHeader) {
+        for (uint8_t s = 0; s < Config.RxCount; s++) {
+            if (rarq[s].AckSeqNo() & 0x01) frame_stats.link_header |= (1 << s);
+        }
+        frame_stats.link_header |= (stats_slot & LINK_HDR_SLOT_MASK) << LINK_HDR_TX_SLOT_SHIFT;
+    }
 
     // Note: the receiver wants to see both bands, also single band receivers.
     // It is then important however that fhss1_curr_i and fhss2_curr_i are identical, as otherwise
@@ -537,7 +700,7 @@ if (!Config.TransmitBoth && (fhss1_curr_i != fhss2_curr_i)) while(1){} // must n
 
         stats.cntFrameTransmitted();
     } else {
-        // txFrame still holds the previous payload, the receiver asked for it again
+        // txFrame still holds the previous payload, a receiver asked for it again
         if (!txFrame_valid) while(1){} // should not happen
 
         update_txframe_stats(&txFrame, &frame_stats);
@@ -548,16 +711,19 @@ if (!Config.TransmitBoth && (fhss1_curr_i != fhss2_curr_i)) while(1){} // must n
 }
 
 
-void process_received_frame(bool do_payload, tRxFrame* const frame)
+void process_received_frame(uint8_t slot, bool do_payload, tRxFrame* const frame)
 {
-    bool accept_payload = rarq.AcceptPayload();
+    bool accept_payload = rarq[slot].AcceptPayload();
 
-    stats.received_antenna = frame->status.antenna;
-    stats.received_transmit_antenna = frame->status.transmit_antenna;
-    stats.received_rssi = rssi_i8_from_u7(frame->status.rssi_u7);
-    stats.received_LQ_link = frame->status.LQ_link;
-    stats.received_power_code = (frame->status.power_hi << 2) | frame->status.power_lo;
-    stats.received_LQ_serial = frame->status.LQ_serial;
+    rxslot[slot].ack = frame->status.ack;
+    if (slot == rx_selected) {
+        stats.received_antenna = frame->status.antenna;
+        stats.received_transmit_antenna = frame->status.transmit_antenna;
+        stats.received_rssi = rssi_i8_from_u7(frame->status.rssi_u7);
+        stats.received_LQ_link = frame->status.LQ_link;
+        stats.received_power_code = (frame->status.power_hi << 2) | frame->status.power_lo;
+        stats.received_LQ_serial = frame->status.LQ_serial;
+    }
 
     if (!do_payload) {
         return;
@@ -567,14 +733,14 @@ void process_received_frame(bool do_payload, tRxFrame* const frame)
 
     // handle cmd frame
     if (frame->status.frame_type == FRAME_TYPE_CMD) {
-        process_received_rxcmdframe(frame);
+        process_received_rxcmdframe(frame, slot);
         return;
     }
 
     // output data on serial
-    sx_serial.putbuf(frame->payload, frame->status.payload_len);
+    sx_serial.putbuf(FRAME_DATA(frame), FRAME_DATA_LEN(frame));
 
-    stats.bytes_received.Add(frame->status.payload_len);
+    stats.bytes_received.Add(FRAME_DATA_LEN(frame));
     stats.serial_data_received.Inc();
 }
 
@@ -604,7 +770,7 @@ void do_transmit_send(uint8_t antenna) // we send a TX frame to receiver
 
 
 // called in isr loop
-uint8_t do_receive(uint8_t antenna) // we receive a RX frame from receiver
+uint8_t do_receive(uint8_t antenna) // we receive a RX frame from a receiver
 {
 uint8_t res;
 uint8_t rx_status = RX_STATUS_INVALID; // this also signals that a frame was received
@@ -616,7 +782,8 @@ uint8_t rx_status = RX_STATUS_INVALID; // this also signals that a frame was rec
     // we don't need to read sx.GetRxBufferStatus(), but hey
     // we could save 2 byte's time by not reading sync_word again, but hey
     sxReadFrame(antenna, &rxFrame, &rxFrame2, Config.FrameLenRx);
-    res = (antenna == ANTENNA_1) ? check_rxframe(&rxFrame) : check_rxframe(&rxFrame2);
+    tRxFrame* frame = (antenna == ANTENNA_1) ? &rxFrame : &rxFrame2;
+    res = check_rxframe(frame);
 
     if (res != CHECK_OK) {
         DBG_MAIN(dbg.puts("fail ");dbg.putc('\n');)
@@ -634,23 +801,35 @@ uint8_t rx_status = RX_STATUS_INVALID; // this also signals that a frame was rec
     // we want to have the rssi,snr stats even if it's a bad packet
     sxGetPacketStatus(antenna, &stats);
 
+    // the slot it answers in: its link header, or the reply window when the frame could not be read
+    uint8_t slot = 0;
+    if (Config.LinkHeader) {
+        slot = (rx_status == RX_STATUS_VALID) ? (frame->payload[0] & LINK_HDR_RX_SLOT_MASK) : slot_from_time();
+        if (slot >= Config.RxCount) slot = Config.RxCount - 1;
+    }
+    link_rx_last_slot = slot;
+
+    // the better of the antennas' copies of it: a valid one, else the stronger
+    int8_t rssi = (antenna == ANTENNA_1) ? stats.last_rssi1 : stats.last_rssi2;
+    tRxSlot* rs = &rxslot[slot];
+    if (rx_status > rs->rx_status || (rx_status == rs->rx_status && rssi > rs->rssi)) {
+        memcpy(&rxFrames[slot], frame, Config.FrameLenRx);
+        rs->rx_status = rx_status;
+        rs->antenna = antenna;
+        rs->rssi = rssi;
+        rs->snr = (antenna == ANTENNA_1) ? stats.last_snr1 : stats.last_snr2;
+    }
+
     return rx_status; // INVALID, VALID
 }
 
 
 // called in doPreTransmit loop
-bool handle_receive(uint8_t antenna) // called if INVALID, VALID
+bool handle_receive(uint8_t slot) // called if INVALID, VALID
 {
-uint8_t rx_status;
-tRxFrame* frame;
-
-    if (antenna == ANTENNA_1) {
-        rx_status = link_rx1_status;
-        frame = &rxFrame;
-    } else {
-        rx_status = link_rx2_status;
-        frame = &rxFrame2;
-    }
+uint8_t rx_status = rxslot[slot].rx_status;
+uint8_t antenna = rxslot[slot].antenna;
+tRxFrame* frame = &rxFrames[slot];
 
     if (bind.IsInBind()) {
         bind.handle_receive(antenna, rx_status);
@@ -666,28 +845,17 @@ tRxFrame* frame;
     // check decrypt_rxframe()
     bool decrypt_ok = false;
     if (rx_status > RX_STATUS_INVALID) {
-        decrypt_ok = decrypt_rxframe(frame, 0); // don't do for INVALID, payload is nonsense
-    }
-
-    // handle transmit ARQ: the receiver's ack of the last payload sent down
-    if (rx_status > RX_STATUS_INVALID) { // = RX_STATUS_VALID: we have valid information on ack
-        if (decrypt_ok) {
-            tarq.AckReceived(frame->status.ack);
-        } else {
-            tarq.Disconnected(); // force sending a new payload
-        }
-    } else {
-        tarq.FrameMissed();
+        decrypt_ok = decrypt_rxframe(frame, slot); // don't do for INVALID, payload is nonsense
     }
 
     // handle receive ARQ, must come before process_received_frame()
-    if (rx_status == RX_STATUS_VALID && decrypt_ok) { // we have valid information on ack
-        rarq.Received(frame->status.seq_no);
+    if (rx_status == RX_STATUS_VALID && decrypt_ok) { // we have valid information on seq_no
+        rarq[slot].Received(frame->status.seq_no);
     } else {
-        rarq.FrameMissed();
+        rarq[slot].FrameMissed();
     }
     // check this before received data may be passed to parsers
-    if (rarq.FrameLost()) {
+    if (rarq[slot].FrameLost()) {
         mavlink.FrameLost();
         msp.FrameLost();
     }
@@ -696,28 +864,54 @@ tRxFrame* frame;
 
         bool do_payload = true; // has no rc data, so do_payload is always
 
-        process_received_frame(do_payload, frame);
+        process_received_frame(slot, do_payload, frame);
 
-        stats.doValidFrameReceived(); // counts both rx and cmd frames, but cmd frames are rare, so no worry
+        rxslot[slot].lq.Inc();
+        if (slot == rx_selected) stats.doValidFrameReceived(); // counts both rx and cmd frames, but cmd frames are rare, so no worry
 
     } else { // RX_STATUS_INVALID or !decrypt_ok
     }
 
-    // we set it for all received frames
-    stats.last_antenna = antenna;
+    if (slot == rx_selected) {
+        // we set it for all received frames
+        stats.last_antenna = antenna;
 
-    // we count all received frames
-    stats.doFrameReceived();
+        // we count all received frames
+        stats.doFrameReceived();
+    }
 
     return decrypt_ok;
 }
 
 
 // called in doPreTransmit loop
-void handle_receive_none(void) // called if RX_STATUS_NONE
+void handle_receive_none(uint8_t slot) // called if RX_STATUS_NONE
 {
-    tarq.FrameMissed();
-    rarq.FrameMissed();
+    rarq[slot].FrameMissed();
+}
+
+
+// called in doPreTransmit loop, after every slot: the transmit ARQ hears from all connected receivers, and moves
+// to a new payload only once each of them acked the last one
+void tarq_update(void)
+{
+    bool any_connected = false, any_heard = false, all_acked = true;
+    uint8_t want = tarq.SeqNo() & 0x01;
+
+    for (uint8_t s = 0; s < Config.RxCount; s++) {
+        if (!slot_connected(s)) continue;
+        any_connected = true;
+        if (rxslot[s].rx_status == RX_STATUS_VALID && rxslot[s].decrypt_ok) {
+            any_heard = true;
+            if ((rxslot[s].ack & 0x01) != want) all_acked = false;
+        } else {
+            all_acked = false;
+        }
+    }
+
+    if (!any_connected) { tarq.Disconnected(); return; }
+    if (!any_heard) { tarq.FrameMissed(); return; }
+    tarq.AckReceived((all_acked) ? want : (want ^ 0x01));
 }
 
 
@@ -731,7 +925,6 @@ void handle_receive_none(void) // called if RX_STATUS_NONE
 // - block hard work one a first tx_tick, to ensure the next tx_tick comes in time
 // - start a timer of 750 us, and do the preparation work for the next transmit frame
 // - transmit
-uint16_t tx_tick;
 bool isInTimeGuard;
 bool doPreTransmit;
 uint16_t pretransmit_tstamp_us;
@@ -741,28 +934,27 @@ uint16_t tick_1hz_commensurate;
 
 uint16_t link_state;
 uint8_t link_tx_status;
-uint8_t connect_state;
-uint16_t connect_tmo_cnt;
-uint8_t connect_sync_cnt;
-bool connect_occured_once;
+bool connect_occured_once; // any receiver, ever
 
 
-
-bool connected(void)
+bool connected(void) // to at least one receiver
 {
-    return (connect_state == CONNECT_STATE_CONNECTED);
+    for (uint8_t s = 0; s < Config.RxCount; s++) if (slot_connected(s)) return true;
+    return false;
 }
 
 bool connected_and_rx_setup_available(void)
 {
-    return (connected() && SetupMetaData.rx_available);
+    return (slot_connected(rx_selected) && SetupMetaData.rx_available);
 }
 
 // a silent receiver (Downlink off) is never heard: the data goes one way, with the receiver's serial setup the Tx
-// read and stored last
+// read and stored last. With several receivers the data flows to whoever is there, the setup is for the parameters.
 bool serial_link_up(void)
 {
-    return connected_and_rx_setup_available() || (Setup.Tx[Config.ConfigId].Downlink == TX_DOWNLINK_OFF);
+    if (Setup.Tx[Config.ConfigId].Downlink == TX_DOWNLINK_OFF) return true;
+    if (Config.RxCount > 1) return connected();
+    return connected_and_rx_setup_available();
 }
 
 
@@ -803,14 +995,14 @@ RESTARTCONTROLLER
     doPreTransmit = false;
     pretransmit_tstamp_us = 0;
     link_state = LINK_STATE_IDLE;
-    connect_state = CONNECT_STATE_LISTEN;
-    connect_tmo_cnt = 0;
-    connect_sync_cnt = 0;
     connect_occured_once = false;
     link_rx1_status = link_rx2_status = RX_STATUS_NONE;
+    link_rx_last_slot = 0;
     link_tx_status = TX_STATUS_NONE;
+    rx_selected = 0;
+    for (uint8_t s = 0; s < RX_SLOT_NUM; s++) slot_init(s);
     link_task_init();
-    link_task_set(LINK_TASK_TX_GET_RX_SETUPDATA_STARTUP); // we start with wanting to get rx setup data
+    link_task_set(LINK_TASK_TX_GET_RX_SETUPDATA_STARTUP, 0); // we start with wanting to get rx setup data
 
     stats.Init(Config.LQAveragingPeriod, Config.frame_rate_hz, Config.frame_rate_ms);
     rdiversity.Init();
@@ -818,7 +1010,6 @@ RESTARTCONTROLLER
 #ifdef DEVICE_HAS_ANTENNA_SWITCH
     antsw.Init();
 #endif
-    rarq.Init();
     tarq.Init();
     crypto.Init(tCrypto::TX,
         Setup.Common[Config.ConfigId].BindPhrase,
@@ -851,8 +1042,8 @@ INITCONTROLLER_END
         // when we do long tasks, like display transfer, we miss ticks, so we need to catch up
         // the commands below must not be sensitive to strict ms timing
 
-        if (connect_tmo_cnt) {
-            connect_tmo_cnt--;
+        for (uint8_t s = 0; s < Config.RxCount; s++) {
+            if (rxslot[s].connect_tmo_cnt) rxslot[s].connect_tmo_cnt--;
         }
 
         DECc(tx_tick, SYSTICK_DELAY_MS(Config.frame_rate_ms));
@@ -952,6 +1143,13 @@ INITCONTROLLER_END
         irq_status = irq2_status = 0;
         DBG_MAIN_SLIM(dbg.puts("r");)
         break;
+
+    case LINK_STATE_RECEIVE_REARM: // a receiver's frame was read, the next slot's is coming
+        IF_ANTENNA1(sx.SetToRx());
+        IF_ANTENNA2(sx2.SetToRx());
+        link_state = LINK_STATE_RECEIVE_WAIT;
+        irq_status = irq2_status = 0;
+        break;
     }//end of switch(link_state)
 
 IF_SX(
@@ -967,7 +1165,9 @@ IF_SX(
         if (link_state == LINK_STATE_RECEIVE_WAIT) {
             if (irq_status & SX_IRQ_RX_DONE) {
                 irq_status = 0;
-                link_rx1_status = do_receive(ANTENNA_1);
+                uint8_t st = do_receive(ANTENNA_1);
+                if (st > link_rx1_status) link_rx1_status = st;
+                if (link_rx_last_slot + 1 < Config.RxCount) link_state = LINK_STATE_RECEIVE_REARM;
                 DBG_MAIN_SLIM(dbg.puts("1<");)
             }
         }
@@ -1001,7 +1201,9 @@ IF_SX2(
         if (link_state == LINK_STATE_RECEIVE_WAIT) {
             if (irq2_status & SX2_IRQ_RX_DONE) {
                 irq2_status = 0;
-                link_rx2_status = do_receive(ANTENNA_2);
+                uint8_t st = do_receive(ANTENNA_2);
+                if (st > link_rx2_status) link_rx2_status = st;
+                if (link_rx_last_slot + 1 < Config.RxCount) link_state = LINK_STATE_RECEIVE_REARM;
                 DBG_MAIN_SLIM(dbg.puts("2<");)
             }
         }
@@ -1030,32 +1232,57 @@ IF_SX2(
         sx.SetToIdle();
         sx2.SetToIdle();
 
-        bool frame_received, valid_frame_received;
-        if (USE_ANTENNA1 && USE_ANTENNA2) {
-            frame_received = (link_rx1_status > RX_STATUS_NONE) || (link_rx2_status > RX_STATUS_NONE);
-            valid_frame_received = (link_rx1_status > RX_STATUS_INVALID) || (link_rx2_status > RX_STATUS_INVALID);
-        } else if (USE_ANTENNA2) {
-            frame_received = (link_rx2_status > RX_STATUS_NONE);
-            valid_frame_received = (link_rx2_status > RX_STATUS_INVALID);
-        } else { // use antenna1
-            frame_received = (link_rx1_status > RX_STATUS_NONE);          // INVALID, VALID
-            valid_frame_received = (link_rx1_status > RX_STATUS_INVALID); // VALID
+        bool valid_frame_received = false; // from any receiver
+
+        for (uint8_t s = 0; s < Config.RxCount; s++) {
+            tRxSlot* rs = &rxslot[s];
+            bool valid = false;
+            if (rs->rx_status > RX_STATUS_NONE) { // frame received
+                valid = handle_receive(s); // false when it could not be read: counts as invalid
+            } else {
+                handle_receive_none(s);
+            }
+            rs->decrypt_ok = valid;
+            if (valid) valid_frame_received = true;
+
+            // this receiver's connection
+            if (valid) {
+                switch (rs->connect_state) {
+                case CONNECT_STATE_LISTEN:
+                    rs->connect_state = CONNECT_STATE_SYNC;
+                    rs->connect_sync_cnt = 0;
+                    break;
+                case CONNECT_STATE_SYNC:
+                    rs->connect_sync_cnt++;
+                    uint8_t connect_sync_cnt_max = CONNECT_SYNC_CNT;
+                    if (!rs->connect_occured_once) {
+                        connect_sync_cnt_max = Config.connect_sync_cnt_max;
+                    }
+                    if (rs->connect_sync_cnt >= connect_sync_cnt_max && crypto.ValidKeys(s)) { // allow connect only if also crypto allows
+                        if (!rs->connect_occured_once && s == rx_selected) {
+                            stats.JustConnected();
+                        }
+                        rs->connect_state = CONNECT_STATE_CONNECTED;
+                        rs->connect_occured_once = true;
+                        connect_occured_once = true;
+                        // its setup data, when not known, is asked for by link_task_pick()
+                    }
+                    break;
+                }
+                rs->connect_tmo_cnt = CONNECT_TMO_SYSTICKS;
+            }
+
+            // connected but the tmo ran out: so disconnect; it may come back restarted, so a fresh key then
+            if (rs->connect_state == CONNECT_STATE_CONNECTED && !rs->connect_tmo_cnt) {
+                rs->connect_state = CONNECT_STATE_LISTEN;
+                rs->key_fresh = false;
+                rs->setup_known = false;
+            }
+
+            if (rs->connect_state != CONNECT_STATE_CONNECTED) rarq[s].Disconnected();
         }
 
-        if (frame_received) { // frame received
-            uint8_t antenna = ANTENNA_1;
-            if (USE_ANTENNA1 && USE_ANTENNA2) {
-                antenna = rdiversity.Antenna(link_rx1_status, link_rx2_status, stats.last_rssi1, stats.last_rssi2);
-            } else if (USE_ANTENNA2) {
-                antenna = ANTENNA_2;
-            }
-            bool decrypt_ok = handle_receive(antenna);
-            if (!decrypt_ok) { // if decrypt fails, count it as invalid
-                valid_frame_received = false;
-            }
-        } else {
-            handle_receive_none();
-        }
+        tarq_update();
 
 #ifdef DEVICE_HAS_ANTENNA_SWITCH
         antsw.Update(valid_frame_received, stats.last_rssi1);
@@ -1070,78 +1297,17 @@ IF_SX2(
         }
 
         // serial data is received if !IsInBind() && RX_STATUS_VALID && !FRAME_TYPE_CMD && sx_serial.IsEnabled()
-        // valid_frame/frame lost logic is modified by ARQ
-#ifndef USE_ARQ
-        if (!valid_frame_received) {
-            mavlink.FrameLost();
-            msp.FrameLost();
-        }
-#endif
-
-        if (valid_frame_received) { // valid frame received
-            switch (connect_state) {
-            case CONNECT_STATE_LISTEN:
-                connect_state = CONNECT_STATE_SYNC;
-                connect_sync_cnt = 0;
-                break;
-            case CONNECT_STATE_SYNC:
-                connect_sync_cnt++;
-                uint8_t connect_sync_cnt_max = CONNECT_SYNC_CNT;
-                if (!connect_occured_once) {
-                    connect_sync_cnt_max = Config.connect_sync_cnt_max;
-                }
-                if (connect_sync_cnt >= connect_sync_cnt_max) {
-                    if (!SetupMetaData.rx_available && !bind.IsInBind()) {
-                        // should not happen, but does very occasionally happen, so let's cope with it
-                        // We must have gotten it at least once, on first connect, since we need it.
-                        // Later on we can accept to be gentle and be ok with not getting it again.
-                        // Bottom line: the receiver must not change after first connection.
-                        if (connect_occured_once) {
-                            link_task_reset();
-                            SetupMetaData.rx_available = true;
-                        } else {
-                            // we could be more gentle and postpone connection by one cnt
-                            FAILALWAYS(BLINK_3, "rx_available not true");
-                        }
-                    }
-                    if (!connect_occured_once) {
-                        stats.JustConnected();
-                    }
-                    if (crypto.ValidKeys()) { // allow connect only if also crypto allows
-                        connect_state = CONNECT_STATE_CONNECTED;
-                        connect_occured_once = true;
-                    }
-                }
-                break;
-            }
-            connect_tmo_cnt = CONNECT_TMO_SYSTICKS;
-        }
-
-        // we are connected but tmo ran out
-        if (connected() && !connect_tmo_cnt) {
-            // so disconnect
-            connect_state = CONNECT_STATE_LISTEN;
-            // link_state will be set to LINK_STATE_TRANSMIT below
-        }
-
-        // we are connected but didn't receive a valid frame
-        if (connected() && !valid_frame_received) {
-            // reset sync counter, relevant if in sync
-            //connect_sync_cnt = 0; //isn't needed, right? since when connected we can't be in sync
-        }
+        // a missed frame is not lost yet: the ARQ tells the parsers when a payload really went missing
 
         link_state = LINK_STATE_TRANSMIT;
         link_rx1_status = link_rx2_status = RX_STATUS_NONE;
+        for (uint8_t s = 0; s < Config.RxCount; s++) rxslot[s].rx_status = RX_STATUS_NONE;
 
-        if (!connected()) { rarq.Disconnected(); tarq.Disconnected(); }
-
-        // a silent receiver never answers the setup request, which would take every frame from the data
-        if (connect_state == CONNECT_STATE_LISTEN && Setup.Tx[Config.ConfigId].Downlink == TX_DOWNLINK_OFF) {
+        // a setup request to a receiver that is not connected goes out once, the data frames come back after it
+        if (link_task == LINK_TASK_TX_GET_RX_SETUPDATA_STARTUP && link_task_sent && !slot_connected(link_task_slot)) {
             link_task_reset();
-        } else if (connect_state == CONNECT_STATE_LISTEN) {
-            link_task_reset(); // to ensure that the following set is enforced
-            link_task_set(LINK_TASK_TX_GET_RX_SETUPDATA_STARTUP); // every connect brings the receiver a fresh key
         }
+        link_task_pick();
 
         // the configured power, or less with Dyn Power; binding keeps its lowest power
         if (!bind.IsInBind()) {
@@ -1167,7 +1333,7 @@ IF_SX2(
             bind.ConfigForBind();
             fhss.SetToBind();
             leds.SetToBind();
-            connect_state = CONNECT_STATE_LISTEN;
+            for (uint8_t s = 0; s < RX_SLOT_NUM; s++) rxslot[s].connect_state = CONNECT_STATE_LISTEN;
             // link_state was set to LINK_STATE_TRANSMIT already
             break;
         case BIND_TASK_TX_RESTART_CONTROLLER:
@@ -1225,7 +1391,8 @@ IF_SX2(
             link_task_set(LINK_TASK_TX_GET_RX_SETUPDATA_WRELOAD);
         }
         break;
-    case TASK_BIND_START: bind.StartBind(); break;
+    case TASK_BIND_START: bind.StartBind(tasks.GetConfigIdValue()); break;
+    case TASK_SELECT_RX: tx_select_rx(tasks.GetConfigIdValue()); break;
     case TASK_BIND_STOP: bind.StopBind(); break;
     case TASK_SYSTEM_BOOT: enter_system_bootloader(); break;
     case TASK_CHANGE_CONFIG_ID: config_id.Change(tasks.GetConfigIdValue()); break;

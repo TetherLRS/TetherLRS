@@ -53,6 +53,8 @@ class tTransmitArq
     void AckReceived(uint8_t ack_seq_no);
 
     bool GetFreshPayload(void);
+    bool WouldAdvance(void); // what GetFreshPayload() would answer, nothing changed: bonded lanes decide together
+    void Settle(bool advance); // GetFreshPayload()'s bookkeeping with the answer imposed
     uint8_t SeqNo(void);
     void SetRetryCnt(uint8_t retry_cnt);
 
@@ -109,18 +111,20 @@ void tTransmitArq::AckReceived(uint8_t ack_seq_no)
 //        false: resend previous payload
 bool tTransmitArq::GetFreshPayload(void)
 {
-    if (payload_retry_cnt == 0) { // ARQ disabled, new payload each time
-        payload_seq_no++;
-        payload_retries = 0;
-        return true;
-    }
+    bool advance = WouldAdvance();
+    Settle(advance);
+    return advance;
+}
+
+
+bool tTransmitArq::WouldAdvance(void)
+{
+    if (payload_retry_cnt == 0) return true; // ARQ disabled, new payload each time
 
     switch (status) {
     case ARQ_TX_IDLE:
         // we have no history info
         // so send new payload
-        payload_seq_no++;
-        payload_retries = 0;
         return true;
 
     case ARQ_TX_RECEIVED:
@@ -133,40 +137,34 @@ bool tTransmitArq::GetFreshPayload(void)
         // next = (received_ack_seq_no & 0x01) == (payload_seq_no & 0x01)
         if ((received_ack_seq_no & 0x01) != (payload_seq_no & 0x01)) {
             // nack, recipient wants the previous payload again
-            if (payload_retry_cnt == UINT8_MAX) { // ARQ with infinite retries, so never next
-                payload_retries = 0;
-                return false;
-            } else { // ARQ with finite retries
-                payload_retries++;
-                if (payload_retries <= payload_retry_cnt) { // we still can retry
-                    return false;
-                }
-            }
+            if (payload_retry_cnt == UINT8_MAX) return false; // ARQ with infinite retries, so never next
+            return (payload_retries + 1 > payload_retry_cnt); // too many retries, send new payload
         }
-        // recipient acked the previous payload or too many retries, shall send new payload
-        payload_seq_no++; // give this payload the next seq_no
-        payload_retries = 0;
+        // recipient acked the previous payload, shall send new payload
         return true;
 
     case ARQ_TX_FRAME_MISSED:
         // no frame or invalid frame received, hence no ack/nack received
         // needs thus to be treated as nack
         // => no new payload, unless too many retries
-        if (payload_retry_cnt == UINT8_MAX) { // ARQ with infinite retries, so never next
-            payload_retries = 0;
-            return false;
-        } else { // ARQ with finite retries
-            payload_retries++;
-            if (payload_retries > payload_retry_cnt) { // too many retries, send new payload
-                payload_seq_no++;
-                payload_retries = 0;
-                return true;
-            }
-        }
-        return false;
+        if (payload_retry_cnt == UINT8_MAX) return false; // ARQ with infinite retries, so never next
+        return (payload_retries + 1 > payload_retry_cnt);
     }
 
     return false;
+}
+
+
+void tTransmitArq::Settle(bool advance)
+{
+    if (advance) {
+        payload_seq_no++; // give this payload the next seq_no
+        payload_retries = 0;
+    } else if (payload_retry_cnt == UINT8_MAX) {
+        payload_retries = 0;
+    } else {
+        payload_retries++;
+    }
 }
 
 

@@ -59,7 +59,8 @@ class tBindBase
   public:
     void Init(void);
     bool IsInBind(void) { return is_in_binding; }
-    void StartBind(void) { if (!is_in_binding) binding_requested = true; }
+    void StartBind(uint8_t slot = 0) { if (!is_in_binding) { binding_requested = true; bind_slot = slot; } }
+    uint8_t bind_slot; // Tx: the slot the receiver binding now gets
     void StopBind(void) { if (is_in_binding) binding_stop_requested = true; }
     void ConfigForBind(void);
     void HopToNextBind(uint16_t frequency_band); // SETUP_FREQUENCY_BAND_ENUM
@@ -132,6 +133,9 @@ void tBindBase::ConfigForBind(void)
     }
     Config.FrameLenTx = Config.FrameLenRx = FRAME_TX_RX_LEN; // the bind frames
     Config.TransmitBoth = Config.IsDualBand; // one band: one radio sends, both are on the bind channel
+    Config.RxCount = 1; // one receiver at a time, no link header, no reply slots
+    Config.RxSlot = 0;
+    Config.LinkHeader = false;
 
     // we may need them both, so ensure they are both started up
     sx.StartUp(&Config.Sx);
@@ -309,6 +313,8 @@ void tBindBase::do_transmit(uint8_t antenna)
 
     txBindFrame.LinkSplit = Setup.Common[Config.ConfigId].LinkSplit;
     txBindFrame.RadioScheme = Setup.Common[Config.ConfigId].RadioScheme;
+    txBindFrame.RxCount = Setup.Common[Config.ConfigId].RxCount;
+    txBindFrame.bind_slot = bind_slot;
     txBindFrame.CustomFreqKHz = Setup.Common[Config.ConfigId].CustomFreqKHz;
     txBindFrame.CustomSpanKHz = Setup.Common[Config.ConfigId].CustomSpanKHz;
     txBindFrame.CustomLbt = Setup.Common[Config.ConfigId].CustomLbt;
@@ -356,6 +362,8 @@ void tBindBase::handle_receive(uint8_t antenna, uint8_t rx_status)
     Setup.Common[0].DynPower = txBindFrame.DynPower;
     Setup.Common[0].LinkSplit = txBindFrame.LinkSplit;
     Setup.Common[0].RadioScheme = txBindFrame.RadioScheme;
+    Setup.Common[0].RxCount = txBindFrame.RxCount;
+    if (txBindFrame.bind_slot < RX_SLOT_NUM) Setup.Rx.Slot = txBindFrame.bind_slot;
     Setup.Common[0].CustomFreqKHz = txBindFrame.CustomFreqKHz;
     Setup.Common[0].CustomSpanKHz = txBindFrame.CustomSpanKHz;
     Setup.Common[0].CustomLbt = txBindFrame.CustomLbt;

@@ -366,8 +366,9 @@ typedef struct
     uint8_t CustomPowerMaxDbm;
     uint8_t PeerRadioCount; // what the other end said at bind: its radios, 1 or 2
     uint8_t PeerRadioBands; // bit per SX_FHSS_FREQUENCY_BAND_ENUM it can run
+    uint8_t RxCount; // receivers of this Tx minus one: the cycle has a reply slot for each
 
-    uint8_t spare[3];
+    uint8_t spare[2];
 } tCommonSetup; // 28 bytes
 
 
@@ -405,8 +406,9 @@ typedef struct
     uint8_t SerialOut2; // RX_SERIAL_OUT2_ENUM
     uint8_t SerialBaudrate2;
     uint8_t Test; // RX_TEST_ENUM
+    uint8_t Slot; // this receiver's reply slot, 0 .. RxCount
 
-    uint8_t spare[4];
+    uint8_t spare[3];
 } tRxSetup; // 16 bytes
 
 
@@ -533,6 +535,11 @@ typedef struct
     uint8_t CustomLbt; // Region = custom: listen before every transmission
     uint8_t RadioScheme; // RADIO_SCHEME_ENUM resolved for this pair, never auto
     bool TransmitBoth; // the same frame goes out of both radios, dual band or dual redundant
+    uint8_t RxCount; // receivers in the cycle, 1 .. RX_SLOT_NUM
+    uint8_t RxSlot; // Rx: the slot it answers in; a slot beyond RxCount never answers
+    uint16_t SlotPeriod_ms; // a receiver's reply slot: its frame's air time and a guard
+    uint16_t FirstReplyEnd_ms; // Tx: when the slot 0 reply has ended, from the tick; the others follow SlotPeriod_ms apart
+    bool LinkHeader; // the payload starts with the link header byte: more than one receiver, or bonded radios
 
     tSxGlobalConfig Sx;
     tSxGlobalConfig Sx2;

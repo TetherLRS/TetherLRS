@@ -98,7 +98,8 @@
   X( Setup.Common[0].Region,        LIST, "Region",           "REGION",           0,0,0,"", "free,EU,custom", SETUP_MSK_REGION )\
   X( Setup.Common[0].DynPower,      LIST, "Dyn Power",        "DYN_POWER",        0,0,0,"", "off,on", MSK_ALL )\
   X( Setup.Common[0].LinkSplit,     LIST, "Link Split",       "LINK_SPLIT",       0,0,0,"", "balanced,downlink,uplink", MSK_ALL )\
-  X( Setup.Common[0].RadioScheme,   LIST, "Radio Scheme",     "RADIO_SCHEME",     0,0,0,"", "auto,single,dual redund,dual bonded,dual band", SETUP_MSK_RADIO_SCHEME )
+  X( Setup.Common[0].RadioScheme,   LIST, "Radio Scheme",     "RADIO_SCHEME",     0,0,0,"", "auto,single,dual redund,dual bonded,dual band", SETUP_MSK_RADIO_SCHEME )\
+  X( Setup.Common[0].RxCount,       LIST, "Rx Count",         "RX_COUNT",         0,0,0,"", "1,2,3,4", MSK_ALL )
 
 #define SETUP_PARAMETER_LIST_TX_MAIN \
   X( Setup.Tx[0].Power,             LIST, "Tx Power",         "TX_POWER",         0,0,0,"", SETUP_OPT_TX_POWER, MSK_ALL )\
@@ -135,7 +136,8 @@
   X( Setup.Rx.Downlink,             LIST, "Rx Downlink",      "RX_DOWNLINK",      0,0,0,"", "as Tx,off", MSK_ALL )\
   X( Setup.Rx.SerialOut2,           LIST, "Rx Ser Out2",      "RX_SER_OUT2",      0,0,0,"", "off,tx on rx pin,serial 1", SETUP_MSK_RX_SER_OUT2 )\
   X( Setup.Rx.SerialBaudrate2,      LIST, "Rx Ser Baudrate2", "RX_SER_BAUD2",     0,0,0,"", SETUP_OPT_RX_SERIAL_BAUDRATE, SETUP_MSK_RX_SER_OUT2 )\
-  X( Setup.Rx.Test,                 LIST, "Rx Test",          "RX_TEST",          0,0,0,"", "off,loopback", MSK_ALL )
+  X( Setup.Rx.Test,                 LIST, "Rx Test",          "RX_TEST",          0,0,0,"", "off,loopback", MSK_ALL )\
+  X( Setup.Rx.Slot,                 LIST, "Rx Slot",          "RX_SLOT",          0,0,0,"", "0,1,2,3", MSK_ALL )
 
 
 #endif // SETUP_LIST_H

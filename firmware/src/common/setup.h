@@ -351,6 +351,7 @@ void setup_default(uint8_t config_id)
     Setup.Common[config_id].CustomPowerMaxDbm = 27;
     Setup.Common[config_id].PeerRadioCount = 1;
     Setup.Common[config_id].PeerRadioBands = 0;
+    Setup.Common[config_id].RxCount = 0; // one receiver
 
     Setup.Tx[config_id].Power = SETUP_TX_POWER;
     Setup.Tx[config_id].Diversity = SETUP_TX_DIVERSITY;
@@ -378,6 +379,7 @@ void setup_default(uint8_t config_id)
     Setup.Rx.SerialOut2 = RX_SERIAL_OUT2_OFF;
     Setup.Rx.SerialBaudrate2 = SERIAL_BAUDRATE_115200;
     Setup.Rx.Test = RX_TEST_OFF;
+    Setup.Rx.Slot = 0;
 }
 
 
@@ -416,6 +418,7 @@ void _setup_sanitize_config(uint8_t config_id, bool only_rx)
     SANITIZE(Common[config_id].RadioScheme, RADIO_SCHEME_NUM, RADIO_SCHEME_AUTO, RADIO_SCHEME_AUTO);
     TST_NOTALLOWED(RadioScheme_allowed_mask, Common[config_id].RadioScheme, RADIO_SCHEME_AUTO);
     if (Setup.Common[config_id].PeerRadioCount < 1 || Setup.Common[config_id].PeerRadioCount > 2) Setup.Common[config_id].PeerRadioCount = 1;
+    SANITIZE(Common[config_id].RxCount, RX_SLOT_NUM, 0, 0);
     SANITIZE(Common[config_id].CustomLbt, 2, 1, 1);
     if (Setup.Common[config_id].CustomFreqKHz < 100000 || Setup.Common[config_id].CustomFreqKHz > 2500000) Setup.Common[config_id].CustomFreqKHz = 869525;
     if (Setup.Common[config_id].CustomSpanKHz < 25) Setup.Common[config_id].CustomSpanKHz = 250;
@@ -604,6 +607,7 @@ if (!only_rx) {
     SANITIZE(Rx.SerialBaudrate2, SERIAL_BAUDRATE_NUM, SERIAL_BAUDRATE_115200, SERIAL_BAUDRATE_115200);
 
     SANITIZE(Rx.Test, RX_TEST_NUM, RX_TEST_OFF, RX_TEST_OFF);
+    SANITIZE(Rx.Slot, RX_SLOT_NUM, 0, 0);
 
 
     //-- Spares and deprecated options:
@@ -963,6 +967,24 @@ uint16_t mode_bandwidth_khz(uint8_t mode, bool is_2p4)
 uint8_t fhss_custom_plan_set(uint32_t centre_khz, uint16_t span_khz, uint16_t bw_khz, bool is_2p4); // fhss.h
 
 
+// a 91-byte frame's time in the air, the drivers' tables; where the chips of a band differ, the slower one, so both
+// ends of a link compute the same reply slot
+uint32_t mode_toa_us(uint8_t mode, bool is_2p4)
+{
+    switch (mode) {
+    case MODE_50HZ: return 7892;
+    case MODE_31HZ: return 13418;
+    case MODE_19HZ:
+    case MODE_19HZ_7X: return (is_2p4) ? 23527 : 22560;
+    case MODE_FLRC_111HZ: return 2383;
+    case MODE_FSK_50HZ: return 7600;
+    case MODE_18HZ: return 22300;
+    case MODE_17HZ: return 26400;
+    }
+    return 52800; // MODE_LR, MODE_8HZ
+}
+
+
 void setup_configure_config(uint8_t config_id)
 {
     //-- SyncWord
@@ -1023,6 +1045,29 @@ void setup_configure_config(uint8_t config_id)
     switch (Setup.Common[config_id].LinkSplit) {
     case LINK_SPLIT_DOWNLINK: Config.FrameLenTx = FRAME_LEN_MIN; Config.FrameLenRx = FRAME_LEN_MAX; break;
     case LINK_SPLIT_UPLINK: Config.FrameLenTx = FRAME_LEN_MAX; Config.FrameLenRx = FRAME_LEN_MIN; break;
+    }
+
+    //-- Multipoint: a reply slot per receiver, the cycle grows by one slot for each receiver beyond the first
+
+    Config.RxCount = Setup.Common[config_id].RxCount + 1;
+#ifdef DEVICE_IS_RECEIVER
+    Config.RxSlot = Setup.Rx.Slot;
+#else
+    Config.RxSlot = 0;
+#endif
+    Config.LinkHeader = (Config.RxCount > 1);
+    {
+    bool is_2p4 = Config.IsDualBand || (Config.Sx.FrequencyBand == SX_FHSS_FREQUENCY_BAND_2P4_GHZ);
+    uint32_t toa_us = mode_toa_us(Config.Mode, is_2p4);
+    uint32_t toa_tx_us = (toa_us * Config.FrameLenTx) / FRAME_TX_RX_LEN;
+    uint32_t toa_rx_us = (toa_us * Config.FrameLenRx) / FRAME_TX_RX_LEN;
+    Config.SlotPeriod_ms = (toa_rx_us + RX_SLOT_GUARD_US + 999) / 1000;
+    Config.FirstReplyEnd_ms = (1000 + toa_tx_us + 1000 + toa_rx_us + 999) / 1000; // the Tx sends 0.75 ms after its tick, the Rx answers 1 ms after the frame
+    if (Config.RxCount > 1) {
+        Config.frame_rate_ms += (Config.RxCount - 1) * Config.SlotPeriod_ms;
+        Config.frame_rate_hz = (1000 + Config.frame_rate_ms / 2) / Config.frame_rate_ms;
+        if (Config.frame_rate_hz < 1) Config.frame_rate_hz = 1;
+    }
     }
 
     //-- Sx12xx

@@ -60,11 +60,10 @@
 // Constants and variables
 //-------------------------------------------------------
 
-#define CLOCK_SHIFT_US  1000 // 1 ms
-
 volatile bool doPostReceive;
 
 static uint32_t CLOCK_PERIOD_US;
+static uint32_t CLOCK_SHIFT_US = 1000; // from the frame to doPostReceive and the reply: 1 ms, plus this receiver's slot
 static volatile tick_t next_tick_us;
 static volatile tick_t next_rx_us;
 
@@ -148,8 +147,9 @@ void IRAM_ATTR timer1_isr() { event_callback(); }
 class tRxClock
 {
   public:
-    void Init(uint16_t period_ms);
+    void Init(uint16_t period_ms, uint16_t shift_us = 1000);
     void SetPeriod(uint16_t period_ms);
+    void SetShift(uint16_t shift_us);
     void Reset(void);
 
   private:
@@ -157,9 +157,10 @@ class tRxClock
 };
 
 
-void tRxClock::Init(uint16_t period_ms)
+void tRxClock::Init(uint16_t period_ms, uint16_t shift_us)
 {
     CLOCK_PERIOD_US = period_ms * 1000;
+    CLOCK_SHIFT_US = shift_us;
     doPostReceive = false;
 
     if (initialized) return;
@@ -190,6 +191,14 @@ IRAM_ATTR void tRxClock::SetPeriod(uint16_t period_ms)
 {
     ENTER_CRITICAL_API();
     CLOCK_PERIOD_US = period_ms * 1000;
+    EXIT_CRITICAL_API();
+}
+
+
+IRAM_ATTR void tRxClock::SetShift(uint16_t shift_us)
+{
+    ENTER_CRITICAL_API();
+    CLOCK_SHIFT_US = shift_us;
     EXIT_CRITICAL_API();
 }
 

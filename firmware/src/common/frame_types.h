@@ -50,6 +50,7 @@ typedef struct
     // not stats but needed
     uint8_t tx_fhss_index_band;
     uint8_t tx_fhss_index;
+    uint8_t link_header; // LINK_HDR_*, when Config.LinkHeader
 } tFrameStats;
 
 
@@ -57,7 +58,15 @@ typedef struct
 // no RC channels: a frame is header, data and CRC, its length that of its direction's Link Split profile
 #define FRAME_PAYLOAD_LEN(frame_len)  ((frame_len) - FRAME_TX_RX_HEADER_LEN - 2) // the data a frame of that length carries
 #define FRAME_PAYLOAD_MAX       FRAME_PAYLOAD_LEN(FRAME_LEN_MAX) // 100
-#define FRAME_CMD_PAYLOAD_LEN   64 // command frames fit the shortest frame of every Link Split
+#define FRAME_CMD_PAYLOAD_LEN   63 // command frames fit the shortest frame of every Link Split, link header included
+
+// the link header: the first payload byte when more than one receiver answers or the radios are bonded, in plain
+// text but under the MAC
+#define LINK_HDR_TX_ACK_MASK    0x0F // Tx: bit s acks the last payload of slot s
+#define LINK_HDR_TX_SLOT_SHIFT  4    // Tx: the slot a command is for, and whose stats the header carries
+#define LINK_HDR_SLOT_MASK      0x03
+#define LINK_HDR_RX_SLOT_MASK   0x03 // Rx: the slot it answers in
+#define LINK_HDR_BOND_SINGLE    0x80 // bonded radios: this frame went out of both, read it as one lane
 
 
 PACKED(
@@ -150,8 +159,10 @@ typedef struct
     uint8_t CustomPowerMaxDbm;
     uint8_t radio_count; // radios this transmitter has, 1 or 2
     uint8_t radio_bands; // bit per SX_FHSS_FREQUENCY_BAND_ENUM it can run
+    uint8_t RxCount;
+    uint8_t bind_slot; // the slot the receiver binding now gets
 
-    uint8_t spare3[37];
+    uint8_t spare3[35];
 
     uint8_t tx_uid[12]; // 12 bytes = 96 bits
     uint64_t tx_random; //  8 bytes = 64 bits
@@ -193,10 +204,10 @@ typedef struct
 // CMD_GET_RX_SETUPDATA           only 1 cmd byte                   -> response from Rx with RX_SETUPDATA
 // CMD_GET_RX_SETUPDATA_WRELOAD   only 1 cmd byte                   -> response from Rx with RX_SETUPDATA
 // CMD_GET_RX_SETUPDATA_STARTUP   1 cmd byte + 36 bytes randoms, nonce, MAC -> response from Rx with RX_SETUPDATA
-// CMD_SET_RX_PARAMS              tTxCmdFrameRxParams = 64-12 bytes -> response from Rx with RX_SETUPDATA
+// CMD_SET_RX_PARAMS              tTxCmdFrameRxParams = 63-12 bytes -> response from Rx with RX_SETUPDATA
 // CMD_STORE_RX_PARAMS            only 1 cmd byte                   -> no response, rx reboots
 // Rx -> Tx
-// CMD_RX_SETUPDATA               tRxCmdFrameRxSetupData = 82 bytes
+// CMD_RX_SETUPDATA               tRxCmdFrameRxSetupData = 63 bytes
 
 typedef enum {
     FRAME_CMD_NONE = 0,
@@ -229,7 +240,9 @@ typedef struct
     uint8_t SerialOut2 : 4;
     uint8_t SerialBaudrate2 : 4;
     uint8_t Test : 4;
-    uint8_t spare[2];
+    uint8_t Slot : 4;
+    uint8_t spare1 : 4;
+    uint8_t spare;
 }) tCmdFrameRxParameters; // 8 bytes
 
 
@@ -259,8 +272,8 @@ typedef struct
     uint8_t SerialOut2_allowed_mask;
     uint8_t radio_count; // radios the receiver has, 1 or 2
     uint8_t radio_bands; // bit per SX_FHSS_FREQUENCY_BAND_ENUM it can run
-    uint8_t spare3[3];
-}) tRxCmdFrameRxSetupData; // 64 bytes
+    uint8_t spare3[2];
+}) tRxCmdFrameRxSetupData; // 63 bytes
 
 
 // send from Tx to do SET_RX_PARAMS
@@ -287,10 +300,11 @@ typedef struct
     uint8_t CustomPowerMaxDbm;
     uint16_t tx_firmware_version_u16; // 16.64.64
     uint16_t tx_setup_layout_u16; // 16.64.64
-    uint8_t spare3[18];
+    uint8_t RxCount;
+    uint8_t spare3[16];
     //--
     uint8_t reserved_for_crypto[12]; // do not use
-}) tTxCmdFrameRxParams; // 64 bytes
+}) tTxCmdFrameRxParams; // 63 bytes
 
 
 // for type casting to get the header

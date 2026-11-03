@@ -145,6 +145,8 @@
 #define FRAME_TX_RX_LEN                 91 // the balanced Link Split, and every bind frame
 #define FRAME_LEN_MIN                   73 // the other profiles: 73 + 109 = 91 + 91, a cycle's air time does not change
 #define FRAME_LEN_MAX                   109
+#define RX_SLOT_NUM                     4 // receivers one Tx can serve, a reply slot each
+#define RX_SLOT_GUARD_US                2000 // between one reply and the next: the Tx re-arms, the Rx listens before talk
 
 #define CONNECT_TMO_MS                  1250 // time to disconnect, was 500, then 750 to better handle 19 Hz mode, now 1250
 

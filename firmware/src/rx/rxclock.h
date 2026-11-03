@@ -20,12 +20,10 @@
 #error CLOCK_TIMx not defined !
 #endif
 
-#define CLOCK_SHIFT_10US          100 // 75 // 100 // 1 ms
-
-
 volatile bool doPostReceive;
 
 uint16_t CLOCK_PERIOD_10US; // does not change while isr is enabled, so no need for volatile
+uint16_t CLOCK_SHIFT_10US; // from the frame to doPostReceive and the reply: 1 ms, plus this receiver's slot
 
 
 //-------------------------------------------------------
@@ -55,8 +53,9 @@ void CLOCK_IRQHandler(void)
 class tRxClock
 {
   public:
-    void Init(uint16_t period_ms);
+    void Init(uint16_t period_ms, uint16_t shift_us = 1000);
     void SetPeriod(uint16_t period_ms);
+    void SetShift(uint16_t shift_us);
     void Reset(void);
 
     void init_isr_off(void);
@@ -64,9 +63,10 @@ class tRxClock
 };
 
 
-void tRxClock::Init(uint16_t period_ms)
+void tRxClock::Init(uint16_t period_ms, uint16_t shift_us)
 {
     CLOCK_PERIOD_10US = period_ms * 100; // frame rate in units of 10us
+    CLOCK_SHIFT_10US = shift_us / 10;
     doPostReceive = false;
 
     init_isr_off();
@@ -77,6 +77,12 @@ void tRxClock::Init(uint16_t period_ms)
 void tRxClock::SetPeriod(uint16_t period_ms)
 {
     CLOCK_PERIOD_10US = period_ms * 100;
+}
+
+
+void tRxClock::SetShift(uint16_t shift_us)
+{
+    CLOCK_SHIFT_10US = shift_us / 10;
 }
 
 

@@ -27,6 +27,9 @@
 extern volatile uint32_t millis32(void);
 extern bool connected(void);
 extern bool connected_and_rx_setup_available(void);
+extern bool slot_connected(uint8_t slot);
+extern uint8_t tx_rx_selected(void);
+extern bool tx_rx_slot_info(uint8_t slot, char* const name_21, uint32_t* const version, uint8_t* const lq, int8_t* const rssi);
 extern tSetup Setup;
 extern tGlobalConfig Config;
 extern tSetupMetaData SetupMetaData;
@@ -350,6 +353,7 @@ class tTxCli
     bool cmd_linkkey(void);
     bool cmd_customplan(void);
     void print_customplan(tCommonSetup* const c);
+    void print_rx_list(void);
 
     void putc(char c) { com->putc(c); }
     void puts(const char* s) { com->puts(s); }
@@ -818,8 +822,49 @@ void tTxCli::stream(void)
             putc('0' + Config.RadioScheme);
             puts("; split ");
             putc('0' + Setup.Common[Config.ConfigId].LinkSplit);
-            putsn(";");
+            puts(";");
+            if (Config.RxCount > 1) { // the receivers: slot:LQ/RSSI, - when not connected, * the selected one
+                puts(" mp");
+                for (uint8_t slot = 0; slot < Config.RxCount; slot++) {
+                    char name[21];
+                    uint32_t version;
+                    uint8_t lq;
+                    int8_t rssi;
+                    bool up = tx_rx_slot_info(slot, name, &version, &lq, &rssi);
+                    putc(' ');
+                    putc('0' + slot);
+                    putc((slot == tx_rx_selected()) ? '*' : ':');
+                    if (up) { puts(u8toBCD_s(lq)); putc('/'); puts(s8toBCD_s(rssi)); } else { putc('-'); }
+                }
+                puts(";");
+            }
+            putsn("");
         }
+    }
+}
+
+
+// the receivers of this Tx: one line each, the selected one marked
+void tTxCli::print_rx_list(void)
+{
+char name[21];
+char s[32];
+uint32_t version;
+uint8_t lq;
+int8_t rssi;
+
+    for (uint8_t slot = 0; slot < Config.RxCount; slot++) {
+        bool up = tx_rx_slot_info(slot, name, &version, &lq, &rssi);
+        puts((slot == tx_rx_selected()) ? "  *" : "   ");
+        putc('0' + slot);
+        puts(": ");
+        if (!up) { putsn("not connected"); continue; }
+        if (name[0]) { puts(name); puts(", "); version_to_str(s, version); puts(s); } else { puts("setup pending"); }
+        puts(", LQ ");
+        puts(u8toBCD_s(lq));
+        puts(" %, RSSI ");
+        puts(s8toBCD_s(rssi));
+        putsn(" dBm");
     }
 }
 
@@ -927,12 +972,14 @@ void tTxCli::print_help_do(void)
         case 9:  putsn("  p name = ?      -> get parameter value and list of allowed values"); break;
         case 10: putsn("  pstore          -> store parameters"); break;
         case 11: putsn("  setconfigid     -> select config id"); break;
-        case 12: putsn("  bind            -> start binding"); break;
+        case 12: putsn("  bind [= slot]   -> start binding, the receiver gets that reply slot"); break;
         case 13: putsn("  reload          -> reload all parameter settings"); break;
         case 14: putsn("  stats           -> starts streaming statistics"); break;
         case 15:
             putsn("  linkkey [= hex] -> show, set (64 hex digits) or clear (none) the link key");
             putsn("  customplan [= kHz/span/lbt/dBm] -> show or set the plan of Region = custom");
+            putsn("  setrx = slot    -> the receiver the parameters and stats are of (Rx Count > 1)");
+            putsn("  rxlist          -> the receivers: slot, state, name, version, LQ, RSSI");
             break;
         case 16:
             putsn("  listfreqs       -> lists frequencies used in fhss scheme");
@@ -1063,8 +1110,30 @@ bool rx_param_changed;
 
         } else
         if (is_cmd("bind")) {
-            tasks.SetCliTask(TASK_BIND_START);
+            tasks.SetCliTaskConfigIdValue(TASK_BIND_START, 0);
             putsn("  Tx entered bind mode");
+
+        } else
+        if (is_cmd_set_value("bind", &value)) { // bind = slot
+            if (value < 0 || value >= Config.RxCount) {
+                putsn("err: the slot is 0 up to Rx Count - 1");
+            } else {
+                tasks.SetCliTaskConfigIdValue(TASK_BIND_START, value);
+                puts("  Tx entered bind mode, the receiver gets slot ");putc('0'+value);putsn("");
+            }
+
+        } else
+        if (is_cmd_set_value("setrx", &value)) { // setrx = slot
+            if (value < 0 || value >= Config.RxCount) {
+                putsn("err: the slot is 0 up to Rx Count - 1");
+            } else {
+                tasks.SetCliTaskConfigIdValue(TASK_SELECT_RX, value);
+                puts("  receiver ");putc('0'+value);putsn(" selected, its parameters follow once it answers");
+            }
+
+        } else
+        if (is_cmd("rxlist")) {
+            print_rx_list();
 
         } else
         if (is_cmd("reload")) {

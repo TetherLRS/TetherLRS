@@ -170,6 +170,15 @@ tRxDroneCan dronecan;
 // Init
 //-------------------------------------------------------
 
+// the receiver answers 1 ms after the frame, and later by its slot when there are several
+uint16_t rxclock_shift_us(void)
+{
+    uint16_t shift_us = 1000;
+    if (Config.RxSlot < Config.RxCount) shift_us += Config.RxSlot * Config.SlotPeriod_ms * 1000;
+    return shift_us;
+}
+
+
 void init_hw(void)
 {
     delay_init();
@@ -189,7 +198,7 @@ void init_hw(void)
     setup_init();
     powerup.Init();
 
-    rxclock.Init(Config.frame_rate_ms); // rxclock needs Config, so call after setup_init()
+    rxclock.Init(Config.frame_rate_ms, rxclock_shift_us()); // rxclock needs Config, so call after setup_init()
 
     uartb_port.Init();
     dronecan_port.Init();
@@ -283,7 +292,10 @@ void link_task_reset(void)
 
 void process_received_txcmdframe(tTxFrame* const frame)
 {
-tCmdFrameHeader* head = (tCmdFrameHeader*)(frame->payload);
+tCmdFrameHeader* head = (tCmdFrameHeader*)FRAME_DATA(frame);
+
+    // with several receivers a command is for one of them
+    if (Config.LinkHeader && ((FRAME_LINK_HDR(frame) >> LINK_HDR_TX_SLOT_SHIFT) & LINK_HDR_SLOT_MASK) != Config.RxSlot) return;
 
     switch (head->cmd) {
     case FRAME_CMD_GET_RX_SETUPDATA:
@@ -306,7 +318,7 @@ tCmdFrameHeader* head = (tCmdFrameHeader*)(frame->payload);
         break;
     case FRAME_CMD_GET_RX_SETUPDATA_STARTUP:
         // request to send setup data, trigger sending RX_SETUPDATA in next transmission
-        crypto.SetSessionKeysFromEncryptedBuf(&frame->payload[1]);
+        crypto.SetSessionKeysFromEncryptedBuf(FRAME_DATA(frame) + 1);
         Config.SessionRandom = crypto.SessionRandom(); // only for reporting
         link_task_set(LINK_TASK_RX_SEND_RX_SETUPDATA);
         break;
@@ -349,7 +361,7 @@ uint8_t payload_len = 0;
         if (transmit_frame_type == TRANSMIT_FRAME_TYPE_NORMAL) {
             // read data from serial
             if (connected()) {
-                uint8_t len_max = FRAME_PAYLOAD_LEN(Config.FrameLenRx) - crypto.NonceLen();
+                uint8_t len_max = FRAME_PAYLOAD_LEN(Config.FrameLenRx) - FRAME_HDR_LEN - crypto.NonceLen();
                 if (Setup.Rx.Test == RX_TEST_LOOPBACK) { // the tool's benchmark: what came down goes back up
                     while (payload_len < len_max && loop_fifo.Available()) payload[payload_len++] = loop_fifo.Get();
                 } else {
@@ -369,6 +381,7 @@ uint8_t payload_len = 0;
     tFrameStats frame_stats;
     frame_stats.seq_no = tarq.SeqNo();
     frame_stats.ack = rarq.AckSeqNo();
+    frame_stats.link_header = Config.RxSlot & LINK_HDR_RX_SLOT_MASK;
     frame_stats.antenna = stats.last_antenna;
     frame_stats.transmit_antenna = antenna;
     frame_stats.rssi = stats.GetLastRssi();
@@ -403,9 +416,12 @@ uint8_t payload_len = 0;
 
 void process_received_frame(tTxFrame* const frame)
 {
-    stats.received_antenna = frame->status.antenna;
-    stats.received_transmit_antenna = frame->status.transmit_antenna;
-    stats.received_rssi = rssi_i8_from_u7(frame->status.rssi_u7);
+    // the status fields are of one receiver at a time: with several, the link header says which
+    if (!Config.LinkHeader || ((FRAME_LINK_HDR(frame) >> LINK_HDR_TX_SLOT_SHIFT) & LINK_HDR_SLOT_MASK) == Config.RxSlot) {
+        stats.received_antenna = frame->status.antenna;
+        stats.received_transmit_antenna = frame->status.transmit_antenna;
+        stats.received_rssi = rssi_i8_from_u7(frame->status.rssi_u7);
+    }
 
     stats.received_fhss_index_band = frame->status.fhss_index_band;
     stats.received_fhss_index = frame->status.fhss_index;
@@ -426,12 +442,12 @@ void process_received_frame(tTxFrame* const frame)
     // output data on serial, but only if connected
     if (!connected() || !accept_payload) return;
     if (Setup.Rx.Test == RX_TEST_LOOPBACK) {
-        loop_fifo.PutBuf(frame->payload, frame->status.payload_len);
+        loop_fifo.PutBuf(FRAME_DATA(frame), FRAME_DATA_LEN(frame));
     } else {
-        sx_serial.putbuf(frame->payload, frame->status.payload_len);
+        sx_serial.putbuf(FRAME_DATA(frame), FRAME_DATA_LEN(frame));
     }
 
-    stats.bytes_received.Add(frame->status.payload_len);
+    stats.bytes_received.Add(FRAME_DATA_LEN(frame));
     stats.serial_data_received.Inc();
 }
 
@@ -524,7 +540,9 @@ tTxFrame* frame;
     // handle transmit ARQ
     if (rx_status > RX_STATUS_INVALID) { // = RX_STATUS_VALID: we have valid information on ack
         if (decrypt_ok) {
-            tarq.AckReceived(frame->status.ack);
+            // with several receivers each has its ack bit in the link header
+            uint8_t ack = (Config.LinkHeader) ? (FRAME_LINK_HDR(frame) >> Config.RxSlot) & 0x01 : frame->status.ack;
+            tarq.AckReceived(ack);
         } else {
             tarq.Disconnected(); // force sending a new payload
         }
@@ -725,7 +743,8 @@ INITCONTROLLER_END
         break;
 
     case LINK_STATE_TRANSMIT:
-        if ((rx_silent || Setup.Rx.Downlink == RX_DOWNLINK_OFF) && !bind.IsInBind()) { // Rx Downlink off: beside a receiver that answers
+        // Rx Downlink off: beside a receiver that answers; a slot beyond Rx Count has no reply window either
+        if ((rx_silent || Setup.Rx.Downlink == RX_DOWNLINK_OFF || Config.RxSlot >= Config.RxCount) && !bind.IsInBind()) {
             sx_serial.flush(); // or the autopilot's old data would go out once the downlink is back
             link_state = LINK_STATE_RECEIVE;
             break;
@@ -994,6 +1013,7 @@ dbg.puts(s8toBCD_s(stats.last_rssi2));*/
         case BIND_TASK_CHANGED_TO_BIND:
             bind.ConfigForBind(); // may change Config
             rxclock.SetPeriod(Config.frame_rate_ms);
+            rxclock.SetShift(rxclock_shift_us()); // 1 ms: the bind runs with one receiver
             rxclock.Reset();
             fhss.SetToBind(Config.frame_rate_ms); // needs to come after fhss
             leds.SetToBind();

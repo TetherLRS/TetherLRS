@@ -52,6 +52,12 @@ typedef enum {
 // CMDs are currently encrypted/authenticated only for Tx -> Rx
 #define FRAME_TYPE_IS_ENCRYPTABLE(ft)  (ft == FRAME_TYPE_TX || ft == FRAME_TYPE_CMD_ENCRYPTED)
 
+// the link header byte opens the payload when Config.LinkHeader: in plain text, under the MAC with the status
+#define FRAME_HDR_LEN          ((Config.LinkHeader) ? 1 : 0)
+#define FRAME_DATA(frame)      ((frame)->payload + FRAME_HDR_LEN)
+#define FRAME_DATA_LEN(frame)  ((frame)->status.payload_len - FRAME_HDR_LEN)
+#define FRAME_LINK_HDR(frame)  ((Config.LinkHeader) ? (frame)->payload[0] : 0)
+
 
 // the CRC closes the frame: the last two bytes of the length its direction runs with
 void frame_set_crc(void* const frame, uint8_t frame_len)
@@ -87,7 +93,8 @@ void _pack_txframe_w_type(
     uint8_t* const payload,
     uint8_t payload_len)
 {
-uint8_t data_len = FRAME_PAYLOAD_LEN(Config.FrameLenTx);
+uint8_t hdr = FRAME_HDR_LEN;
+uint8_t data_len = FRAME_PAYLOAD_LEN(Config.FrameLenTx) - hdr;
 
     if (payload_len > data_len) payload_len = data_len; // should never occur, but play it safe
 
@@ -105,20 +112,20 @@ uint8_t data_len = FRAME_PAYLOAD_LEN(Config.FrameLenTx);
     frame->status.fhss_index = frame_stats->tx_fhss_index;
     frame->status.LQ_serial = frame_stats->LQ_serial;
     frame->status.rx_silent = frame_stats->rx_silent;
-    frame->status.payload_len = payload_len;
+    frame->status.payload_len = hdr + payload_len;
 
-    // pack the payload
+    // pack the payload, the link header first
+    if (hdr) frame->payload[0] = frame_stats->link_header;
     for (uint8_t i = 0; i < payload_len; i++) {
-        frame->payload[i] = payload[i];
+        frame->payload[hdr + i] = payload[i];
     }
 
     // encrypt only normal TX frames and encryptable CMD frames
     if (crypto.PrivacyLevel() && FRAME_TYPE_IS_ENCRYPTABLE(frame->status.frame_type)) {
-        CHECK_PAYLOAD_MAX_LEN(frame->status.payload_len,data_len);
+        CHECK_PAYLOAD_MAX_LEN(payload_len,data_len);
         // encrypt data, move data to payload + N, copy nonce & mac into payload, correct len
-        uint8_t payload_len = frame->status.payload_len;
-        frame->status.payload_len += crypto.NonceLen(); // adjust to new payload len
-        crypto.Encrypt(&(frame->status), 5, frame->payload, payload_len);
+        frame->status.payload_len = hdr + payload_len + crypto.NonceLen(); // adjust to new payload len
+        crypto.Encrypt(&(frame->status), 5 + hdr, frame->payload + hdr, payload_len);
     }
 
     frame_set_crc(frame, Config.FrameLenTx);
@@ -151,10 +158,12 @@ void update_txframe_stats(tTxFrame* const frame, tFrameStats* const frame_stats)
     frame->status.LQ_serial = frame_stats->LQ_serial;
     frame->status.rx_silent = frame_stats->rx_silent;
     // keep !! frame->status.payload_len = payload_len;
+    uint8_t hdr = FRAME_HDR_LEN;
+    if (hdr) frame->payload[0] = frame_stats->link_header;
 
     // the ciphertext and its nonce stay, the MAC covers the new header
     if (crypto.PrivacyLevel() && FRAME_TYPE_IS_ENCRYPTABLE(frame->status.frame_type)) {
-        crypto.RecalculateMac(&(frame->status), 5, frame->payload, frame->status.payload_len);
+        crypto.RecalculateMac(&(frame->status), 5 + hdr, frame->payload + hdr, frame->status.payload_len - hdr);
     }
 
     frame_set_crc(frame, Config.FrameLenTx);
@@ -176,7 +185,8 @@ uint8_t check_txframe(tTxFrame* const frame)
     }
 
     if (frame->status.payload_len > FRAME_PAYLOAD_LEN(Config.FrameLenTx)) return CHECK_ERROR_HEADER;
-    if (FRAME_TYPE_IS_ENCRYPTABLE(frame->status.frame_type) && frame->status.payload_len < crypto.NonceLen()) {
+    if (frame->status.payload_len < FRAME_HDR_LEN) return CHECK_ERROR_HEADER;
+    if (FRAME_TYPE_IS_ENCRYPTABLE(frame->status.frame_type) && FRAME_DATA_LEN(frame) < crypto.NonceLen()) {
         return CHECK_ERROR_HEADER;
     }
 
@@ -194,14 +204,16 @@ bool decrypt_txframe(tTxFrame* const frame)
 {
     // decrypt only normal TX frames and encryptable CMD frames
     if (crypto.PrivacyLevel() && FRAME_TYPE_IS_ENCRYPTABLE(frame->status.frame_type)) {
-        CHECK_PAYLOAD_MIN_LEN(frame->status.payload_len);
-        if (!crypto.Decrypt(0, &(frame->status), 5, frame->payload, frame->status.payload_len)) return false;
+        uint8_t hdr = FRAME_HDR_LEN;
+        uint8_t data_len = frame->status.payload_len - hdr;
+        CHECK_PAYLOAD_MIN_LEN(data_len);
+        if (!crypto.Decrypt(0, &(frame->status), 5 + hdr, frame->payload + hdr, data_len)) return false;
         frame->status.payload_len -= crypto.NonceLen(); // adjust to new payload len
     }
 
     // prevent plaintext CMDs to get through, except of GET_RX_SETUPDATA_STARTUP
     if (crypto.PrivacyLevel() && frame->status.frame_type == FRAME_TYPE_CMD &&
-        frame->payload[0] != FRAME_CMD_GET_RX_SETUPDATA_STARTUP) {
+        FRAME_DATA(frame)[0] != FRAME_CMD_GET_RX_SETUPDATA_STARTUP) {
         return false;
     }
 
@@ -233,10 +245,12 @@ void update_rxframe_stats(tRxFrame* const frame, tFrameStats* const frame_stats)
     frame->status.power_hi = frame_stats->power_code >> 2;
     frame->status.power_lo = frame_stats->power_code & 0x03;
     // keep !! frame->status.payload_len = payload_len;
+    uint8_t hdr = FRAME_HDR_LEN;
+    if (hdr) frame->payload[0] = frame_stats->link_header;
 
     // the ciphertext and its nonce stay, the MAC covers the new header
     if (crypto.PrivacyLevel() && frame->status.frame_type == FRAME_TYPE_RX) {
-        crypto.RecalculateMac(&(frame->status), 5, frame->payload, frame->status.payload_len);
+        crypto.RecalculateMac(&(frame->status), 5 + hdr, frame->payload + hdr, frame->status.payload_len - hdr);
     }
 
     frame_set_crc(frame, Config.FrameLenRx);
@@ -254,7 +268,8 @@ void _pack_rxframe_w_type(
     uint8_t* const payload,
     uint8_t payload_len)
 {
-uint8_t data_len = FRAME_PAYLOAD_LEN(Config.FrameLenRx);
+uint8_t hdr = FRAME_HDR_LEN;
+uint8_t data_len = FRAME_PAYLOAD_LEN(Config.FrameLenRx) - hdr;
 
     if (payload_len > data_len) payload_len = data_len; // should never occur, but play it safe
 
@@ -272,20 +287,20 @@ uint8_t data_len = FRAME_PAYLOAD_LEN(Config.FrameLenRx);
     frame->status.LQ_serial = frame_stats->LQ_serial;
     frame->status.power_hi = frame_stats->power_code >> 2;
     frame->status.power_lo = frame_stats->power_code & 0x03;
-    frame->status.payload_len = payload_len;
+    frame->status.payload_len = hdr + payload_len;
 
-    // pack the payload
+    // pack the payload, the link header first
+    if (hdr) frame->payload[0] = frame_stats->link_header;
     for (uint8_t i = 0; i < payload_len; i++) {
-        frame->payload[i] = payload[i];
+        frame->payload[hdr + i] = payload[i];
     }
 
     // encrypt only normal RX frames; the setup data command carries no secret and goes as it is
     if (crypto.PrivacyLevel() && frame->status.frame_type == FRAME_TYPE_RX) {
-        CHECK_PAYLOAD_MAX_LEN(frame->status.payload_len,data_len);
+        CHECK_PAYLOAD_MAX_LEN(payload_len,data_len);
         // encrypt data, move data to payload + N, copy nonce & mac into payload, correct len
-        uint8_t payload_len = frame->status.payload_len;
-        frame->status.payload_len += crypto.NonceLen(); // adjust to new payload len
-        crypto.Encrypt(&(frame->status), 5, frame->payload, payload_len);
+        frame->status.payload_len = hdr + payload_len + crypto.NonceLen(); // adjust to new payload len
+        crypto.Encrypt(&(frame->status), 5 + hdr, frame->payload + hdr, payload_len);
     }
 
     frame_set_crc(frame, Config.FrameLenRx);
@@ -316,7 +331,8 @@ uint8_t check_rxframe(tRxFrame* const frame)
     }
 
     if (frame->status.payload_len > FRAME_PAYLOAD_LEN(Config.FrameLenRx)) return CHECK_ERROR_HEADER;
-    if (frame->status.frame_type == FRAME_TYPE_RX && frame->status.payload_len < crypto.NonceLen()) {
+    if (frame->status.payload_len < FRAME_HDR_LEN) return CHECK_ERROR_HEADER;
+    if (frame->status.frame_type == FRAME_TYPE_RX && FRAME_DATA_LEN(frame) < crypto.NonceLen()) {
         return CHECK_ERROR_HEADER;
     }
 
@@ -332,8 +348,10 @@ bool decrypt_rxframe(tRxFrame* const frame, uint8_t slot)
 {
     // decrypt only normal RX frames
     if (crypto.PrivacyLevel() && frame->status.frame_type == FRAME_TYPE_RX) {
-        CHECK_PAYLOAD_MIN_LEN(frame->status.payload_len);
-        if (!crypto.Decrypt(slot, &(frame->status), 5, frame->payload, frame->status.payload_len)) {
+        uint8_t hdr = FRAME_HDR_LEN;
+        uint8_t data_len = frame->status.payload_len - hdr;
+        CHECK_PAYLOAD_MIN_LEN(data_len);
+        if (!crypto.Decrypt(slot, &(frame->status), 5 + hdr, frame->payload + hdr, data_len)) {
             return false;
         }
         frame->status.payload_len -= crypto.NonceLen(); // adjust to new payload len
@@ -364,6 +382,7 @@ void _copy_rxsetup_to_cmdframerxparameters(tCmdFrameRxParameters* const rx_param
     rx_params->SerialOut2 = Setup.Rx.SerialOut2;
     rx_params->SerialBaudrate2 = Setup.Rx.SerialBaudrate2;
     rx_params->Test = Setup.Rx.Test;
+    rx_params->Slot = Setup.Rx.Slot;
 }
 
 
@@ -382,6 +401,7 @@ void _copy_cmdframerxparameters_to_rxsetup(tCmdFrameRxParameters* const rx_param
     Setup.Rx.SerialOut2 = rx_params->SerialOut2;
     Setup.Rx.SerialBaudrate2 = rx_params->SerialBaudrate2;
     Setup.Rx.Test = rx_params->Test;
+    Setup.Rx.Slot = rx_params->Slot;
 }
 
 
@@ -447,7 +467,7 @@ uint8_t frame_type;
 // Tx: handle FRAME_CMD_RX_SETUPDATA from Rx
 void unpack_rxcmdframe_rxsetupdata(tRxFrame* const frame)
 {
-tRxCmdFrameRxSetupData* rx_setupdata = (tRxCmdFrameRxSetupData*)frame->payload;
+tRxCmdFrameRxSetupData* rx_setupdata = (tRxCmdFrameRxSetupData*)FRAME_DATA(frame);
 
     SetupMetaData.rx_available = true;
 
@@ -479,6 +499,16 @@ tRxCmdFrameRxSetupData* rx_setupdata = (tRxCmdFrameRxSetupData*)frame->payload;
 }
 
 
+// Tx: what FRAME_CMD_RX_SETUPDATA from a receiver other than the selected one is kept of: its name and version
+void unpack_rxcmdframe_rxsetupdata_brief(tRxFrame* const frame, char* const device_name_21, uint32_t* const firmware_version)
+{
+tRxCmdFrameRxSetupData* rx_setupdata = (tRxCmdFrameRxSetupData*)FRAME_DATA(frame);
+
+    *firmware_version = version_from_u16(rx_setupdata->firmware_version_u16);
+    strstrbufcpy(device_name_21, rx_setupdata->device_name_20, 20);
+}
+
+
 // Tx: send new receiver parameters with FRAME_CMD_SET_RX_PARAMS to Rx
 // we take the values from Tx' Setup.Rx structure
 // Note: Encryptable, so length must be adjusted to free the space for the nonce and MAC.
@@ -504,6 +534,7 @@ tTxCmdFrameRxParams rx_params = {};
     rx_params.CustomSpanKHz = Setup.Common[Config.ConfigId].CustomSpanKHz;
     rx_params.CustomLbt = Setup.Common[Config.ConfigId].CustomLbt;
     rx_params.CustomPowerMaxDbm = Setup.Common[Config.ConfigId].CustomPowerMaxDbm;
+    rx_params.RxCount = Setup.Common[Config.ConfigId].RxCount;
 
     _copy_rxsetup_to_cmdframerxparameters(&(rx_params.RxParams));
 
@@ -554,7 +585,7 @@ tRxCmdFrameRxSetupData rx_setupdata = {};
 // Note: This frame has 64 bytes, but can be shortened by 12 bytes, so can be encrypted.
 void unpack_txcmdframe_setrxparams(tTxFrame* const frame)
 {
-tTxCmdFrameRxParams* rx_params = (tTxCmdFrameRxParams*)frame->payload;
+tTxCmdFrameRxParams* rx_params = (tTxCmdFrameRxParams*)FRAME_DATA(frame);
 
     strstrbufcpy(Setup.Common[0].BindPhrase, rx_params->BindPhrase_6, 6);
     Setup.Common[0].FrequencyBand = (SETUP_FREQUENCY_BAND_ENUM)rx_params->FrequencyBand;
@@ -569,6 +600,7 @@ tTxCmdFrameRxParams* rx_params = (tTxCmdFrameRxParams*)frame->payload;
     Setup.Common[0].CustomSpanKHz = rx_params->CustomSpanKHz;
     Setup.Common[0].CustomLbt = rx_params->CustomLbt;
     Setup.Common[0].CustomPowerMaxDbm = rx_params->CustomPowerMaxDbm;
+    Setup.Common[0].RxCount = rx_params->RxCount;
 
     // don't take over Rx parameters if there is a layout version mismatch
     if (version_from_u16(rx_params->tx_setup_layout_u16) != (uint32_t)SETUPLAYOUT) return;

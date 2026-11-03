@@ -13,7 +13,7 @@
 #define FRAME_LEN_MAX 109
 #define FRAME_TX_RX_HEADER_LEN 7
 #define FRAME_PAYLOAD_LEN(frame_len)  ((frame_len) - FRAME_TX_RX_HEADER_LEN - 2)
-#define FRAME_CMD_PAYLOAD_LEN 64
+#define FRAME_CMD_PAYLOAD_LEN 63
 
 static int fails = 0;
 static void check(const char* name, bool ok)
@@ -46,7 +46,7 @@ int main(void)
     check("none clears it", tlrs_key_from_text("none", key) && !tlrs_key_is_set(key));
 
     check("the split frames add up to two balanced ones", FRAME_LEN_MIN + FRAME_LEN_MAX == 2 * FRAME_TX_RX_LEN);
-    check("the short frame still carries a command frame", FRAME_PAYLOAD_LEN(FRAME_LEN_MIN) == FRAME_CMD_PAYLOAD_LEN);
+    check("the short frame still carries a command frame and the link header", FRAME_PAYLOAD_LEN(FRAME_LEN_MIN) == FRAME_CMD_PAYLOAD_LEN + 1);
     check("the long frame carries 100 bytes", FRAME_PAYLOAD_LEN(FRAME_LEN_MAX) == 100);
 
     printf("%s\n", fails ? "FAILED" : "all ok");

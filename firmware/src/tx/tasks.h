@@ -28,6 +28,7 @@ typedef enum {
     TASK_PARAM_STORE,
     TASK_PARAM_RELOAD,
     TASK_CHANGE_CONFIG_ID,
+    TASK_SELECT_RX, // the receiver the parameters and stats are of, value = slot
 
     TASK_ESPBRIDGE_FLASH,
     TASK_ESPBRIDGE_PASSTHROUGH,
