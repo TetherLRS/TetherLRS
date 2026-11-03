@@ -515,11 +515,11 @@ void prepare_transmit_frame(uint8_t antenna, uint8_t fhss1_curr_i, uint8_t fhss2
     // It is then important however that fhss1_curr_i and fhss2_curr_i are identical, as otherwise
     // the receiver would jump to wrong frequencies
     // this must be ensured by setup
-    uint8_t fhss_band = fhss_band_next(); // this randomly toggles between 0 and 1, but never has more than two symbols in a row
+    uint8_t fhss_band = (Config.IsDualBand) ? fhss_band_next() : 0; // dual band: randomly toggles between 0 and 1; one band: the 2nd sequencer follows the 1st
     frame_stats.tx_fhss_index_band = fhss_band;
     frame_stats.tx_fhss_index = ((fhss_band & 0x01) == 0) ? fhss1_curr_i : fhss2_curr_i;
 
-if (!Config.IsDualBand && (fhss1_curr_i != fhss2_curr_i)) while(1){} // must not happen, catch it
+if (!Config.TransmitBoth && (fhss1_curr_i != fhss2_curr_i)) while(1){} // must not happen, catch it
 
     frame_stats.LQ_serial = stats.GetLQ_serial();
     frame_stats.rx_silent = (Setup.Tx[Config.ConfigId].Downlink == TX_DOWNLINK_OFF) ? 1 : 0;
@@ -900,7 +900,9 @@ INITCONTROLLER_END
         rfpower.Update();
         sx.SetRfFrequency(fhss.GetCurrFreq());
         sx2.SetRfFrequency(fhss.GetCurrFreq2());
-        if (!regulatory.TxGo(tdiversity.Antenna(), fhss.GetCurrFreq())) { // not this frame, the Rx sees it as lost
+        bool go = regulatory.TxGo(tdiversity.Antenna(), fhss.GetCurrFreq());
+        if (go && Config.TransmitBoth && !Config.IsDualBand) go = regulatory.TxGo(ANTENNA_2, fhss.GetCurrFreq2()); // the 2nd channel books its time too
+        if (!go) { // not this frame, the Rx sees it as lost
             if (transmit_frame_type == TRANSMIT_FRAME_TYPE_NORMAL) tx_payload_held = true;
             link_state = LINK_STATE_RECEIVE;
             break;
@@ -932,7 +934,7 @@ IF_SX(
             if (irq_status & SX_IRQ_TX_DONE) {
                 irq_status = 0;
                 link_tx_status |= TX_STATUS_TX1_DONE;
-                if (!Config.IsDualBand || (link_tx_status & TX_STATUS_TX2_DONE)) { link_state = LINK_STATE_RECEIVE; }
+                if (!Config.TransmitBoth || (link_tx_status & TX_STATUS_TX2_DONE)) { link_state = LINK_STATE_RECEIVE; }
                 DBG_MAIN_SLIM(dbg.puts("1!");)
             }
         } else
@@ -966,7 +968,7 @@ IF_SX2(
             if (irq2_status & SX2_IRQ_TX_DONE) {
                 irq2_status = 0;
                 link_tx_status |= TX_STATUS_TX2_DONE;
-                if (!Config.IsDualBand || (link_tx_status & TX_STATUS_TX1_DONE)) { link_state = LINK_STATE_RECEIVE; }
+                if (!Config.TransmitBoth || (link_tx_status & TX_STATUS_TX1_DONE)) { link_state = LINK_STATE_RECEIVE; }
                 DBG_MAIN_SLIM(dbg.puts("2!");)
             }
         } else

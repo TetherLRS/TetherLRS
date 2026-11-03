@@ -364,8 +364,10 @@ typedef struct
     uint32_t CustomFreqKHz; // centre of the custom plan
     uint16_t CustomSpanKHz; // its width, the channels come from span / the mode's bandwidth
     uint8_t CustomPowerMaxDbm;
+    uint8_t PeerRadioCount; // what the other end said at bind: its radios, 1 or 2
+    uint8_t PeerRadioBands; // bit per SX_FHSS_FREQUENCY_BAND_ENUM it can run
 
-    uint8_t spare[5];
+    uint8_t spare[3];
 } tCommonSetup; // 28 bytes
 
 
@@ -463,6 +465,7 @@ typedef struct
     uint16_t Ortho_allowed_mask;
     uint16_t Privacy_allowed_mask;
     uint16_t Region_allowed_mask;
+    uint16_t RadioScheme_allowed_mask;
 
     char Tx_Power_optstr[67+1];
     uint16_t Tx_Diversity_allowed_mask;
@@ -515,6 +518,7 @@ typedef struct
     uint8_t Except;
     uint16_t BindScan_mask;
     uint8_t Plan; // FHSS_PLAN_ENUM, regional channel plans
+    uint8_t Offset; // the 2nd sequencer trails the 1st by this many hops: dual redundant on one band
 } tFhssGlobalConfig;
 
 
@@ -527,6 +531,8 @@ typedef struct
     uint8_t Region;
     uint8_t PowerIdxMax; // highest rfpower_list index the region allows
     uint8_t CustomLbt; // Region = custom: listen before every transmission
+    uint8_t RadioScheme; // RADIO_SCHEME_ENUM resolved for this pair, never auto
+    bool TransmitBoth; // the same frame goes out of both radios, dual band or dual redundant
 
     tSxGlobalConfig Sx;
     tSxGlobalConfig Sx2;

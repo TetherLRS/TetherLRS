@@ -730,8 +730,8 @@ class tFhssBase
 };
 
 
-#if !defined DEVICE_HAS_DUAL_SX126x_SX128x && !defined DEVICE_HAS_DUAL_SX126x_SX126x
-// SINGLE BAND
+#ifndef USE_SX2
+// ONE RADIO
 
 class tFhss : public tFhssBase
 {
@@ -760,7 +760,7 @@ class tFhss : public tFhssBase
 };
 
 #else
-// DUALBAND !
+// TWO RADIOS: dual band, or one band with the 2nd sequencer trailing by Offset (dual redundant), or in step (diversity)
 
 class tFhss
 {
@@ -773,7 +773,11 @@ class tFhss
         fhss2ndBand.Init(fhss2->Num, fhss2->Seed,
                           fhss2->FrequencyBand, fhss2->BindScan_mask,
                           fhss2->Ortho, fhss2->Except, fhss2->Plan);
+        offset = fhss2->Offset;
+        if (offset) fhss2ndBand.SetCurrI(trail(fhss1stBand.GetCurrI()));
     }
+
+    uint8_t trail(uint8_t i) { return (i + offset) % fhss1stBand.Cnt(); } // where the 2nd sequencer is when the 1st is at i
 
     void Start(void)
     {
@@ -801,8 +805,8 @@ class tFhss
 
     //-- receiver only
 
-    void SetCurrI(uint8_t i) { fhss1stBand.SetCurrI(i); }
-    void SetCurrI2(uint8_t i) { fhss2ndBand.SetCurrI(i); }
+    void SetCurrI(uint8_t i) { fhss1stBand.SetCurrI(i); if (offset) fhss2ndBand.SetCurrI(trail(i)); }
+    void SetCurrI2(uint8_t i) { fhss2ndBand.SetCurrI(i); if (offset) fhss1stBand.SetCurrI((i + fhss1stBand.Cnt() - offset) % fhss1stBand.Cnt()); }
 
     bool HopToNextBind(void)
     {
@@ -825,7 +829,7 @@ class tFhss
 #elif defined DEVICE_HAS_DUAL_SX126x_SX128x
         return 1.0E6f * SX128X_REG_TO_FREQ_MHZ(GetCurrFreq2());
 #else
-        #error Something wrong with dual band config !
+        return fhss2ndBand.GetCurrFreq_Hz(); // the same chip twice
 #endif
     }
 
@@ -846,12 +850,15 @@ class tFhss
 #elif defined DEVICE_HAS_DUAL_SX126x_SX128x
         strcpy(unit_str, " MHz");
         return (uint32_t)SX128X_REG_TO_FREQ_MHZ(fhss2ndBand.FhssList(i));
+#else
+        return fhss2ndBand.GetFreq_x1000(unit_str, i); // the same chip twice
 #endif
     }
 
   private:
     tFhssBase fhss1stBand;
     tFhssBase fhss2ndBand;
+    uint8_t offset;
 };
 
 #endif

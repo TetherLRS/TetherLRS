@@ -153,6 +153,15 @@ void setup_configure_metadata(void)
     SetupMetaData.Privacy_allowed_mask = 0b1111; // all
 #endif
 
+    //-- Radio Scheme: "auto,single,dual redund,dual bonded,dual band": bonded is not there yet, dual band only on that hardware
+#if defined DEVICE_HAS_DUAL_SX126x_SX128x || defined DEVICE_HAS_DUAL_SX126x_SX126x
+    SetupMetaData.RadioScheme_allowed_mask = 0b10111;
+#elif defined USE_SX2
+    SetupMetaData.RadioScheme_allowed_mask = 0b00111;
+#else
+    SetupMetaData.RadioScheme_allowed_mask = 0b00011; // auto and single, one radio
+#endif
+
     //-- Region: "free,EU,custom"
 #ifdef USE_REGION_EU
     SetupMetaData.Region_allowed_mask = 0b111; // all
@@ -340,6 +349,8 @@ void setup_default(uint8_t config_id)
     Setup.Common[config_id].CustomSpanKHz = 250;
     Setup.Common[config_id].CustomLbt = 1;
     Setup.Common[config_id].CustomPowerMaxDbm = 27;
+    Setup.Common[config_id].PeerRadioCount = 1;
+    Setup.Common[config_id].PeerRadioBands = 0;
 
     Setup.Tx[config_id].Power = SETUP_TX_POWER;
     Setup.Tx[config_id].Diversity = SETUP_TX_DIVERSITY;
@@ -403,6 +414,8 @@ void _setup_sanitize_config(uint8_t config_id, bool only_rx)
     SANITIZE(Common[config_id].DynPower, 2, SETUP_DYN_POWER, 1);
     SANITIZE(Common[config_id].LinkSplit, LINK_SPLIT_NUM, LINK_SPLIT_BALANCED, LINK_SPLIT_BALANCED);
     SANITIZE(Common[config_id].RadioScheme, RADIO_SCHEME_NUM, RADIO_SCHEME_AUTO, RADIO_SCHEME_AUTO);
+    TST_NOTALLOWED(RadioScheme_allowed_mask, Common[config_id].RadioScheme, RADIO_SCHEME_AUTO);
+    if (Setup.Common[config_id].PeerRadioCount < 1 || Setup.Common[config_id].PeerRadioCount > 2) Setup.Common[config_id].PeerRadioCount = 1;
     SANITIZE(Common[config_id].CustomLbt, 2, 1, 1);
     if (Setup.Common[config_id].CustomFreqKHz < 100000 || Setup.Common[config_id].CustomFreqKHz > 2500000) Setup.Common[config_id].CustomFreqKHz = 869525;
     if (Setup.Common[config_id].CustomSpanKHz < 25) Setup.Common[config_id].CustomSpanKHz = 250;
@@ -1120,7 +1133,25 @@ void setup_configure_config(uint8_t config_id)
     }
 
     // ensure equal fhss1, fhss2, is required in single band mode
+    Config.Fhss.Offset = 0;
     Config.Fhss2 = Config.Fhss;
+
+    //-- Radio Scheme: what this pair runs, from what both ends have; the peer's radios came with the bind
+#if defined USE_SX2 && !defined DEVICE_HAS_DUAL_SX126x_SX128x && !defined DEVICE_HAS_DUAL_SX126x_SX126x // two radios on one band here
+    bool pair_two_radios = (Setup.Common[config_id].PeerRadioCount == 2);
+#else
+    bool pair_two_radios = false;
+#endif
+    Config.RadioScheme = RADIO_SCHEME_SINGLE;
+    if (Config.IsDualBand) {
+        Config.RadioScheme = RADIO_SCHEME_DUAL_BAND;
+    } else if (pair_two_radios && Setup.Common[config_id].RadioScheme != RADIO_SCHEME_SINGLE && Config.Fhss.Num >= 2) {
+        Config.RadioScheme = RADIO_SCHEME_DUAL_REDUNDANT; // auto, redundant, and bonded until it exists
+        Config.Fhss2.Offset = Config.Fhss.Num / 2; // never the same frequency in the same slot
+        Config.ReceiveUseAntenna1 = Config.ReceiveUseAntenna2 = true; // both radios, whatever Diversity says
+        Config.TransmitUseAntenna1 = Config.TransmitUseAntenna2 = true;
+    }
+    Config.TransmitBoth = (Config.RadioScheme != RADIO_SCHEME_SINGLE);
 
 #if defined DEVICE_HAS_DUAL_SX126x_SX128x
     if (Config.IsDualBand) { // only modify if in dual band mode, otherwise keep fhss1 = fhss2

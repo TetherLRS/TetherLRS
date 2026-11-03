@@ -716,7 +716,9 @@ INITCONTROLLER_END
         sx.SetFrameLength(Config.FrameLenRx);
         sx2.SetFrameLength(Config.FrameLenRx);
         rfpower.Update();
-        if (!regulatory.TxGo(tdiversity.Antenna(), fhss.GetCurrFreq())) { // not this frame, the ARQ resends its data
+        bool go = regulatory.TxGo(tdiversity.Antenna(), fhss.GetCurrFreq());
+        if (go && Config.TransmitBoth && !Config.IsDualBand) go = regulatory.TxGo(ANTENNA_2, fhss.GetCurrFreq2()); // the 2nd channel books its time too
+        if (!go) { // not this frame, the ARQ resends its data
             link_state = LINK_STATE_RECEIVE;
             break;
         }
@@ -734,7 +736,7 @@ IF_SX(
             if (irq_status & SX_IRQ_TX_DONE) {
                 irq_status = 0;
                 link_tx_status |= TX_STATUS_TX1_DONE;
-                if (!Config.IsDualBand || (link_tx_status & TX_STATUS_TX2_DONE)) { link_state = LINK_STATE_RECEIVE; }
+                if (!Config.TransmitBoth || (link_tx_status & TX_STATUS_TX2_DONE)) { link_state = LINK_STATE_RECEIVE; }
                 DBG_MAIN_SLIM(dbg.puts("1<");)
             }
         } else
@@ -771,7 +773,7 @@ IF_SX2(
             if (irq2_status & SX2_IRQ_TX_DONE) {
                 irq2_status = 0;
                 link_tx_status |= TX_STATUS_TX2_DONE;
-                if (!Config.IsDualBand || (link_tx_status & TX_STATUS_TX1_DONE)) { link_state = LINK_STATE_RECEIVE; }
+                if (!Config.TransmitBoth || (link_tx_status & TX_STATUS_TX1_DONE)) { link_state = LINK_STATE_RECEIVE; }
                 DBG_MAIN_SLIM(dbg.puts("2<");)
             }
         } else

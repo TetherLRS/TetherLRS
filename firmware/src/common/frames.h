@@ -361,10 +361,10 @@ void _copy_cmdframerxparameters_to_rxsetup(tCmdFrameRxParameters* const rx_param
 }
 
 
-// what this device's radios are, for the bind and setup data frames
+// what this device's radios are, for the bind and setup data frames: radios on one band, a dual band pair has one per band
 uint8_t device_radio_count(void)
 {
-#ifdef USE_SX2
+#if defined USE_SX2 && !defined DEVICE_HAS_DUAL_SX126x_SX128x && !defined DEVICE_HAS_DUAL_SX126x_SX126x
     return 2;
 #else
     return 1;

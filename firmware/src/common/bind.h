@@ -131,6 +131,7 @@ void tBindBase::ConfigForBind(void)
         mode_mask |= (1 << Config.FrequencyBand); // set bit for current frequency band
     }
     Config.FrameLenTx = Config.FrameLenRx = FRAME_TX_RX_LEN; // the bind frames
+    Config.TransmitBoth = Config.IsDualBand; // one band: one radio sends, both are on the bind channel
 
     // we may need them both, so ensure they are both started up
     sx.StartUp(&Config.Sx);
@@ -286,6 +287,8 @@ void tBindBase::handle_receive(uint8_t antenna, uint8_t rx_status)
     // do stuff
 
     memcpy(Setup.peer_uid[Config.ConfigId], rxBindFrame.rx_uid, 12); // store receiver uid // must both be 12 bytes
+    Setup.Common[Config.ConfigId].PeerRadioCount = rxBindFrame.radio_count;
+    Setup.Common[Config.ConfigId].PeerRadioBands = rxBindFrame.radio_bands;
 }
 
 
@@ -310,6 +313,8 @@ void tBindBase::do_transmit(uint8_t antenna)
     txBindFrame.CustomSpanKHz = Setup.Common[Config.ConfigId].CustomSpanKHz;
     txBindFrame.CustomLbt = Setup.Common[Config.ConfigId].CustomLbt;
     txBindFrame.CustomPowerMaxDbm = Setup.Common[Config.ConfigId].CustomPowerMaxDbm;
+    txBindFrame.radio_count = device_radio_count();
+    txBindFrame.radio_bands = device_radio_bands();
     memcpy(txBindFrame.tx_uid, Config.Uid, 12); // send own uid to receiver // must both be 12 bytes
     txBindFrame.tx_random = Config.BindRandom;  // send own random to receiver
     Setup.tx_random[Config.ConfigId] = Config.BindRandom; // store the used random
@@ -349,8 +354,16 @@ void tBindBase::handle_receive(uint8_t antenna, uint8_t rx_status)
     Setup.Common[0].Privacy = txBindFrame.Privacy;
     Setup.Common[0].Region = txBindFrame.Region;
     Setup.Common[0].DynPower = txBindFrame.DynPower;
+    Setup.Common[0].LinkSplit = txBindFrame.LinkSplit;
+    Setup.Common[0].RadioScheme = txBindFrame.RadioScheme;
+    Setup.Common[0].CustomFreqKHz = txBindFrame.CustomFreqKHz;
+    Setup.Common[0].CustomSpanKHz = txBindFrame.CustomSpanKHz;
+    Setup.Common[0].CustomLbt = txBindFrame.CustomLbt;
+    Setup.Common[0].CustomPowerMaxDbm = txBindFrame.CustomPowerMaxDbm;
     Config.Region = txBindFrame.Region; // the replies already follow the Tx's region
 
+    Setup.Common[0].PeerRadioCount = txBindFrame.radio_count;
+    Setup.Common[0].PeerRadioBands = txBindFrame.radio_bands;
     memcpy(Setup.peer_uid[0], txBindFrame.tx_uid, 12); // store transmitter uid // must both be 12 bytes
     Setup.tx_random[0] = txBindFrame.tx_random; // store transmitter random
 
@@ -370,6 +383,8 @@ void tBindBase::do_transmit(uint8_t antenna)
     rxBindFrame.firmware_version = VERSION;
     strbufstrcpy(rxBindFrame.device_name_20, DEVICE_NAME, 20);
 
+    rxBindFrame.radio_count = device_radio_count();
+    rxBindFrame.radio_bands = device_radio_bands();
     memcpy(rxBindFrame.rx_uid, Config.Uid, 12); // send own uid to transmitter // must both be 12 bytes
 
     rxBindFrame.crc = fmav_crc_calculate((uint8_t*)&rxBindFrame, FRAME_TX_RX_LEN - 2);

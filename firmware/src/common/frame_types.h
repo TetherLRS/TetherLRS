@@ -148,8 +148,10 @@ typedef struct
     uint16_t CustomSpanKHz;
     uint8_t CustomLbt;
     uint8_t CustomPowerMaxDbm;
+    uint8_t radio_count; // radios this transmitter has, 1 or 2
+    uint8_t radio_bands; // bit per SX_FHSS_FREQUENCY_BAND_ENUM it can run
 
-    uint8_t spare3[39];
+    uint8_t spare3[37];
 
     uint8_t tx_uid[12]; // 12 bytes = 96 bits
     uint64_t tx_random; //  8 bytes = 64 bits

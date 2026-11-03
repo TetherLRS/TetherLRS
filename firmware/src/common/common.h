@@ -360,8 +360,8 @@ void sxReadFrame(uint8_t antenna, void* const data, void* const data2, uint8_t l
 
 void sxSendFrame(uint8_t antenna, void* const data, uint8_t len, uint16_t tmo_ms)
 {
-#if defined DEVICE_HAS_DUAL_SX126x_SX128x || defined DEVICE_HAS_DUAL_SX126x_SX126x // DUAL BAND
-    if (Config.IsDualBand) {
+#ifdef USE_SX2 // dual band, or dual redundant on one band
+    if (Config.TransmitBoth) {
         sx.SendFrame((uint8_t*)data, len, tmo_ms);
         sx2.SendFrame((uint8_t*)data, len, tmo_ms);
     } else
