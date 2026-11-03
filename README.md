@@ -19,8 +19,13 @@ receiver, which can be the aircraft radio or the ground radio.
   optional encryption with a link key that never goes over the air, 2.4 GHz, 915 MHz (FCC), 868 MHz, 866 MHz (IN)
   and 433 MHz, on SX1280, SX127x and LR1121 radios. Every frame carries 82 bytes each way, and **Link Split** moves
   bytes to the direction that needs them (64 down and 100 up, or the reverse).
-- **Two radios, two channels**: boards with two radios on both ends (true diversity receivers, Gemini modules) send
-  every frame on two channels at once; dual band boards on two bands.
+- **Two radios, two lanes**: boards with two radios on both ends (true diversity receivers, Gemini modules) run two
+  lanes for twice the data, and fall back to the same frame on both while a channel is poor; dual band boards pick
+  the band that gets through.
+- **Several receivers**: one ground radio serves up to four aircraft radios, each in its own reply slot with its own
+  ARQ, selected and bound from the tool.
+- **Automatic mode**: the ground radio steps the air rate up while the link has margin to spare and down when it
+  gets poor, both ends meeting again at 19 Hz if a change goes wrong.
 - **A frequency plan of your own**: a custom region with a centre, a span, listen before talk and a power cap, with
   narrow modes for small slices of a band (869.4 to 869.65 MHz at 500 mW, for example).
 - **MAVLink that fits the link**: mavlinkX compression, flow control through RADIO_STATUS, and optionally the
