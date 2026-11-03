@@ -23,7 +23,6 @@
 //   Ch3    PA9 / U1Tx    -> Serial Tx
 //   Ch4    PA10 / U1Rx   -> Serial Rx
 
-#define DEVICE_HAS_OUT_INVERTED
 #define DEVICE_HAS_DEBUG_SWUART
 #define DEVICE_HAS_SYSTEMBOOT
 
@@ -44,7 +43,6 @@
 
 //-- UARTS
 // UARTB = serial port
-// UART = output port, SBus or whatever
 // UARTF = debug port
 
 #define UARTB_USE_UART1_PA9PA10 // serial
@@ -55,13 +53,6 @@
 #define UARTB_USE_RX
 #define UARTB_RXBUFSIZE           RX_SERIAL_RXBUFSIZE // 1024 // 512
 
-#define UART_USE_UART2_PA2PA3 // out pin
-#define UART_BAUD                 100000 // SBus normal baud rate, is being set later anyhow
-#define UART_USE_TX
-#define UART_TXBUFSIZE            256 // 512
-#define UART_USE_TX_ISR
-//#define UART_USE_RX
-//#define UART_RXBUFSIZE            512
 
 /*
 #define UARTF_USE_UART1_PA9PA10 //3 // debug
@@ -138,21 +129,6 @@ void sx_dio_enable_exti_isr(void)
 void sx_dio_exti_isr_clearflag(void)
 {
     LL_EXTI_ClearFlag_0_31(SX_DIO_EXTI_LINE_x);
-}
-
-
-//-- Out port
-
-void out_init_gpio(void)
-{
-}
-
-void out_set_normal(void)
-{
-}
-
-void out_set_inverted(void)
-{
 }
 
 

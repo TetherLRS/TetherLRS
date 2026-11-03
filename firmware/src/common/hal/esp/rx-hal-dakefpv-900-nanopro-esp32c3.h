@@ -14,12 +14,13 @@
 
 #define DEVICE_HAS_SINGLE_LED_RGB
 #define DEVICE_HAS_NO_DEBUG
+#define DEVICE_HAS_USB_CDC // the USB pins are free
 //#define DEVICE_HAS_NO_SERIAL
 
 
 //-- UARTS
 // UARTB = serial port
-// UART = output port, SBus or whatever
+// UART = Ser Out2 port, a second TX for the link's data
 // UARTF = debug port
 
 #define UARTB_USE_SERIAL

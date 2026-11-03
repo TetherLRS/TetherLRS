@@ -7,6 +7,7 @@
 //-------------------------------------------------------
 
 #define DEVICE_HAS_SINGLE_LED
+#define DEVICE_HAS_USB_CDC // the USB pins are free
 #define DEVICE_HAS_NO_DEBUG
 
 

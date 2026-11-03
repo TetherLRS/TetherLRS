@@ -14,6 +14,11 @@
 extern tSetup Setup;
 
 
+#include "serial_out2.h"
+
+extern tRxSerialOut2 serial_out2;
+
+
 class tRxSxSerial : public tSerialBase
 {
   public:
@@ -46,6 +51,7 @@ class tRxSxSerial : public tSerialBase
 
     void putbuf(uint8_t* const buf, uint16_t len) override
     {
+        serial_out2.putbuf(buf, len); // the link's data as it came, whatever the mode
         if (SERIAL_LINK_MODE_IS_MAVLINK(Setup.Rx.SerialLinkMode)) {
             for (uint16_t i = 0; i < len; i++) mavlink.putc(buf[i]); // send to serial via MAVLink parser
             return;

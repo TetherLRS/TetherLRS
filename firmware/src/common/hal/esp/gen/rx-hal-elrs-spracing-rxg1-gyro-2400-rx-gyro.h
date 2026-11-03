@@ -8,6 +8,7 @@
 
 #define DEVICE_HAS_SINGLE_LED_RGB
 #define DEVICE_HAS_DIVERSITY_SINGLE_SPI // must be set, doesn't work without it
+#define DEVICE_HAS_USB_CDC // the USB pins are free
 #define DEVICE_HAS_NO_DEBUG
 
 

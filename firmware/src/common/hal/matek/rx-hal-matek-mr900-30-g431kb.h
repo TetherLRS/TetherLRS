@@ -10,7 +10,7 @@
 // MATEKSYS mR900-30 STM32G431KB, as receiver
 //-------------------------------------------------------
 
-#define DEVICE_HAS_OUT
+#define DEVICE_HAS_SERIAL_OUT2
 #define DEVICE_HAS_FAN_ONOFF
 
 #include "hal-matek-mr-g431kb-common.h"
@@ -26,7 +26,7 @@
 
 //-- UARTS
 // UARTB = serial port
-// UART = output port, SBus or whatever
+// UART = Ser Out2 port, a second TX for the link's data
 // UARTF = debug port
 
 #define UARTB_USE_UART1_PA9PA10 // serial
@@ -38,7 +38,7 @@
 #define UARTB_RXBUFSIZE           RX_SERIAL_RXBUFSIZE // 1024 // 512
 
 #define UART_USE_UART2_PB3PB4 // out pin
-#define UART_BAUD                 100000 // SBus normal baud rate, is being set later anyhow
+#define UART_BAUD                 115200 // Rx Ser Baudrate2 sets it
 #define UART_USE_TX
 #define UART_TXBUFSIZE            256 // 512
 #define UART_USE_TX_ISR
@@ -55,29 +55,6 @@
 
 
 //-- SX1: SX12xx & SPI
-
-
-//-- Out port
-// this is nasty, UART defines not yet known, but cumbersome to add, so we include the lib
-#include "../../../modules/stm32ll-lib/src/stdstm32-uart.h"
-
-void out_init_gpio(void)
-{
-}
-
-void out_set_normal(void)
-{
-    LL_USART_Disable(UART_UARTx);
-    LL_USART_SetTXPinLevel(UART_UARTx, LL_USART_TXPIN_LEVEL_STANDARD);
-    LL_USART_Enable(UART_UARTx);
-}
-
-void out_set_inverted(void)
-{
-    LL_USART_Disable(UART_UARTx);
-    LL_USART_SetTXPinLevel(UART_UARTx, LL_USART_TXPIN_LEVEL_INVERTED);
-    LL_USART_Enable(UART_UARTx);
-}
 
 
 //-- Button

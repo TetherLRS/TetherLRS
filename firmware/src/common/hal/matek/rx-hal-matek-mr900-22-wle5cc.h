@@ -28,7 +28,7 @@ SWD     solder pad      PA13        SWDIO       ADC_IN9
 SWC     solder pad      PA14        SWDCLK      ADC_IN10
 */
 
-#define DEVICE_HAS_OUT
+#define DEVICE_HAS_SERIAL_OUT2
 #define DEVICE_HAS_DEBUG_SWUART
 
 
@@ -48,7 +48,7 @@ SWC     solder pad      PA14        SWDCLK      ADC_IN10
 
 //-- UARTS
 // UARTB = serial port
-// UART = output port, SBus or whatever
+// UART = Ser Out2 port, a second TX for the link's data
 // UARTF = debug port
 
 #define UARTB_USE_UART2_PA2PA3 // serial // PA2,PA3
@@ -60,7 +60,7 @@ SWC     solder pad      PA14        SWDCLK      ADC_IN10
 #define UARTB_RXBUFSIZE           RX_SERIAL_RXBUFSIZE
 
 #define UART_USE_UART1_PB6PB7 // out pin // PB6
-#define UART_BAUD                 100000 // SBus normal baud rate, is being set later anyhow
+#define UART_BAUD                 115200 // Rx Ser Baudrate2 sets it
 #define UART_USE_TX
 #define UART_TXBUFSIZE            256
 #define UART_USE_TX_ISR
@@ -137,29 +137,6 @@ void sx_dio_enable_exti_isr(void)
 void sx_dio_exti_isr_clearflag(void)
 {
     // there is no EXTI_LINE_44 interrupt flag
-}
-
-
-//-- Out port
-// this is nasty, UART defines not yet known, but cumbersome to add, so we include the lib
-#include "../../../modules/stm32ll-lib/src/stdstm32-uart.h"
-
-void out_init_gpio(void)
-{
-}
-
-void out_set_normal(void)
-{
-    LL_USART_Disable(UART_UARTx);
-    LL_USART_SetTXPinLevel(UART_UARTx, LL_USART_TXPIN_LEVEL_STANDARD);
-    LL_USART_Enable(UART_UARTx);
-}
-
-void out_set_inverted(void)
-{
-    LL_USART_Disable(UART_UARTx);
-    LL_USART_SetTXPinLevel(UART_UARTx, LL_USART_TXPIN_LEVEL_INVERTED);
-    LL_USART_Enable(UART_UARTx);
 }
 
 

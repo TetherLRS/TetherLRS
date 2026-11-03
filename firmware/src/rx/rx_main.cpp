@@ -43,6 +43,9 @@
 #ifdef USE_SERIAL
 #include "../modules/esp-lib/esp-uartb.h"
 #endif
+#ifdef USE_USB
+#include "../modules/esp-lib/esp-usb.h"
+#endif
 #ifdef USE_DEBUG
 #ifdef DEVICE_HAS_DEBUG_SWUART
 #include "../modules/esp-lib/esp-uart-sw.h"
@@ -75,6 +78,9 @@
 #endif
 #ifdef USE_SERIAL
 #include "../modules/stm32ll-lib/src/stdstm32-uartb.h"
+#endif
+#ifdef USE_SERIAL_OUT2
+#include "../modules/stm32ll-lib/src/stdstm32-uart.h"
 #endif
 #ifdef USE_DEBUG
 #ifdef DEVICE_HAS_DEBUG_SWUART
@@ -142,6 +148,8 @@ tRxMavlink mavlink;
 
 tRxMsp msp;
 
+#include "serial_out2.h"
+tRxSerialOut2 serial_out2;
 #include "sx_serial_interface_rx.h"
 
 tRxSxSerial sx_serial;
@@ -185,6 +193,7 @@ void init_hw(void)
     uartb_port.Init();
     dronecan_port.Init();
     Serials.Init(Setup.Rx.SerialPort, Config.SerialBaudrate);
+    serial_out2.Init(Setup.Rx.SerialOut2, Config.SerialBaudrate2);
     dronecan.Init(Setup.Rx.SerialPort); // after delay_init() since it needs delay
 }
 
@@ -579,6 +588,7 @@ void main_loop(void)
     main_test();
 #endif
 INITCONTROLLER_ONCE
+    usb_port.InitOnce();
     stack_check_init();
 RESTARTCONTROLLER
     init_hw();

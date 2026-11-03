@@ -253,12 +253,15 @@ void setup_configure_metadata(void)
     SetupMetaData.Rx_SerialPort_allowed_mask |= 0b1000; // add usb
 #endif
 
-    // Rx SerialOut2: "off,tx on rx pin,serial 1": any pin is a UART TX on the ESP32 family, not on the ESP8285 or STM32
-#if defined ESP32
-    SetupMetaData.Rx_SerialOut2_allowed_mask = 0b011;
-#else
-    SetupMetaData.Rx_SerialOut2_allowed_mask = 0; // not available, do not display
+    // Rx SerialOut2: "off,tx on rx pin,serial 1": any pin is a UART TX on the ESP32 family, a pad where the layout has one
+    SetupMetaData.Rx_SerialOut2_allowed_mask = 0b001;
+#if defined ESP32 && defined USE_SERIAL
+    SetupMetaData.Rx_SerialOut2_allowed_mask |= 0b010;
 #endif
+#ifdef USE_SERIAL_OUT2
+    SetupMetaData.Rx_SerialOut2_allowed_mask |= 0b100;
+#endif
+    if (SetupMetaData.Rx_SerialOut2_allowed_mask == 0b001) SetupMetaData.Rx_SerialOut2_allowed_mask = 0; // nothing to choose
 
     //-- Tx: Receiver setup meta data
 
@@ -277,13 +280,6 @@ void setup_configure_metadata(void)
 //-------------------------------------------------------
 // Setup
 //-------------------------------------------------------
-
-// override default setup setting from common_conf.h
-// enable rc channels for single serial receivers
-#if !defined DEVICE_HAS_OUT
-  #undef SETUP_RX_SEND_RC_CHANNELS
-  #define SETUP_RX_SEND_RC_CHANNELS  SEND_RC_CHANNELS_RADIORCCHANNELS
-#endif
 
 
 void inc_bindphrase_char(char* const s, uint8_t pos)
@@ -580,6 +576,10 @@ if (!only_rx) {
 
     SANITIZE(Rx.SerialOut2, RX_SERIAL_OUT2_NUM, RX_SERIAL_OUT2_OFF, RX_SERIAL_OUT2_OFF);
     TST_NOTALLOWED(Rx_SerialOut2_allowed_mask, Rx.SerialOut2, RX_SERIAL_OUT2_OFF);
+    // on the RX pin only with a transparent link: MAVLink and MSP need to hear the autopilot
+    if (Setup.Rx.SerialOut2 == RX_SERIAL_OUT2_TX_ON_RX_PIN && Setup.Rx.SerialLinkMode != SERIAL_LINK_MODE_TRANSPARENT) {
+        Setup.Rx.SerialOut2 = RX_SERIAL_OUT2_OFF;
+    }
     SANITIZE(Rx.SerialBaudrate2, SERIAL_BAUDRATE_NUM, SERIAL_BAUDRATE_115200, SERIAL_BAUDRATE_115200);
 
     SANITIZE(Rx.Test, RX_TEST_NUM, RX_TEST_OFF, RX_TEST_OFF);
@@ -1100,13 +1100,15 @@ void setup_configure_config(uint8_t config_id)
 
 #ifdef DEVICE_IS_TRANSMITTER
     switch (Setup.Tx[config_id].SerialBaudrate2) {
+#else // DEVICE_IS_RECEIVER, Ser Out2
+    switch (Setup.Rx.SerialBaudrate2) {
+#endif
     case SERIAL_BAUDRATE_57600: Config.SerialBaudrate2 = 57600; break;
     case SERIAL_BAUDRATE_115200: Config.SerialBaudrate2 = 115200; break;
     case SERIAL_BAUDRATE_230400: Config.SerialBaudrate2 = 230400; break;
     default:
         Config.SerialBaudrate2 = 115200;
     }
-#endif
 }
 
 

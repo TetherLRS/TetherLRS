@@ -11,7 +11,7 @@
 // R9M Lite Pro v1.5 TX Module STM32F303CC as RECEIVER
 //-------------------------------------------------------
 
-#define DEVICE_HAS_OUT
+#define DEVICE_HAS_SERIAL_OUT2 // the pad sits behind a fixed inverter, with an enable
 #define DEVICE_HAS_NO_DEBUG
 
 
@@ -31,7 +31,7 @@
 
 //-- UARTS
 // UARTB = serial port
-// UART = output port, SBus or whatever
+// UART = Ser Out2 port, a second TX for the link's data
 // UARTF = debug port
 
 #define UARTB_USE_UART2_PA2PA3 // serial PA2/PA3
@@ -44,7 +44,7 @@
 #define UARTB_INVERTED
 
 #define UART_USE_UART3_PB10PB11 // out pin PB10
-#define UART_BAUD                 100000 // SBus normal baud rate, is being set later anyhow
+#define UART_BAUD                 115200 // Rx Ser Baudrate2 sets it
 #define UART_USE_TX
 #define UART_TXBUFSIZE            256
 #define UART_USE_TX_ISR
@@ -124,28 +124,15 @@ void sx_dio_exti_isr_clearflag(void)
 }
 
 
-//-- Out port
-// the R9MLitePro has a fixed inverter
+//-- Ser Out2 port
 
+#define UART_INVERTED // the inverter in front of the pad gives a normal signal
 #define OUT_EN                    IO_PB2
+#define SERIAL_OUT2_INIT_GPIO
 
-void out_init_gpio(void)
+void serial_out2_init_gpio(void)
 {
     gpio_init(OUT_EN, IO_MODE_OUTPUT_PP_LOW, IO_SPEED_DEFAULT);
-}
-
-void out_set_normal(void)
-{
-    LL_USART_Disable(OUT_UARTx);
-    LL_USART_SetTXPinLevel(OUT_UARTx, LL_USART_TXPIN_LEVEL_INVERTED);
-    LL_USART_Enable(OUT_UARTx);
-}
-
-void out_set_inverted(void)
-{
-    LL_USART_Disable(OUT_UARTx);
-    LL_USART_SetTXPinLevel(OUT_UARTx, LL_USART_TXPIN_LEVEL_STANDARD);
-    LL_USART_Enable(OUT_UARTx);
 }
 
 

@@ -11,7 +11,6 @@
 // R9M TX Module STM32F103C8 as RECEIVER
 //-------------------------------------------------------
 
-#define DEVICE_HAS_OUT_INVERTED
 #define DEVICE_HAS_FAN_ONOFF
 
 
@@ -31,7 +30,6 @@
 
 //-- UARTS
 // UARTB = serial port
-// UART = output port, SBus or whatever
 // UARTF = debug port
 
 #define UARTB_USE_UART1_PA9PA10 // serial
@@ -42,13 +40,6 @@
 #define UARTB_USE_RX
 #define UARTB_RXBUFSIZE           RX_SERIAL_RXBUFSIZE
 
-#define UART_USE_UART3_PB10PB11 // out pin
-#define UART_BAUD                 100000 // SBus normal baud rate, is being set later anyhow
-#define UART_USE_TX
-#define UART_TXBUFSIZE            256
-#define UART_USE_TX_ISR
-//#define UART_USE_RX
-//#define UART_RXBUFSIZE            512
 
 #define UARTF_USE_UART2_PA2PA3 // debug // Tx goes via an inverter to JR Pin2, solder to R15 for TTL UART signal, C23 provides GND
 #define UARTF_BAUD                115200
@@ -125,25 +116,6 @@ void sx_dio_enable_exti_isr(void)
 void sx_dio_exti_isr_clearflag(void)
 {
     LL_EXTI_ClearFlag_0_31(SX_DIO_EXTI_LINE_x);
-}
-
-
-//-- Out port
-
-#define OUT_ENABLE                IO_PA5 // high = enabled
-
-void out_init_gpio(void)
-{
-    gpio_init(OUT_ENABLE, IO_MODE_OUTPUT_PP_HIGH, IO_SPEED_DEFAULT);
-    gpio_high(OUT_ENABLE);
-}
-
-void out_set_normal(void)
-{
-}
-
-void out_set_inverted(void)
-{
 }
 
 

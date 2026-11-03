@@ -77,9 +77,9 @@ In rx-hal files:
 #define DEVICE_HAS_DIVERSITY        // board supports diversity
 #define DEVICE_HAS_ANTENNA_SWITCH   // board has one radio with an RF switch between two antennas, needs sx_antenna_switch_set()
 #define DEVICE_HAS_DIVERSITY_SINGLE_SPI // board supports diversity on a single SPI bus
-#define DEVICE_HAS_OUT              // board has an OUT port, which supports both normal and inverted UART signals
-#define DEVICE_HAS_OUT_NORMAL       // board has an OUT port, which supports only normal UART signals
-#define DEVICE_HAS_OUT_INVERTED     // board has an OUT port, which supports only inverted UART signals
+#define DEVICE_HAS_SERIAL_OUT2      // board has a second UART TX pad (the UART_ defines, UART_INVERTED behind an inverter,
+                                    // SERIAL_OUT2_INIT_GPIO with serial_out2_init_gpio() for an enable): Rx Ser Out2 = serial 1
+#define DEVICE_HAS_USB_CDC          // ESP32-C3/S3 with the USB pins free: Ser Port = usb, the native USB CDC
 #define DEVICE_HAS_NO_SERIAL        // board has no Serial port
 #define DEVICE_HAS_NO_DEBUG         // board has no Debug port
 #define DEVICE_HAS_DEBUG_SWUART     // implement Debug as software UART
@@ -311,8 +311,12 @@ extern "C" { void delay_ms(uint16_t ms); }
 #endif
 
 
-#if defined DEVICE_HAS_OUT || defined DEVICE_HAS_OUT_NORMAL || defined DEVICE_HAS_OUT_INVERTED
-  #define USE_OUT
+#if defined DEVICE_HAS_SERIAL_OUT2 && defined DEVICE_IS_RECEIVER
+  #define USE_SERIAL_OUT2
+#endif
+
+#ifdef DEVICE_HAS_USB_CDC
+  #define USE_USB
 #endif
 
 #if defined DEVICE_HAS_DRONECAN || defined DEVICE_HAS_DRONECAN_FD

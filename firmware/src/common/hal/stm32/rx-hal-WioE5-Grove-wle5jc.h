@@ -16,7 +16,7 @@
 // no out port (not available, to make available change this hal accordingly)
 
 #define DEVICE_HAS_SINGLE_LED
-//#define DEVICE_HAS_OUT
+//#define DEVICE_HAS_SERIAL_OUT2
 #define DEVICE_HAS_NO_DEBUG
 //#define DEVICE_HAS_NO_SERIAL
 
@@ -37,7 +37,7 @@
 
 //-- UARTS
 // UARTB = serial port
-// UART = output port, SBus or whatever
+// UART = Ser Out2 port, a second TX for the link's data
 // UARTF = debug port
 
 #define UARTB_USE_UART1_PB6PB7 // serial // PB6,PB7 Grove plug
@@ -49,7 +49,7 @@
 #define UARTB_RXBUFSIZE           RX_SERIAL_RXBUFSIZE
 
 #define UART_USE_LPUART1_PC1PC0 // out pin // PC1
-#define UART_BAUD                 100000 // SBus normal baud rate, is being set later anyhow
+#define UART_BAUD                 115200 // Rx Ser Baudrate2 sets it
 #define UART_USE_TX
 #define UART_TXBUFSIZE            256
 #define UART_USE_TX_ISR
@@ -131,27 +131,6 @@ void sx_dio_enable_exti_isr(void)
 void sx_dio_exti_isr_clearflag(void)
 {
     // there is no EXTI_LINE_44 interrupt flag
-}
-
-
-//-- Out port
-
-void out_init_gpio(void)
-{
-}
-
-void out_set_normal(void)
-{
-    LL_USART_Disable(OUT_UARTx);
-    LL_USART_SetTXPinLevel(OUT_UARTx, LL_USART_TXPIN_LEVEL_STANDARD);
-    LL_USART_Enable(OUT_UARTx);
-}
-
-void out_set_inverted(void)
-{
-    LL_USART_Disable(OUT_UARTx);
-    LL_USART_SetTXPinLevel(OUT_UARTx, LL_USART_TXPIN_LEVEL_INVERTED);
-    LL_USART_Enable(OUT_UARTx);
 }
 
 

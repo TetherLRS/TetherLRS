@@ -233,13 +233,19 @@ void tSerialPorts::Init(uint8_t serial_port, uint32_t baud, uint8_t serial_port2
         serial = com_port();
         com = &uartb_port;
         break;
+#ifdef USE_USB
+    case TX_SERIAL_PORT_USB: // the data on the native USB, the CLI on the serial pins
+        serial = &usb_port;
+        com = &uartb_port;
+        break;
+#endif
     default:
         serial = &uartb_port;
         com = com_port();
     }
 
 #ifdef USE_SERIAL_ESCAPE // the uartb pins carry serial and com, switched with +++
-    if (serial == &uartb_port || com == &uartb_port) {
+    if (serial == &uartb_port) {
         serial_escape.Init(&uartb_port);
         serial = &serial_escape_data;
         com = &serial_escape_com;
@@ -277,6 +283,7 @@ void tSerialPorts::Init(uint8_t serial_port, uint32_t baud, uint8_t serial_port2
 #ifdef DEVICE_IS_RECEIVER
 tUartBPort uartb_port;
 tDroneCANPort dronecan_port;
+tUsbPort usb_port;
 // in contrast to the tx code, in the rx code we directly use the pointer to serial
 // works here since we only have one serial, and makes the higher level code simpler
 tSerialBase* serial; // assigned according to RxSerPort
@@ -289,19 +296,16 @@ typedef struct
 
 void tSerialPorts::Init(uint8_t serial_port, uint32_t baud)
 {
-#if defined USE_SERIAL && defined USE_DRONECAN
-    switch (serial_port) {
-    case RX_SERIAL_PORT_CAN:
-    case RX_SERIAL_PORT_CANFD:
-        serial = &dronecan_port; // assign dronecan to serial
-        break;
-    default:
-        serial = &uartb_port; // assign uartb to serial
-    }
-#elif defined USE_DRONECAN
+#if defined USE_DRONECAN && !defined USE_SERIAL
     serial = &dronecan_port;
 #else // USE_SERIAL or DEVICE_HAS_NO_SERIAL, uartb_port is always defined
     serial = &uartb_port;
+#endif
+#ifdef USE_DRONECAN
+    if (serial_port == RX_SERIAL_PORT_CAN || serial_port == RX_SERIAL_PORT_CANFD) serial = &dronecan_port;
+#endif
+#ifdef USE_USB
+    if (serial_port == RX_SERIAL_PORT_USB) serial = &usb_port;
 #endif
 
     serial->SetBaudRate(baud);

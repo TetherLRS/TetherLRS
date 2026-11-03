@@ -49,6 +49,9 @@
 #if defined USE_COM && !defined DEVICE_HAS_COM_ON_USB
 #include "../modules/esp-lib/esp-uartc.h"
 #endif
+#ifdef USE_USB
+#include "../modules/esp-lib/esp-usb.h"
+#endif
 #ifdef USE_SERIAL2 // is set when either HAS_SERIAL2 or USE_WIRELESS_BRIDGE
 #include "../modules/esp-lib/esp-uartd.h"
 #endif

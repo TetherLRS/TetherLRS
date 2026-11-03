@@ -19,7 +19,7 @@
 // USB <-> TxD,RxD pins   -> PA2,PA3 = LPUART1,UART2
 
 //#define DEVICE_HAS_DIVERSITY // TODO, could be an add-on board/shield for the MBL Kit
-#define DEVICE_HAS_OUT
+#define DEVICE_HAS_SERIAL_OUT2
 #define DEVICE_HAS_DEBUG_SWUART
 #define DEVICE_HAS_SYSTEMBOOT
 
@@ -40,7 +40,7 @@
 
 //-- UARTS
 // UARTB = serial port
-// UART = output port, SBus or whatever
+// UART = Ser Out2 port, a second TX for the link's data
 // UARTF = debug port
 
 #define UARTB_USE_UART2_PA2PA3 // serial // PA2,PA3
@@ -52,7 +52,7 @@
 #define UARTB_RXBUFSIZE           RX_SERIAL_RXBUFSIZE
 
 #define UART_USE_UART1_PB6PB7 // out pin // PB6
-#define UART_BAUD                 100000 // SBus normal baud rate, is being set later anyhow
+#define UART_BAUD                 115200 // Rx Ser Baudrate2 sets it
 #define UART_USE_TX
 #define UART_TXBUFSIZE            256
 #define UART_USE_TX_ISR
@@ -207,27 +207,6 @@ void sx2_dio_enable_exti_isr(void)
 void sx2_dio_exti_isr_clearflag(void)
 {
     LL_EXTI_ClearFlag_0_31(SX2_DIO_EXTI_LINE_x);
-}
-
-
-//-- Out port
-
-void out_init_gpio(void)
-{
-}
-
-void out_set_normal(void)
-{
-    LL_USART_Disable(OUT_UARTx);
-    LL_USART_SetTXPinLevel(OUT_UARTx, LL_USART_TXPIN_LEVEL_STANDARD);
-    LL_USART_Enable(OUT_UARTx);
-}
-
-void out_set_inverted(void)
-{
-    LL_USART_Disable(OUT_UARTx);
-    LL_USART_SetTXPinLevel(OUT_UARTx, LL_USART_TXPIN_LEVEL_INVERTED);
-    LL_USART_Enable(OUT_UARTx);
 }
 
 

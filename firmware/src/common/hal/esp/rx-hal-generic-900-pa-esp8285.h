@@ -17,7 +17,7 @@
 
 //-- UARTS
 // UARTB = serial port
-// UART = output port, SBus or whatever
+// UART = Ser Out2 port, a second TX for the link's data
 // UARTf = debug port
 
 #define UARTB_USE_SERIAL

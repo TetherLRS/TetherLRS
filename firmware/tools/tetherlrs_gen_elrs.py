@@ -31,7 +31,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # what a data link does not use: PWM, battery and voltage sense, VTX, gyro, I2C, IR, backpack; of misc_ only the FAN
 IGNORED = re.compile(r'^(//|vbat|vsrc|pwm_outputs|i2c_|vtx_|gyro_|ir_|adc_|misc_|ledidx_rgb_vtx|ledidx_rgb_boot|'
-                     r'spi_|serial1_|ant_group|use_backpack|debug_|backpack|screen_|joystick|five_way|fan_|power_pdet)')
+                     r'spi_|serial1_baud|ant_group|use_backpack|debug_|backpack|screen_|joystick|five_way|fan_|power_pdet)')
 # on a Tx module also the radio bay's serial pin, ELRS's unused power_high, the fan's speeds and tachometer
 TX_IGNORED = re.compile(r'^(serial_|power_high|passthrough_baud|button2|button_led_index|thermal_|radio_dio2|misc_fan_speeds|misc_fan_tacho)')
 FAN = ('misc_fan_en', 'misc_fan_pwm')
@@ -51,6 +51,26 @@ RADIO = {
     'SX127x': {'src': 'sx127x.cpp', 'has': 'DEVICE_HAS_SX127x', 'calc': 'sx1276_rfpower_calc', 'spi': '10000000L'},
     'LR1121': {'src': 'lr11xx.cpp', 'has': 'DEVICE_HAS_LR11xx', 'calc': 'lr11xx_rfpower_calc', 'spi': '16000000L'},
 }
+
+
+# not a pin: a count, a table, a flag or a baud rate
+NOT_A_PIN = ('power_min', 'power_max', 'power_default', 'power_control', 'power_lna', 'power_pa_', 'power_values',
+             'ledidx', 'led_rgb_isgrb', 'led_invert', 'serial_baud', 'serial1_baud', 'passthrough_baud', 'misc_fan_speeds')
+
+
+def pins_used(hw):
+    pins = set()
+    for k, v in hw.items():
+        if k.startswith(NOT_A_PIN) or isinstance(v, bool):
+            continue
+        for x in (v if isinstance(v, list) else [v]):
+            if isinstance(x, int) and not isinstance(x, bool):
+                pins.add(x)
+    return pins
+
+
+# the chip's USB pins: with them free, Ser Port = usb is the native USB CDC
+USB_PINS = {'esp32-c3': {18, 19}, 'esp32-s3': {19, 20}}
 
 
 def define(name, value):
@@ -394,14 +414,22 @@ def hal(name, kind, plat, radio, hw, products, layout, overlay):
     L += display_defines(hw)
     if td:
         L.append('#define DEVICE_HAS_DIVERSITY_SINGLE_SPI // must be set, doesn\'t work without it')
-    L += ['#define DEVICE_HAS_NO_DEBUG', '', '', '//-- UARTS', '// UARTB = serial port', '// UARTF = debug port', '',
+    out2 = kind == 'rx' and plat != 'esp8285' and hw.get('serial1_tx') is not None
+    if out2:
+        L.append('#define DEVICE_HAS_SERIAL_OUT2')
+    if kind == 'rx' and plat in USB_PINS and not (USB_PINS[plat] & pins_used(hw)):
+        L.append('#define DEVICE_HAS_USB_CDC // the USB pins are free')
+    L += ['#define DEVICE_HAS_NO_DEBUG', '', '', '//-- UARTS', '// UARTB = serial port'] + (['// UART = Ser Out2 port, a second TX for the link\'s data'] if out2 else []) + ['// UARTF = debug port', '',
           '#define UARTB_USE_SERIAL', '#define UARTB_BAUD                RX_SERIAL_BAUDRATE']
     if kind == 'tx':  # ESP32 UART0, wired to the module's USB-C
         L += [define('UARTB_USE_TX_IO', 'IO_P1'), define('UARTB_USE_RX_IO', 'IO_P3')]
     elif plat != 'esp8285' and hw.get('serial_tx') is not None and (plat != 'esp32' or (hw['serial_tx'], hw['serial_rx']) != (1, 3)):
         L += [f'#define UARTB_USE_TX_IO           {io(hw["serial_tx"])}', f'#define UARTB_USE_RX_IO           {io(hw["serial_rx"])}']
-    L += ['#define UARTB_TXBUFSIZE           RX_SERIAL_TXBUFSIZE', '#define UARTB_RXBUFSIZE           RX_SERIAL_RXBUFSIZE', '',
-          '#define UARTF_USE_SERIAL', '#define UARTF_BAUD                115200', '', '']
+    L += ['#define UARTB_TXBUFSIZE           RX_SERIAL_TXBUFSIZE', '#define UARTB_RXBUFSIZE           RX_SERIAL_RXBUFSIZE', '']
+    if out2:
+        L += ['#define UART_USE_SERIAL1', '#define UART_BAUD                 115200   // Rx Ser Baudrate2 sets it',
+              define('UART_USE_TX_IO', io(hw['serial1_tx'])), '#define UART_USE_RX_IO            -1', '#define UART_TXBUFSIZE            512', '']
+    L += ['#define UARTF_USE_SERIAL', '#define UARTF_BAUD                115200', '', '']
     L += radio_block(plat, radio, hw, '')
     if td:
         L += radio_block(plat, radio, hw, '2')

@@ -10,14 +10,15 @@
 // FlySky PR02 2.4 GHz True Diversity Receiver ESP32S3
 //-------------------------------------------------------
 
-#define DEVICE_HAS_OUT
+#define DEVICE_HAS_SERIAL_OUT2
 #define DEVICE_HAS_DIVERSITY_SINGLE_SPI // must be set, doesn't work without it
 #define DEVICE_HAS_SINGLE_LED_RGB
+#define DEVICE_HAS_USB_CDC // the USB pins are free
 
 
 //-- UARTS
 // UARTB = serial port
-// UART = output port, SBus or whatever
+// UART = Ser Out2 port, a second TX for the link's data
 // UARTF = debug port
 
 #define UARTB_USE_SERIAL
@@ -28,7 +29,7 @@
 #define UARTB_RXBUFSIZE           RX_SERIAL_RXBUFSIZE
 
 #define UART_USE_SERIAL1 
-#define UART_BAUD                 416666   // CRSF baud rate
+#define UART_BAUD                 115200   // Rx Ser Baudrate2 sets it
 #define UART_USE_TX_IO            IO_P35   // TX2 pad
 #define UART_USE_RX_IO            -1       
 #define UART_TXBUFSIZE            256
@@ -128,13 +129,6 @@ IRAM_ATTR void sx2_amp_receive(void)
 void sx2_dio_init_exti_isroff(void) { detachInterrupt(SX2_DIO); }
 void sx2_dio_enable_exti_isr(void) { attachInterrupt(SX2_DIO, SX2_DIO_EXTI_IRQHandler, RISING); }
 IRAM_ATTR void sx2_dio_exti_isr_clearflag(void) {}
-
-
-//-- Out port
-
-void out_init_gpio(void) {}
-void out_set_normal(void) { gpio_matrix_out((gpio_num_t)UART_USE_TX_IO, U1TXD_OUT_IDX, false, false); }
-void out_set_inverted(void) { gpio_matrix_out((gpio_num_t)UART_USE_TX_IO, U1TXD_OUT_IDX, true, false); }
 
 
 //-- Button
