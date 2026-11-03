@@ -30,7 +30,7 @@ body:
     attributes:
       label: TetherLRS version
       description: "`v` on the command line, or the Device page."
-      placeholder: v1.0
+      placeholder: v2.0
     validations:
       required: true
   - type: input

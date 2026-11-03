@@ -7,16 +7,22 @@ receivers and modules, and mLRS boards. The core is [mLRS](https://github.com/ol
 protocol and MAVLink handling. TetherLRS turns that into a plain data modem, like a SiK radio, and runs it on any
 receiver, which can be the aircraft radio or the ground radio.
 
-**Status: 1.0.** Built for the boards in
-[Hardware](#hardware)). Read the [disclaimer](#disclaimer-and-responsibility) before you transmit.
+**Status: 2.0 in development** on the `dev` branch; 1.0 is the released version. Built for the boards in
+[Hardware](#hardware). Read the [disclaimer](#disclaimer-and-responsibility) before you transmit.
 
 ## What it does
 
 - **A serial link, both ways**: MAVLink (ArduPilot, PX4, INAV), MSP (INAV) or any data in transparent mode, between
   a ground station program and the flight controller. No RC channels: fly with your usual radio link, TetherLRS
   carries the telemetry, missions and commands.
-- **The air link of mLRS**: LoRa at 50, 31, 19 and 18 Hz, FLRC and FSK, frequency hopping, optional encryption,
-  2.4 GHz, 915 MHz (FCC), 868 MHz, 866 MHz (IN) and 433 MHz, on SX1280, SX127x and LR1121 radios.
+- **The air link of mLRS, made for data**: LoRa at 50, 31, 19, 18, 17 and 8 Hz, FLRC and FSK, frequency hopping,
+  optional encryption with a link key that never goes over the air, 2.4 GHz, 915 MHz (FCC), 868 MHz, 866 MHz (IN)
+  and 433 MHz, on SX1280, SX127x and LR1121 radios. Every frame carries 82 bytes each way, and **Link Split** moves
+  bytes to the direction that needs them (64 down and 100 up, or the reverse).
+- **Two radios, two channels**: boards with two radios on both ends (true diversity receivers, Gemini modules) send
+  every frame on two channels at once; dual band boards on two bands.
+- **A frequency plan of your own**: a custom region with a centre, a span, listen before talk and a power cap, with
+  narrow modes for small slices of a band (869.4 to 869.65 MHz at 500 mW, for example).
 - **MAVLink that fits the link**: mavlinkX compression, flow control through RADIO_STATUS, and optionally the
   freshest copy of state messages first when the link falls behind.
 - **A ground radio that looks like a SiK radio**: `+++` and AT commands on the same serial port, NETID as bind phrase,
@@ -26,10 +32,12 @@ receiver, which can be the aircraft radio or the ground radio.
 - **EU region**: the 868 MHz and 2.4 GHz rules (listen before talk, on-time limits per channel, power caps) chosen at
   run time, with the same firmware.
 - **Downlink off**: the aircraft radio can stay silent; data then goes one way only, from the ground (RTK corrections,
-  commands).
+  commands). A receiver can also be silent on its own, so two receivers listen to one ground radio.
+- **A second serial output** on the receiver (the serial port's RX pin, or the board's second pad), and **USB as the
+  data port** on ESP32-C3 and S3 boards whose USB pins are free.
 - **The TetherLRS tool**, for Windows, macOS and Linux or in the browser: it finds the radios, backs them up, flashes
-  them without pressing buttons (also through a flight controller's serial passthrough), sets the bind phrase into the
-  image, and changes the settings of both radios.
+  them without pressing buttons (also through a flight controller's serial passthrough), sets the bind phrase and the
+  link key into the image, changes the settings of both radios, and measures the link with a loopback test.
 
 ## Hardware
 
