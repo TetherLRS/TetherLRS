@@ -1,6 +1,7 @@
 <script lang="ts">
   import { app } from '$lib/app.svelte';
   import { randomKey, validKey } from '$lib/firmware/bindphrase';
+  import { mwText } from '$lib/link-metrics';
 
   // the two settings that are not parameters: the link key, which never goes over the air, and the custom plan
   let key = $state('');
@@ -8,6 +9,9 @@
   let span = $state(250);
   let lbt = $state(true);
   let dbm = $state(27);
+  // the usual power levels, and whatever the radio holds if it is none of them
+  const LEVELS = [10, 14, 17, 20, 24, 27, 30, 33];
+  const levels = $derived([...new Set([...LEVELS, dbm])].sort((a, b) => a - b));
 
   $effect(() => {
     const cp = app.customPlan;
@@ -56,7 +60,11 @@
     <div class="control fields">
       <label><span class="caption">Centre kHz</span><input type="number" min="100000" max="2500000" bind:value={centre} {disabled} /></label>
       <label><span class="caption">Span kHz</span><input type="number" min="25" max="100000" bind:value={span} {disabled} /></label>
-      <label><span class="caption">Max dBm</span><input type="number" min="0" max="33" bind:value={dbm} {disabled} /></label>
+      <label><span class="caption">Power cap</span>
+        <select bind:value={dbm} {disabled} aria-label="Power cap">
+          {#each levels as l (l)}<option value={l}>{mwText(l)} · {l} dBm</option>{/each}
+        </select>
+      </label>
       <label class="check"><input type="checkbox" bind:checked={lbt} {disabled} /><span class="caption">Listen before talk</span></label>
       <button class="btn" onclick={() => app.setCustomPlan({ centreKHz: centre, spanKHz: span, lbt, maxDbm: dbm })} disabled={disabled || !planChanged}>Set</button>
     </div>

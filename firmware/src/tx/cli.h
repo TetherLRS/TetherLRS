@@ -550,7 +550,8 @@ void band_range_khz(uint8_t setup_band, uint32_t* const fmin, uint32_t* const fm
 void tTxCli::print_customplan(tCommonSetup* const c)
 {
     puts("  custom plan: "); puts(utoBCD_s(c->CustomFreqKHz)); puts(" kHz centre, "); puts(utoBCD_s(c->CustomSpanKHz)); puts(" kHz span, ");
-    puts((c->CustomLbt) ? "LBT on, " : "no LBT, "); puts(utoBCD_s(c->CustomPowerMaxDbm)); putsn(" dBm max");
+    puts((c->CustomLbt) ? "LBT on, " : "no LBT, "); puts(utoBCD_s(c->CustomPowerMaxDbm)); puts(" dBm (");
+    puts(utoBCD_s(cvt_power(c->CustomPowerMaxDbm))); putsn(" mW) max");
     uint16_t bw = mode_bandwidth_khz(c->Mode, c->FrequencyBand == SETUP_FREQUENCY_BAND_2P4_GHZ);
     uint16_t n = c->CustomSpanKHz / bw;
     if (n < 1) n = 1;

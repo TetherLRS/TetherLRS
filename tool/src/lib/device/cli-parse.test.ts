@@ -82,6 +82,7 @@ describe('options, versions, stats', () => {
       centreKHz: 869525, spanKHz: 250, lbt: true, maxDbm: 27, channels: 2, bwKHz: 125,
     });
     expect(parseCustomPlan('  custom plan: 915000 kHz centre, 2000 kHz span, no LBT, 20 dBm max')).toMatchObject({ lbt: false, maxDbm: 20 });
+    expect(parseCustomPlan('  custom plan: 869525 kHz centre, 250 kHz span, LBT on, 27 dBm (501 mW) max')).toMatchObject({ lbt: true, maxDbm: 27 });
     expect(parseCustomPlan('err: the span is 25 kHz up to the band\'s width')).toBeUndefined();
   });
   it('CLI names', () => {

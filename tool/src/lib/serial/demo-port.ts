@@ -309,7 +309,7 @@ export class DemoSerialPort {
 
   private printPlan() {
     const { centre, span, lbt, dbm } = this.plan;
-    this.putsn(`  custom plan: ${centre} kHz centre, ${span} kHz span, ${lbt ? 'LBT on' : 'no LBT'}, ${dbm} dBm max`);
+    this.putsn(`  custom plan: ${centre} kHz centre, ${span} kHz span, ${lbt ? 'LBT on' : 'no LBT'}, ${dbm} dBm (${Math.round(10 ** (dbm / 10))} mW) max`);
     const bw = [500, 500, 500, 1000, 250, 500, 500, 125, 250, 125][this.find('MODE')!.value as number] ?? 500;
     this.putsn(`  ${Math.min(32, Math.max(1, Math.floor(span / bw)))} channel(s) of ${bw} kHz in the current mode`);
   }

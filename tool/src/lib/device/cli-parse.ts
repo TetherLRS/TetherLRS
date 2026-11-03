@@ -172,7 +172,7 @@ export function parseLinkKey(text: string): boolean | undefined {
 
 // "  custom plan: 869525 kHz centre, 250 kHz span, LBT on, 27 dBm max" and "  2 channel(s) of 125 kHz in the current mode"
 export function parseCustomPlan(text: string): CustomPlan | undefined {
-  const m = /custom plan: (\d+) kHz centre, (\d+) kHz span, (LBT on|no LBT), (\d+) dBm max/.exec(text);
+  const m = /custom plan: (\d+) kHz centre, (\d+) kHz span, (LBT on|no LBT), (\d+) dBm(?: \(\d+ mW\))? max/.exec(text);
   if (!m) return undefined;
   const cp: CustomPlan = { centreKHz: parseInt(m[1], 10), spanKHz: parseInt(m[2], 10), lbt: m[3] === 'LBT on', maxDbm: parseInt(m[4], 10) };
   const c = /(\d+) channel\(s\) of (\d+) kHz/.exec(text);

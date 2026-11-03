@@ -16,10 +16,11 @@ export type Metric = {
 
 const ok = (v: number | undefined) => (v === undefined || v === 127 || v === -127 ? undefined : v);
 const fmt = (v: number | undefined, unit: string) => (v === undefined ? '–' : `${v} ${unit}`);
-const mw = (dbm: number) => {
+export const mwText = (dbm: number) => {
   const v = Math.pow(10, dbm / 10);
   return v < 1 ? `${v.toFixed(2)} mW` : `${Math.round(v)} mW`;
 };
+const mw = mwText;
 // the receiver's power comes as its Rx Power option names it: "10 mW", "0.02 mW"
 export const optionDbm = (name: string | undefined) => {
   const m = /^(\d+(?:\.\d+)?) mW$/.exec(name ?? '');
