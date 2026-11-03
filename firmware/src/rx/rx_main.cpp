@@ -129,6 +129,7 @@ tTDiversity tdiversity;
 tAntennaSwitch antsw;
 #endif
 tTransmitArq tarq;
+tReceiveArq rarq;
 tCrypto crypto;
 
 
@@ -305,7 +306,7 @@ tCmdFrameHeader* head = (tCmdFrameHeader*)(frame->payload);
         break;
     case FRAME_CMD_GET_RX_SETUPDATA_STARTUP:
         // request to send setup data, trigger sending RX_SETUPDATA in next transmission
-        crypto.SetSessionKeyFromEncryptedRandomBuf(&frame->payload[1]);
+        crypto.SetSessionKeysFromEncryptedBuf(&frame->payload[1]);
         Config.SessionRandom = crypto.SessionRandom(); // only for reporting
         link_task_set(LINK_TASK_RX_SEND_RX_SETUPDATA);
         break;
@@ -367,7 +368,7 @@ uint8_t payload_len = 0;
 
     tFrameStats frame_stats;
     frame_stats.seq_no = tarq.SeqNo();
-    frame_stats.ack = 1; // TODO
+    frame_stats.ack = rarq.AckSeqNo();
     frame_stats.antenna = stats.last_antenna;
     frame_stats.transmit_antenna = antenna;
     frame_stats.rssi = stats.GetLastRssi();
@@ -412,16 +413,18 @@ void process_received_frame(tTxFrame* const frame)
     stats.received_LQ_serial = frame->status.LQ_serial;
     rx_silent = frame->status.rx_silent;
 
+    bool accept_payload = rarq.AcceptPayload(); // a payload sent again is one we already have
+
     // handle cmd frame
     if (frame->status.frame_type == FRAME_TYPE_CMD || frame->status.frame_type == FRAME_TYPE_CMD_ENCRYPTED) {
-        process_received_txcmdframe(frame);
+        if (accept_payload) process_received_txcmdframe(frame);
         return;
     }
 
     link_task_reset(); // clear it if non-cmd frame is received
 
     // output data on serial, but only if connected
-    if (!connected()) return;
+    if (!connected() || !accept_payload) return;
     if (Setup.Rx.Test == RX_TEST_LOOPBACK) {
         loop_fifo.PutBuf(frame->payload, frame->status.payload_len);
     } else {
@@ -529,6 +532,18 @@ tTxFrame* frame;
         tarq.FrameMissed();
     }
 
+    // handle receive ARQ, must come before process_received_frame()
+    if (rx_status == RX_STATUS_VALID && decrypt_ok) { // we have valid information on seq_no
+        rarq.Received(frame->status.seq_no);
+    } else {
+        rarq.FrameMissed();
+    }
+    // check this before received data may be passed to parsers
+    if (rarq.FrameLost()) {
+        mavlink.FrameLost();
+        msp.FrameLost();
+    }
+
     if (rx_status > RX_STATUS_INVALID && decrypt_ok) { // = RX_STATUS_VALID
 
         process_received_frame(frame);
@@ -552,6 +567,7 @@ tTxFrame* frame;
 void handle_receive_none(void) // called if RX_STATUS_NONE
 {
     tarq.FrameMissed();
+    rarq.FrameMissed();
 }
 
 
@@ -633,8 +649,9 @@ RESTARTCONTROLLER
     antsw.Init();
 #endif
     tarq.Init();
+    rarq.Init();
     crypto.Init(tCrypto::RX,
-        Setup.Common[0].BindPhrase, Setup.peer_uid[0], Config.Uid, Setup.tx_random[0],
+        Setup.Common[0].BindPhrase, Setup.peer_uid[0], Setup.tx_random[0],
         Setup.Common[0].Privacy, Setup.LinkKey);
 
     loop_fifo.Init();
@@ -858,10 +875,7 @@ dbg.puts(s8toBCD_s(stats.last_rssi2));*/
         }
 
         // serial data is received if !IsInBind() && RX_STATUS_VALID && !FRAME_TYPE_CMD && connected()
-        if (!valid_frame_received) {
-            mavlink.FrameLost();
-            msp.FrameLost();
-        }
+        // a missed frame is not lost yet: the ARQ tells the parsers when a payload really went missing
 
         // check fhss index
         // do it only in LISTEN and SYNC
@@ -963,7 +977,7 @@ dbg.puts(s8toBCD_s(stats.last_rssi2));*/
             link_task_set(LINK_TASK_RX_SEND_RX_SETUPDATA);
         }
 
-        if (!connected()) tarq.Disconnected();
+        if (!connected()) { tarq.Disconnected(); rarq.Disconnected(); }
 
         DECc(tick_1hz_commensurate, Config.frame_rate_hz);
         if (!tick_1hz_commensurate) {

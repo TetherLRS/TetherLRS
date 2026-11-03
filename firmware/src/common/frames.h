@@ -135,6 +135,31 @@ void pack_txframe(
     _pack_txframe_w_type(frame, FRAME_TYPE_TX, frame_stats, payload, payload_len);
 }
 
+
+// update header info of a tTxFrame, keep payload: the ARQ sends the same payload again under the current stats
+void update_txframe_stats(tTxFrame* const frame, tFrameStats* const frame_stats)
+{
+    frame->sync_word = Config.FrameSyncWord;
+    // keep !! frame->status.seq_no = frame_stats->seq_no;
+    frame->status.ack = frame_stats->ack;
+    // keep !! frame->status.frame_type = type;
+    frame->status.antenna = frame_stats->antenna;
+    frame->status.transmit_antenna = frame_stats->transmit_antenna;
+    frame->status.rssi_u7 = rssi_u7_from_i8(frame_stats->rssi);
+    frame->status.fhss_index_band = frame_stats->tx_fhss_index_band;
+    frame->status.fhss_index = frame_stats->tx_fhss_index;
+    frame->status.LQ_serial = frame_stats->LQ_serial;
+    frame->status.rx_silent = frame_stats->rx_silent;
+    // keep !! frame->status.payload_len = payload_len;
+
+    // the ciphertext and its nonce stay, the MAC covers the new header
+    if (crypto.PrivacyLevel() && FRAME_TYPE_IS_ENCRYPTABLE(frame->status.frame_type)) {
+        crypto.RecalculateMac(&(frame->status), 5, frame->payload, frame->status.payload_len);
+    }
+
+    frame_set_crc(frame, Config.FrameLenTx);
+}
+
 #endif
 #ifdef DEVICE_IS_RECEIVER
 
@@ -170,7 +195,7 @@ bool decrypt_txframe(tTxFrame* const frame)
     // decrypt only normal TX frames and encryptable CMD frames
     if (crypto.PrivacyLevel() && FRAME_TYPE_IS_ENCRYPTABLE(frame->status.frame_type)) {
         CHECK_PAYLOAD_MIN_LEN(frame->status.payload_len);
-        if (!crypto.Decrypt(&(frame->status), 5, frame->payload, frame->status.payload_len)) return false;
+        if (!crypto.Decrypt(0, &(frame->status), 5, frame->payload, frame->status.payload_len)) return false;
         frame->status.payload_len -= crypto.NonceLen(); // adjust to new payload len
     }
 
@@ -209,8 +234,7 @@ void update_rxframe_stats(tRxFrame* const frame, tFrameStats* const frame_stats)
     frame->status.power_lo = frame_stats->power_code & 0x03;
     // keep !! frame->status.payload_len = payload_len;
 
-    // TODO: we should also update the nonce
-    // this needs changes in the higher level code however as we can't just store the last tRxFrame
+    // the ciphertext and its nonce stay, the MAC covers the new header
     if (crypto.PrivacyLevel() && frame->status.frame_type == FRAME_TYPE_RX) {
         crypto.RecalculateMac(&(frame->status), 5, frame->payload, frame->status.payload_len);
     }
@@ -302,14 +326,14 @@ uint8_t check_rxframe(tRxFrame* const frame)
 }
 
 
-// decrypt a normal tRxFrame, comes before any payload processing
+// decrypt a normal tRxFrame, comes before any payload processing; slot: the receiver it came from, its key
 // Note: There are currently no encrypted CMDs in this direction
-bool decrypt_rxframe(tRxFrame* const frame)
+bool decrypt_rxframe(tRxFrame* const frame, uint8_t slot)
 {
     // decrypt only normal RX frames
     if (crypto.PrivacyLevel() && frame->status.frame_type == FRAME_TYPE_RX) {
         CHECK_PAYLOAD_MIN_LEN(frame->status.payload_len);
-        if (!crypto.Decrypt(&(frame->status), 5, frame->payload, frame->status.payload_len)) {
+        if (!crypto.Decrypt(slot, &(frame->status), 5, frame->payload, frame->status.payload_len)) {
             return false;
         }
         frame->status.payload_len -= crypto.NonceLen(); // adjust to new payload len
@@ -398,10 +422,10 @@ uint8_t device_radio_bands(void)
 
 #ifdef DEVICE_IS_TRANSMITTER
 
-// Tx: send CMD to Rx
-void pack_txcmdframe_cmd(tTxFrame* const frame, tFrameStats* const frame_stats, uint8_t cmd)
+// Tx: send CMD to Rx; slot: the receiver it is for, STARTUP carries that receiver's session random
+void pack_txcmdframe_cmd(tTxFrame* const frame, tFrameStats* const frame_stats, uint8_t cmd, uint8_t slot)
 {
-uint8_t payload[32]; // 1 + CRYPTO_STARTUP_RANDOM_BUF_LEN (=28) = 29
+uint8_t payload[40]; // 1 + CRYPTO_STARTUP_RANDOM_BUF_LEN (=36) = 37
 uint8_t len;
 uint8_t frame_type;
 
@@ -409,10 +433,9 @@ uint8_t frame_type;
     payload[0] = cmd;
     len = 1;
 
-    // CMD_GET_RX_SETUPDATA_STARTUP adds random session key
-    // TODO: should we only send if privacy level > 0? Doens't really matter, right
+    // CMD_GET_RX_SETUPDATA_STARTUP adds the session randoms, under the static key
     if (cmd == FRAME_CMD_GET_RX_SETUPDATA_STARTUP) {
-        crypto.EncryptSessionRandom(&(payload[1]), Config.StartupRandom, Config.BindRandom);
+        crypto.EncryptSessionRandoms(&(payload[1]), slot, Config.StartupRandom, Config.BindRandom);
         len += CRYPTO_STARTUP_RANDOM_BUF_LEN;
         frame_type = FRAME_TYPE_CMD; // this one is never encrypted
     }

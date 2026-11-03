@@ -140,6 +140,7 @@ tTDiversity tdiversity;
 tAntennaSwitch antsw;
 #endif
 tReceiveArq rarq;
+tTransmitArq tarq;
 tCrypto crypto;
 tConfigId config_id;
 tTxInfo txinfo;
@@ -386,9 +387,11 @@ bool link_task_set(uint8_t task)
 
     // set a timeout if relevant, or do other things as needed
     switch (link_task) {
+    case LINK_TASK_TX_GET_RX_SETUPDATA_STARTUP:
+        crypto.SetReceiveKey(0, setup_new_random()); // the receiver gets a fresh key of its own with every connect
+        // fall through
     case LINK_TASK_TX_GET_RX_SETUPDATA:
     case LINK_TASK_TX_GET_RX_SETUPDATA_WRELOAD:
-    case LINK_TASK_TX_GET_RX_SETUPDATA_STARTUP:
         SetupMetaData.rx_available = false;
         break;
     case LINK_TASK_TX_STORE_RX_PARAMS: // store rx parameters
@@ -441,19 +444,19 @@ void pack_txcmdframe(tTxFrame* const frame, tFrameStats* const frame_stats)
 {
     switch (link_task) {
     case LINK_TASK_TX_GET_RX_SETUPDATA:
-        pack_txcmdframe_cmd(frame, frame_stats, FRAME_CMD_GET_RX_SETUPDATA);
+        pack_txcmdframe_cmd(frame, frame_stats, FRAME_CMD_GET_RX_SETUPDATA, 0);
         break;
     case LINK_TASK_TX_GET_RX_SETUPDATA_WRELOAD:
-        pack_txcmdframe_cmd(frame, frame_stats, FRAME_CMD_GET_RX_SETUPDATA_WRELOAD);
+        pack_txcmdframe_cmd(frame, frame_stats, FRAME_CMD_GET_RX_SETUPDATA_WRELOAD, 0);
         break;
     case LINK_TASK_TX_GET_RX_SETUPDATA_STARTUP:
-        pack_txcmdframe_cmd(frame, frame_stats, FRAME_CMD_GET_RX_SETUPDATA_STARTUP);
+        pack_txcmdframe_cmd(frame, frame_stats, FRAME_CMD_GET_RX_SETUPDATA_STARTUP, 0);
         break;
     case LINK_TASK_TX_SET_RX_PARAMS:
         pack_txcmdframe_setrxparams(frame, frame_stats);
         break;
     case LINK_TASK_TX_STORE_RX_PARAMS:
-        pack_txcmdframe_cmd(frame, frame_stats, FRAME_CMD_STORE_RX_PARAMS);
+        pack_txcmdframe_cmd(frame, frame_stats, FRAME_CMD_STORE_RX_PARAMS, 0);
         transmit_frame_type = TRANSMIT_FRAME_TYPE_NORMAL;
         break;
     }
@@ -475,37 +478,36 @@ void pack_txcmdframe(tTxFrame* const frame, tFrameStats* const frame_stats)
 //                               -> decrypt_rxframe(frame)
 //                                  process_received_rxcmdframe(frame)
 
-uint8_t tx_payload[FRAME_PAYLOAD_MAX];
-uint8_t tx_payload_len = 0;
-bool tx_payload_held = false; // the frame with it was not sent (region rules), so it goes in the next one
-
 void prepare_transmit_frame(uint8_t antenna, uint8_t fhss1_curr_i, uint8_t fhss2_curr_i)
 {
-    if (transmit_frame_type == TRANSMIT_FRAME_TYPE_NORMAL) {
-        // read data from serial port; a silent receiver is never heard, the data goes one way
-        if (connected() || Setup.Tx[Config.ConfigId].Downlink == TX_DOWNLINK_OFF) {
-            if (!tx_payload_held) {
-                tx_payload_len = 0;
-                for (uint8_t i = 0; i < FRAME_PAYLOAD_LEN(Config.FrameLenTx) - crypto.NonceLen(); i++) {
-                    if (!sx_serial.available()) break;
-                    uint8_t c = sx_serial.getc();
-                    tx_payload[tx_payload_len++] = c;
-                }
+uint8_t payload[FRAME_PAYLOAD_MAX];
+uint8_t payload_len = 0;
 
-                stats.bytes_transmitted.Add(tx_payload_len);
+    // a silent receiver never acks: its data goes one way, every frame a new payload
+    bool one_way = (Setup.Tx[Config.ConfigId].Downlink == TX_DOWNLINK_OFF);
+    if (one_way) tarq.SetRetryCnt(0);
+
+    bool get_fresh_payload = tarq.GetFreshPayload();
+
+    if (get_fresh_payload) {
+        if (transmit_frame_type == TRANSMIT_FRAME_TYPE_NORMAL) {
+            // read data from serial port
+            if (connected() || one_way) {
+                uint8_t len_max = FRAME_PAYLOAD_LEN(Config.FrameLenTx) - crypto.NonceLen();
+                while (payload_len < len_max && sx_serial.available()) payload[payload_len++] = sx_serial.getc();
+
+                stats.bytes_transmitted.Add(payload_len);
                 stats.serial_data_transmitted.Inc();
+            } else {
+                sx_serial.flush();
             }
-        } else {
-            sx_serial.flush();
-            tx_payload_len = 0;
         }
-        tx_payload_held = false;
     }
 
     stats.last_transmit_antenna = antenna;
 
     tFrameStats frame_stats;
-    frame_stats.seq_no = stats.transmit_seq_no;
+    frame_stats.seq_no = tarq.SeqNo();
     frame_stats.ack = rarq.AckSeqNo();
     frame_stats.antenna = stats.last_antenna;
     frame_stats.transmit_antenna = antenna;
@@ -522,13 +524,27 @@ void prepare_transmit_frame(uint8_t antenna, uint8_t fhss1_curr_i, uint8_t fhss2
 if (!Config.TransmitBoth && (fhss1_curr_i != fhss2_curr_i)) while(1){} // must not happen, catch it
 
     frame_stats.LQ_serial = stats.GetLQ_serial();
-    frame_stats.rx_silent = (Setup.Tx[Config.ConfigId].Downlink == TX_DOWNLINK_OFF) ? 1 : 0;
+    frame_stats.rx_silent = (one_way) ? 1 : 0;
 
-    if (transmit_frame_type == TRANSMIT_FRAME_TYPE_NORMAL) {
-        pack_txframe(&txFrame, &frame_stats, tx_payload, tx_payload_len);
+    static bool txFrame_valid = false;
+    if (get_fresh_payload) {
+        if (transmit_frame_type == TRANSMIT_FRAME_TYPE_NORMAL) {
+            pack_txframe(&txFrame, &frame_stats, payload, payload_len);
+        } else {
+            pack_txcmdframe(&txFrame, &frame_stats);
+        }
+        txFrame_valid = true;
+
+        stats.cntFrameTransmitted();
     } else {
-        pack_txcmdframe(&txFrame, &frame_stats);
+        // txFrame still holds the previous payload, the receiver asked for it again
+        if (!txFrame_valid) while(1){} // should not happen
+
+        update_txframe_stats(&txFrame, &frame_stats);
+
+        stats.cntFrameSkipped();
     }
+    if (!one_way) tarq.SetRetryCntAuto(stats.GetFrameCnt(), Config.Mode);
 }
 
 
@@ -571,8 +587,6 @@ void do_transmit_prepare(uint8_t antenna, uint8_t fhss1_curr_i, uint8_t fhss2_cu
         bind.do_transmit(antenna);
         return;
     }
-
-    stats.transmit_seq_no++;
 
     prepare_transmit_frame(antenna, fhss1_curr_i, fhss2_curr_i);
 }
@@ -652,7 +666,18 @@ tRxFrame* frame;
     // check decrypt_rxframe()
     bool decrypt_ok = false;
     if (rx_status > RX_STATUS_INVALID) {
-        decrypt_ok = decrypt_rxframe(frame); // don't do for INVALID, payload is nonsense
+        decrypt_ok = decrypt_rxframe(frame, 0); // don't do for INVALID, payload is nonsense
+    }
+
+    // handle transmit ARQ: the receiver's ack of the last payload sent down
+    if (rx_status > RX_STATUS_INVALID) { // = RX_STATUS_VALID: we have valid information on ack
+        if (decrypt_ok) {
+            tarq.AckReceived(frame->status.ack);
+        } else {
+            tarq.Disconnected(); // force sending a new payload
+        }
+    } else {
+        tarq.FrameMissed();
     }
 
     // handle receive ARQ, must come before process_received_frame()
@@ -691,6 +716,7 @@ tRxFrame* frame;
 // called in doPreTransmit loop
 void handle_receive_none(void) // called if RX_STATUS_NONE
 {
+    tarq.FrameMissed();
     rarq.FrameMissed();
 }
 
@@ -793,11 +819,12 @@ RESTARTCONTROLLER
     antsw.Init();
 #endif
     rarq.Init();
+    tarq.Init();
     crypto.Init(tCrypto::TX,
         Setup.Common[Config.ConfigId].BindPhrase,
-        Config.Uid, Setup.peer_uid[Config.ConfigId], Setup.tx_random[Config.ConfigId],
+        Config.Uid, Setup.tx_random[Config.ConfigId],
         Setup.Common[Config.ConfigId].Privacy, Setup.LinkKey);
-    crypto.SetSessionKey(Config.SessionRandom);
+    crypto.SetTransmitKey(Config.SessionRandom);
 
     mavlink.Init(); // serial ports selected by SerialPort, SerialPort2
     msp.Init(); // serial port selected by SerialPort
@@ -902,8 +929,7 @@ INITCONTROLLER_END
         sx2.SetRfFrequency(fhss.GetCurrFreq2());
         bool go = regulatory.TxGo(tdiversity.Antenna(), fhss.GetCurrFreq());
         if (go && Config.TransmitBoth && !Config.IsDualBand) go = regulatory.TxGo(ANTENNA_2, fhss.GetCurrFreq2()); // the 2nd channel books its time too
-        if (!go) { // not this frame, the Rx sees it as lost
-            if (transmit_frame_type == TRANSMIT_FRAME_TYPE_NORMAL) tx_payload_held = true;
+        if (!go) { // not this frame, the Rx sees it as lost and the ARQ sends it again
             link_state = LINK_STATE_RECEIVE;
             break;
         }
@@ -1107,18 +1133,14 @@ IF_SX2(
         link_state = LINK_STATE_TRANSMIT;
         link_rx1_status = link_rx2_status = RX_STATUS_NONE;
 
-        if (!connected()) rarq.Disconnected();
+        if (!connected()) { rarq.Disconnected(); tarq.Disconnected(); }
 
         // a silent receiver never answers the setup request, which would take every frame from the data
         if (connect_state == CONNECT_STATE_LISTEN && Setup.Tx[Config.ConfigId].Downlink == TX_DOWNLINK_OFF) {
             link_task_reset();
         } else if (connect_state == CONNECT_STATE_LISTEN) {
             link_task_reset(); // to ensure that the following set is enforced
-            if (connect_occured_once && crypto.IsAuthenticated()) {
-                link_task_set(LINK_TASK_TX_GET_RX_SETUPDATA);
-            } else {
-                link_task_set(LINK_TASK_TX_GET_RX_SETUPDATA_STARTUP);
-            }
+            link_task_set(LINK_TASK_TX_GET_RX_SETUPDATA_STARTUP); // every connect brings the receiver a fresh key
         }
 
         // the configured power, or less with Dyn Power; binding keeps its lowest power

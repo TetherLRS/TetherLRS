@@ -54,7 +54,6 @@ void tStats::Clear(void) // called then not connected
     received_transmit_antenna = UINT8_MAX;
 
     frame_cnt.Clear();
-    transmit_seq_no = 0;
 
     just_connected_cnt = 0;
 }

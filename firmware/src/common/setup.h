@@ -1215,24 +1215,30 @@ void setup_configure_config(uint8_t config_id)
 // Crypto
 //-------------------------------------------------------
 
-void setup_configure_config_crypto(void)
+// a fresh 64-bit random, UINT64_MAX when the Tx has no true random source: with Privacy > 0 it then must not connect
+uint64_t setup_new_random(void)
 {
-    memset(Config.Uid, 0xFF, 12);
-    Config.BindRandom = UINT64_MAX;
-    Config.SessionRandom = UINT64_MAX;
-    Config.StartupRandom = UINT64_MAX;
+uint64_t random = UINT64_MAX;
 
-    mcu_uid(Config.Uid);
 #if defined DEVICE_IS_TRANSMITTER && \
     (defined STM32G4 || defined STM32WL || defined ESP32) // trng is available, note, must match Privacy_allowed_mask
     // trng_get32() can return UINT32_MAX, so give it few chances, but terminate
-    // if either is invalid and Privacy > 0, then we have a serious issue, system should fail to connect
     for (uint8_t i = 0; i < 4; i++) {
-        if (Config.BindRandom == UINT64_MAX) Config.BindRandom = ((uint64_t)trng_get32() << 32) + trng_get32();
-        if (Config.SessionRandom == UINT64_MAX) Config.SessionRandom = ((uint64_t)trng_get32() << 32) + trng_get32();
-        if (Config.StartupRandom == UINT64_MAX) Config.StartupRandom = ((uint64_t)trng_get32() << 32) + trng_get32();
+        if (random == UINT64_MAX) random = ((uint64_t)trng_get32() << 32) + trng_get32();
     }
 #endif
+    return random;
+}
+
+
+void setup_configure_config_crypto(void)
+{
+    memset(Config.Uid, 0xFF, 12);
+    mcu_uid(Config.Uid);
+
+    Config.BindRandom = setup_new_random();
+    Config.SessionRandom = setup_new_random();
+    Config.StartupRandom = setup_new_random();
 }
 
 

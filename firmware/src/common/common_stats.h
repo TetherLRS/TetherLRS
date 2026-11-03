@@ -99,9 +99,6 @@ class tStats
     void cntFrameSkipped(void);
     int32_t GetFrameCnt(void);
 
-    // seq no in the last transmitted frame, only tx
-
-    uint8_t transmit_seq_no;
 
     // moving average fields
 

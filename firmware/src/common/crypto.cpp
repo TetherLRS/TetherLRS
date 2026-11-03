@@ -3,6 +3,7 @@
 // GPL3
 // https://www.gnu.org/licenses/gpl-3.0.de.html
 // OlliW @ www.olliw.eu
+// TetherLRS changes: Copyright (c) TetherLRS project
 //*******************************************************
 // CRYPTO
 //*******************************************************
@@ -18,6 +19,8 @@
 #define MAC_LEN         3
 #define LVL3_NONCE_LEN  4
 #define LVL3_MAC_LEN    8
+
+#define STATIC_SOURCE_LEN  78
 
 
 #if LVL3_NONCE_LEN + LVL3_MAC_LEN != CRYPTO_NONCE_MAX_LEN
@@ -48,7 +51,7 @@ const crypto_level_t crypto_list[] = {
 
 void tCrypto::Init(
     uint8_t role,
-    char* const bind_phrase, uint8_t tx_uid[12], uint8_t rx_uid[12], uint64_t tx_random,
+    char* const bind_phrase, uint8_t tx_uid[12], uint64_t tx_random,
     uint8_t privacy_level, const uint8_t* const link_key)
 {
     _role = role;
@@ -61,32 +64,37 @@ void tCrypto::Init(
 
     // static secrets
 
-    _static_random = tx_random;
+    bool link_key_set = false;
+    for (uint8_t i = 0; i < 32; i++) { if (link_key[i]) link_key_set = true; }
 
     memset(_static_source, 0, sizeof(_static_source));
     memcpy(_static_source,                   "TLRS key",    8); //  8 bytes
     memcpy(_static_source + 8,               bind_phrase,   6); //  6 bytes
-    memcpy(_static_source + 8 + 6,           tx_uid,       12); // 12 bytes
-    memcpy(_static_source + 8 + 6 + 12,      rx_uid,       12); // 12 bytes
-    memcpy(_static_source + 8 + 6 + 12 +12,  &tx_random,    8); //  8 bytes // sum 46 bytes
+    if (!link_key_set) { // with a link key the air bind's material is not needed, so radios flashed alike pair up
+        memcpy(_static_source + 8 + 6,       tx_uid,       12); // 12 bytes
+        memcpy(_static_source + 8 + 6 + 12,  &tx_random,    8); //  8 bytes // sum 34 bytes
+    }
     memcpy(_static_source + 46,              link_key,     32); // 32 bytes // sum 78 bytes, all zero when no key was set
 
-    crypto_blake2b(_static_key, 32, _static_source, 78); // construct static key
+    crypto_blake2b(_static_key, 32, _static_source, STATIC_SOURCE_LEN); // construct static key
+
+    _static_valid = link_key_set || (tx_random != UINT64_MAX);
 
     _startup_nonce_u32 = 0;
 
-    // session secrets
+    // session secrets: the static key stands in until the real ones are known
 
-    _session_random = 0;
-    _session_key_has_been_set = false; // session key not yet set
-
-    memset(_session_key, 0, sizeof(_session_key));
-    memcpy(_session_key, _static_key, 32); // set key to static key to have some default
+    _transmit_random = 0;
+    _key_tx_set = false;
+    memcpy(_key_tx, _static_key, 32);
     _nonce_u32 = 0;
 
-    // auxiliary
-
-    _nonce_u32_last_received = 0;
+    for (uint8_t slot = 0; slot < CRYPTO_SLOT_NUM; slot++) {
+        _receive_random[slot] = 0;
+        _key_rx_set[slot] = false;
+        memcpy(_key_rx[slot], _static_key, 32);
+        _nonce_u32_last_received[slot] = 0;
+    }
 
     // statistics
     mac_errors = 0;
@@ -94,44 +102,63 @@ void tCrypto::Init(
 }
 
 
-bool tCrypto::ValidKeys(void) // to tell Tx or Rx if they can connect
+// the Tx can connect a slot once it holds its own key and that slot's; the Rx gets both from the Tx's STARTUP
+bool tCrypto::ValidKeys(uint8_t slot)
 {
-//    return (_privacy_level == 0 ||(_static_random != UINT64_MAX && _session_random != UINT64_MAX));
-    return !(_privacy_level > 0 && (_static_random == UINT64_MAX || _session_random == UINT64_MAX));
+    if (!_privacy_level) return true;
+    if (!_static_valid) return false;
+    if (_role == TX) return _key_tx_set && (slot < CRYPTO_SLOT_NUM) && _key_rx_set[slot];
+    return true;
 }
 
 
-//-- handle session random and session key
+//-- session keys
 
-// Tx: called in init sequence
-// Rx: called by SetSessionKeyFromEncryptedRandom() when a FRAME_CMD_GET_RX_SETUPDATA_STARTUP frame is received
-void tCrypto::SetSessionKey(uint64_t session_random)
+void tCrypto::_derive_key(uint8_t key[32], uint64_t random)
 {
 uint8_t key_source[96]; // 78 + 8 = 86
 
-    _session_random = session_random;
+    memcpy(key_source,                     _static_source, STATIC_SOURCE_LEN);
+    memcpy(key_source + STATIC_SOURCE_LEN, &random,        8);
 
-    memcpy(key_source,      _static_source,   78); // 78 bytes
-    memcpy(key_source + 78, &_session_random,  8); //  8 bytes // sum = 86 bytes
-
-    crypto_blake2b(_session_key, 32, key_source, 86);
-
-    _session_key_has_been_set = true;
+    crypto_blake2b(key, 32, key_source, STATIC_SOURCE_LEN + 8);
 }
 
-// The session random is transmitted encrypted, in the following format:
-//  0 ..  7:  8 bytes session-random
-//  8 .. 19: 12 bytes startup-random | bind-random | startup-nonce
-// 20 .. 27:  8 bytes mac
 
-// only Tx: send along with a FRAME_CMD_GET_RX_SETUPDATA_STARTUP frame
-void tCrypto::EncryptSessionRandom(uint8_t* const buf28, uint64_t startup_random, uint64_t bind_random)
+void tCrypto::SetTransmitKey(uint64_t random)
+{
+    _transmit_random = random;
+    _derive_key(_key_tx, random);
+    _key_tx_set = (random != UINT64_MAX);
+    _nonce_u32 = 0; // a new key, the counter may start over
+}
+
+
+void tCrypto::SetReceiveKey(uint8_t slot, uint64_t random)
+{
+    if (slot >= CRYPTO_SLOT_NUM) return;
+    _receive_random[slot] = random;
+    _derive_key(_key_rx[slot], random);
+    _key_rx_set[slot] = (random != UINT64_MAX);
+    _nonce_u32_last_received[slot] = 0;
+}
+
+
+// The session randoms go encrypted, in this format:
+//  0 ..  7:  8 bytes the Tx's transmit random, the group's
+//  8 .. 15:  8 bytes the receiver's own random
+// 16 .. 27: 12 bytes startup-random | bind-random | startup-nonce
+// 28 .. 35:  8 bytes mac
+
+// only Tx: sent along with a FRAME_CMD_GET_RX_SETUPDATA_STARTUP frame, to one slot
+void tCrypto::EncryptSessionRandoms(uint8_t* const buf36, uint8_t slot, uint64_t startup_random, uint64_t bind_random)
 {
 uint8_t nonce[12];
 uint8_t poly1305_key[32];
 uint8_t mac[16];
+uint8_t randoms[16];
 
-    if (!_session_key_has_been_set) while(1){} // must not happen, SetSessionKey() must be called before
+    if (slot >= CRYPTO_SLOT_NUM) slot = 0;
 
     bind_random += _startup_nonce_u32;
     _startup_nonce_u32++; // ready it for next use
@@ -140,37 +167,43 @@ uint8_t mac[16];
     memcpy(nonce, &startup_random, 8);
     memcpy(nonce + 8, &bind_random, 4);
 
-    crypto_chacha20_ietf(buf28, (uint8_t*)&_session_random, 8, _static_key, nonce, 1); // random[0] ... random[8 - 1]
+    memcpy(randoms, &_transmit_random, 8);
+    memcpy(randoms + 8, &_receive_random[slot], 8);
 
-    memcpy(buf28 + 8, nonce, 12); // random[8] ... random[20 - 1]
+    crypto_chacha20_ietf(buf36, randoms, 16, _static_key, nonce, 1); // buf36[0] ... buf36[16 - 1]
+
+    memcpy(buf36 + 16, nonce, 12); // buf36[16] ... buf36[28 - 1]
 
     crypto_chacha20_ietf(poly1305_key, NULL, 32, _static_key, nonce, 0);
-    crypto_poly1305(mac, buf28, 20, poly1305_key); // mac over session random & nonce
+    crypto_poly1305(mac, buf36, 28, poly1305_key); // mac over the randoms & nonce
 
-    memcpy(buf28 + 20, mac, 8); // random[20] ... random[28 - 1]
+    memcpy(buf36 + 28, mac, 8); // buf36[28] ... buf36[36 - 1]
 }
 
 
-// only Rx: called upon receive of a FRAME_CMD_GET_RX_SETUPDATA frame
-void tCrypto::SetSessionKeyFromEncryptedRandomBuf(uint8_t* const buf28)
+// only Rx: called upon receive of a FRAME_CMD_GET_RX_SETUPDATA_STARTUP frame; the randoms are taken when they
+// changed, so a restarted Tx re-keys the receiver and a reconnect brings the receiver a fresh key of its own
+void tCrypto::SetSessionKeysFromEncryptedBuf(uint8_t* const buf36)
 {
 uint8_t nonce[12];
 uint8_t poly1305_key[32];
 uint8_t mac[16];
-uint64_t session_random;
-
-    if (_session_key_has_been_set) return; // has already been set
+uint8_t randoms[16];
+uint64_t group_random, own_random;
 
     memset(nonce, 0, 12);
-    memcpy(nonce, buf28 + 8, 12); // random[8] ... random[20 -1]
+    memcpy(nonce, buf36 + 16, 12);
 
     crypto_chacha20_ietf(poly1305_key, NULL, 32, _static_key, nonce, 0);
-    crypto_poly1305(mac, buf28, 20, poly1305_key); // mac over session random & nonce
-    for (uint8_t i = 0; i < 8; i++) { if (buf28[20 + i] != mac[i]) return; } // authentication failed
+    crypto_poly1305(mac, buf36, 28, poly1305_key); // mac over the randoms & nonce
+    for (uint8_t i = 0; i < 8; i++) { if (buf36[28 + i] != mac[i]) return; } // authentication failed
 
-    crypto_chacha20_ietf((uint8_t*)&session_random, buf28, 8, _static_key, nonce, 1);
+    crypto_chacha20_ietf(randoms, buf36, 16, _static_key, nonce, 1);
+    memcpy(&group_random, randoms, 8);
+    memcpy(&own_random, randoms + 8, 8);
 
-    SetSessionKey(session_random);
+    if (!_key_rx_set[0] || group_random != _receive_random[0]) SetReceiveKey(0, group_random);
+    if (!_key_tx_set || own_random != _transmit_random) SetTransmitKey(own_random);
 }
 
 
@@ -200,11 +233,12 @@ void tCrypto::RecalculateMac(void* const header, uint8_t header_len, void* const
 }
 
 
-bool tCrypto::Decrypt(void* const header, uint8_t header_len, void* const data, uint8_t len)
+bool tCrypto::Decrypt(uint8_t slot, void* const header, uint8_t header_len, void* const data, uint8_t len)
 {
     if (!_privacy_level) return true; // no encryption
+    if (slot >= CRYPTO_SLOT_NUM) return false;
 
-    return _decrypt_it((uint8_t*)header, header_len, (uint8_t*)data, len);
+    return _decrypt_it(slot, (uint8_t*)header, header_len, (uint8_t*)data, len);
 }
 
 
@@ -235,11 +269,11 @@ uint8_t mac[16];
     nonce[11] = (_role == RX) ? 0xAA : 0x55;
 
     // encrypt data at data[0]
-    _crypt_it(data, len, nonce);
+    _crypt_it(_key_tx, data, len, nonce);
 
     if (_mac_len) {
         // MAC = poly1305(header || nonce || ciphertext)
-        _mac_it(mac, header, header_len, data, len, nonce, _nonce_len);
+        _mac_it(_key_tx, mac, header, header_len, data, len, nonce, _nonce_len);
     }
 
     // move data to data + mac_len + nonce_len
@@ -270,14 +304,14 @@ uint8_t mac[16];
     nonce[11] = (_role == RX) ? 0xAA : 0x55;
 
     // MAC the existing encrypted data, not plain palyoad
-    _mac_it(mac, header, header_len, data + _mac_len + _nonce_len, len - _mac_len - _nonce_len, nonce, _nonce_len);
+    _mac_it(_key_tx, mac, header, header_len, data + _mac_len + _nonce_len, len - _mac_len - _nonce_len, nonce, _nonce_len);
 
     // copy new mac into data; leave nonce and ciphertext untouched
     memcpy(data, mac, _mac_len); // data[0] ... data[mac_len - 1]
 }
 
 
-bool tCrypto::_decrypt_it(uint8_t* const header, uint8_t header_len, uint8_t* const data, uint8_t len)
+bool tCrypto::_decrypt_it(uint8_t slot, uint8_t* const header, uint8_t header_len, uint8_t* const data, uint8_t len)
 {
 uint8_t received_mac[LVL3_MAC_LEN];
 uint8_t nonce[12];
@@ -308,7 +342,7 @@ uint8_t mac[16];
 
     if (_mac_len) {
         // calculate MAC over header + nonce + payload
-        _mac_it(mac, header, header_len, data, len, nonce, _nonce_len);
+        _mac_it(_key_rx[slot], mac, header, header_len, data, len, nonce, _nonce_len);
 
         // comparison of mac_len byte mac
         bool ok = true;
@@ -323,14 +357,14 @@ uint8_t mac[16];
     // check nonce, don't accept previously seen nonces, to prevent replay attacks
     // do only for privacy levels > 1
     // TODO: what needs to be done upon connection loss? does it play well with ARQ?
-    if (_privacy_level >= 2 && nonce_u32 <= _nonce_u32_last_received) {
+    if (_privacy_level >= 2 && nonce_u32 <= _nonce_u32_last_received[slot]) {
         replay_counts++;
         //return false;
     }
-    _nonce_u32_last_received = nonce_u32;
+    _nonce_u32_last_received[slot] = nonce_u32;
 
     // decrypt data at data[0]
-    _crypt_it(data, len, nonce);
+    _crypt_it(_key_rx[slot], data, len, nonce);
 
     return true;
 }
@@ -340,7 +374,7 @@ uint8_t mac[16];
 // Monocypher interface
 //-------------------------------------------------------
 
-void tCrypto::_crypt_it(uint8_t* data, uint16_t len, uint8_t nonce[12])
+void tCrypto::_crypt_it(const uint8_t key[32], uint8_t* data, uint16_t len, uint8_t nonce[12])
 {
 // Note: the counter does not have to start at 0, one just needs to use
 // different counter for each block, so always starting with 1 is fine
@@ -349,13 +383,13 @@ void tCrypto::_crypt_it(uint8_t* data, uint16_t len, uint8_t nonce[12])
         data,         // cipher_text,
         data,         // plain_text, same as cipher = in-place encoding
         len,          // text_size,
-        _session_key, // key[32],
+        key,          // key[32],
         nonce,        // nonce[12],
         1);           // ctr
 }
 
 
-void tCrypto::_mac_it(uint8_t mac[16], uint8_t* const header, uint8_t header_len, uint8_t* const data, uint16_t len, uint8_t nonce[12], uint8_t nonce_len)
+void tCrypto::_mac_it(const uint8_t key[32], uint8_t mac[16], uint8_t* const header, uint8_t header_len, uint8_t* const data, uint16_t len, uint8_t nonce[12], uint8_t nonce_len)
 {
 uint8_t poly1305_key[32];
 crypto_poly1305_ctx ctx;
@@ -368,7 +402,7 @@ crypto_poly1305_ctx ctx;
         poly1305_key, // cipher_text,
         NULL,         // plain_text, NULL = returns ChaCha20 keystream
         32,           // text_size,
-        _session_key, // key[32],
+        key,          // key[32],
         nonce,        // nonce[12],
         0);           // ctr
 

@@ -192,7 +192,7 @@ typedef struct
 // Tx -> Rx
 // CMD_GET_RX_SETUPDATA           only 1 cmd byte                   -> response from Rx with RX_SETUPDATA
 // CMD_GET_RX_SETUPDATA_WRELOAD   only 1 cmd byte                   -> response from Rx with RX_SETUPDATA
-// CMD_GET_RX_SETUPDATA_STARTUP   1 cmd byte + 18 bytes nonce&MAC   -> response from Rx with RX_SETUPDATA
+// CMD_GET_RX_SETUPDATA_STARTUP   1 cmd byte + 36 bytes randoms, nonce, MAC -> response from Rx with RX_SETUPDATA
 // CMD_SET_RX_PARAMS              tTxCmdFrameRxParams = 64-12 bytes -> response from Rx with RX_SETUPDATA
 // CMD_STORE_RX_PARAMS            only 1 cmd byte                   -> no response, rx reboots
 // Rx -> Tx
