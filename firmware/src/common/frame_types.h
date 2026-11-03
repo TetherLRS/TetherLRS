@@ -220,6 +220,7 @@ typedef enum {
     FRAME_CMD_STORE_RX_PARAMS,          // tx -> rx, store parameters, reboots (no extra data)
     FRAME_CMD_GET_RX_SETUPDATA_WRELOAD, // tx -> rx, reload parameters
     FRAME_CMD_GET_RX_SETUPDATA_STARTUP, // tx -> rx, ask for param & metadata, send session random
+    FRAME_CMD_SET_LINK,                 // tx -> rx, Mode = auto: restart with this mode (1 byte), answered with RX_SETUPDATA naming it
 } FRAME_CMD_ENUM;
 
 
@@ -252,7 +253,7 @@ PACKED(
 typedef struct
 {
     uint8_t cmd;
-    uint8_t spare;
+    uint8_t link_mode_pending; // Mode = auto: the mode the receiver restarts with once this answer is through, MODE_AUTO = none
     // rx setup meta data 1
     uint16_t firmware_version_u16; // 16.64.64
     uint16_t setup_layout_u16; // 16.64.64

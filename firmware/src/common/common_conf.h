@@ -152,6 +152,17 @@
 #define BOND_LANES_LQ_MIN               95 // both antennas above this for BOND_LANES_AFTER_S bring the two lanes back
 #define BOND_LANES_AFTER_S              10
 #define BOND_GRACE_S                    3 // seconds after a connect before the lanes are judged
+#define MODE_AUTO_UP_MARGIN_DB          10 // Mode = auto: the weaker end this far above the faster mode's sensitivity, with the power Dyn Power holds back added
+#define MODE_AUTO_UP_LQ                 97 // and both LQ at least this, for MODE_AUTO_UP_S seconds: a step up
+#define MODE_AUTO_UP_S                  10
+#define MODE_AUTO_DOWN_LQ               85 // an LQ under this, or the Tx's signal under MODE_AUTO_DOWN_MARGIN_DB over the mode's sensitivity, for MODE_AUTO_DOWN_S: a step down
+#define MODE_AUTO_DOWN_MARGIN_DB        5
+#define MODE_AUTO_DOWN_S                3
+#define MODE_AUTO_HOLD_S                20 // between two changes
+#define MODE_AUTO_REVERT_S              5 // without a link both ends go back to the base mode after this
+#define MODE_AUTO_ANSWER_MISMATCH_MAX   3 // setup data answers that do not confirm the mode before the change is dropped
+#define BAND_AUTO_GOOD                  200 // dual band: a band's score (0..255, an average over about 8 frames) above this is good
+#define BAND_AUTO_POOR                  128 // below this with the other good: the good one 7 frames in 8, this one probes the 8th
 
 #define CONNECT_TMO_MS                  1250 // time to disconnect, was 500, then 750 to better handle 19 Hz mode, now 1250
 

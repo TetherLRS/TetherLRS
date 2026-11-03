@@ -79,6 +79,7 @@ typedef enum {
     MODE_LR, // one 125 kHz channel at 869.525 MHz, slow, 500 mW allowed in the EU
     MODE_17HZ, // sub-GHz LoRa BW250 SF5 at 60 ms: narrow plans
     MODE_8HZ, // sub-GHz LoRa BW125 SF5 at 120 ms: the narrowest
+    MODE_AUTO, // the Tx picks among the modes above from the link's margin; Config.Mode is the one in use
     MODE_NUM,
 } MODE_ENUM;
 
@@ -493,6 +494,7 @@ typedef struct
     uint16_t rx_Mode_allowed_mask;
     uint8_t rx_radio_count; // radios the connected receiver has
     uint8_t rx_radio_bands; // bit per SX_FHSS_FREQUENCY_BAND_ENUM it can run
+    uint8_t rx_link_mode_pending; // the mode the receiver is about to restart with, MODE_AUTO = none
 } tSetupMetaData;
 
 
@@ -536,6 +538,7 @@ typedef struct
     uint8_t RadioScheme; // RADIO_SCHEME_ENUM resolved for this pair, never auto
     bool TransmitBoth; // the same frame goes out of both radios, dual band or dual redundant
     bool Bonded; // two radios, two lanes with a frame each: twice the data, one frame on both when a lane is poor
+    bool ModeAuto; // Mode is auto: the mode in use is mode_auto_current, 19 Hz at start and when the link is lost
     uint8_t RxCount; // receivers in the cycle, 1 .. RX_SLOT_NUM
     uint8_t RxSlot; // Rx: the slot it answers in; a slot beyond RxCount never answers
     uint16_t SlotPeriod_ms; // a receiver's reply slot: its frame's air time and a guard

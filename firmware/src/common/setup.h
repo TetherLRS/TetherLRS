@@ -507,6 +507,18 @@ void _setup_sanitize_config(uint8_t config_id, bool only_rx)
         }
     }
 
+    // auto picks among the modes above: it needs two to choose from, and one receiver (the change restarts the link)
+    {
+    uint16_t modes = SetupMetaData.Mode_allowed_mask & ~(1 << MODE_AUTO);
+    uint8_t n = 0;
+    for (uint8_t i = 0; i < MODE_AUTO; i++) if (modes & (1 << i)) n++;
+    if (n >= 2 && Setup.Common[config_id].RxCount == 0) {
+        SetupMetaData.Mode_allowed_mask |= (1 << MODE_AUTO);
+    } else {
+        SetupMetaData.Mode_allowed_mask &= ~(1 << MODE_AUTO);
+    }
+    }
+
     SANITIZE(Common[config_id].Mode, MODE_NUM, SETUP_MODE, MODE_DEFAULT);
     TST_NOTALLOWED(Mode_allowed_mask, Common[config_id].Mode, MODE_DEFAULT);
 
@@ -968,6 +980,53 @@ uint16_t mode_bandwidth_khz(uint8_t mode, bool is_2p4)
 uint8_t fhss_custom_plan_set(uint32_t centre_khz, uint16_t span_khz, uint16_t bw_khz, bool is_2p4); // fhss.h
 
 
+//-- Mode = auto: the mode in use lives here, not in the setup, so a change never wears the EEPROM
+
+uint8_t mode_auto_current = MODE_AUTO; // MODE_AUTO: not chosen yet, the base
+uint8_t mode_auto_pending = MODE_AUTO; // the mode the link is about to restart with, MODE_AUTO = none
+
+// where auto starts and meets again: 19 Hz, on every chip and band; else the first mode the hardware has
+uint8_t mode_auto_base(void)
+{
+    uint16_t modes = SetupMetaData.Mode_allowed_mask & ~(1 << MODE_AUTO);
+    if (modes & (1 << MODE_19HZ)) return MODE_19HZ;
+    if (modes & (1 << MODE_19HZ_7X)) return MODE_19HZ_7X;
+    for (uint8_t i = 0; i < MODE_AUTO; i++) if (modes & (1 << i)) return i;
+    return MODE_19HZ;
+}
+
+// the drivers' receiver sensitivities, by mode
+int8_t mode_sensitivity_dbm(uint8_t mode, bool is_2p4)
+{
+    switch (mode) {
+    case MODE_50HZ: return -105;
+    case MODE_31HZ: return -108;
+    case MODE_19HZ:
+    case MODE_19HZ_7X: return -112;
+    case MODE_FLRC_111HZ: return -104;
+    case MODE_FSK_50HZ: return -106;
+    case MODE_18HZ: return -112;
+    case MODE_17HZ: return -114;
+    }
+    (void)is_2p4;
+    return -117; // MODE_LR, MODE_8HZ
+}
+
+// the next mode up or down the ladder of rates that both ends allow, MODE_AUTO when there is none
+uint8_t mode_auto_next(uint8_t mode, uint16_t allowed_mask, bool faster)
+{
+    const uint8_t ladder[] = { MODE_FLRC_111HZ, MODE_50HZ, MODE_FSK_50HZ, MODE_31HZ, MODE_19HZ, MODE_19HZ_7X, MODE_18HZ, MODE_17HZ, MODE_8HZ, MODE_LR };
+    const int8_t num = sizeof(ladder);
+    int8_t pos = -1;
+    for (int8_t i = 0; i < num; i++) if (ladder[i] == mode) pos = i;
+    if (pos < 0) return MODE_AUTO;
+    for (int8_t i = pos + ((faster) ? -1 : 1); i >= 0 && i < num; i += ((faster) ? -1 : 1)) {
+        if (allowed_mask & (1 << ladder[i])) return ladder[i];
+    }
+    return MODE_AUTO;
+}
+
+
 // a 91-byte frame's time in the air, the drivers' tables; where the chips of a band differ, the slower one, so both
 // ends of a link compute the same reply slot
 uint32_t mode_toa_us(uint8_t mode, bool is_2p4)
@@ -1038,7 +1097,14 @@ void setup_configure_config(uint8_t config_id)
     //-- Mode, Mode dependent settings
 
     // sets Mode and related, also sets Sx/Sx2.LoraConfigIndex, Sx/Sx2.is_lora, Sx/Sx2.FrequencyBand
-    configure_mode(Setup.Common[config_id].Mode, Config.FrequencyBand);
+    // Mode = auto: the mode in use, the base until the link picked one
+    uint8_t mode = Setup.Common[config_id].Mode;
+    Config.ModeAuto = (mode == MODE_AUTO);
+    if (Config.ModeAuto) {
+        if (mode_auto_current >= MODE_AUTO || !(SetupMetaData.Mode_allowed_mask & (1 << mode_auto_current))) mode_auto_current = mode_auto_base();
+        mode = mode_auto_current;
+    }
+    configure_mode(mode, Config.FrequencyBand);
 
     //-- Link Split: the frame length of each direction, their sum stays the same so a cycle's air time does too
 

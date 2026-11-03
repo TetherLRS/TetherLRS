@@ -442,8 +442,8 @@ uint8_t device_radio_bands(void)
 
 #ifdef DEVICE_IS_TRANSMITTER
 
-// Tx: send CMD to Rx; slot: the receiver it is for, STARTUP carries that receiver's session random
-void pack_txcmdframe_cmd(tTxFrame* const frame, tFrameStats* const frame_stats, uint8_t cmd, uint8_t slot)
+// Tx: send CMD to Rx; slot: the receiver it is for, STARTUP carries that receiver's session random; arg: SET_LINK's mode
+void pack_txcmdframe_cmd(tTxFrame* const frame, tFrameStats* const frame_stats, uint8_t cmd, uint8_t slot, uint8_t arg = 0)
 {
 uint8_t payload[40]; // 1 + CRYPTO_STARTUP_RANDOM_BUF_LEN (=36) = 37
 uint8_t len;
@@ -452,6 +452,11 @@ uint8_t frame_type;
     frame_type = (crypto.PrivacyLevel()) ? FRAME_TYPE_CMD_ENCRYPTED : FRAME_TYPE_CMD;
     payload[0] = cmd;
     len = 1;
+
+    if (cmd == FRAME_CMD_SET_LINK) {
+        payload[1] = arg;
+        len = 2;
+    }
 
     // CMD_GET_RX_SETUPDATA_STARTUP adds the session randoms, under the static key
     if (cmd == FRAME_CMD_GET_RX_SETUPDATA_STARTUP) {
@@ -491,6 +496,7 @@ tRxCmdFrameRxSetupData* rx_setupdata = (tRxCmdFrameRxSetupData*)FRAME_DATA(frame
     SetupMetaData.Rx_SerialOut2_allowed_mask = rx_setupdata->SerialOut2_allowed_mask;
     SetupMetaData.rx_radio_count = rx_setupdata->radio_count;
     SetupMetaData.rx_radio_bands = rx_setupdata->radio_bands;
+    SetupMetaData.rx_link_mode_pending = rx_setupdata->link_mode_pending;
 
     // ensure that Tx has receiver settings which are compatible with its layout, to avoid index issues
     if (SetupMetaData.rx_setup_layout != (uint32_t)SETUPLAYOUT) {
@@ -554,6 +560,7 @@ void pack_rxcmdframe_rxsetupdata(tRxFrame* const frame, tFrameStats* const frame
 tRxCmdFrameRxSetupData rx_setupdata = {};
 
     rx_setupdata.cmd = FRAME_CMD_RX_SETUPDATA;
+    rx_setupdata.link_mode_pending = mode_auto_pending;
 
     rx_setupdata.firmware_version_u16 = version_to_u16(VERSION);
     rx_setupdata.setup_layout_u16 = version_to_u16(SETUPLAYOUT);

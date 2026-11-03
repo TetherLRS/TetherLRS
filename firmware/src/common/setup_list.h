@@ -62,8 +62,8 @@
 #define SETUP_OPT_SERIAL_LINK_MODE       "transp.,mavlink,mavlinkX,mspX"
 #define SETUP_OPT_SERIAL_LINK_MODE_DISP  "transp.,mavlink,mavlnkX,mspX"
 
-#define SETUP_OPT_MODE                "50 Hz,31 Hz,19 Hz,FLRC,FSK,19 Hz 7x,18 Hz,LR,17 Hz,8 Hz" // used below in LIST_COMMON, also in cli
-#define SETUP_OPT_MODE_DISP           "50 Hz,31 Hz,19 Hz,FLRC,FSK,19Hz7x,18 Hz,LR,17 Hz,8 Hz" // used in display, 7 chars max, better 6 chars
+#define SETUP_OPT_MODE                "50 Hz,31 Hz,19 Hz,FLRC,FSK,19 Hz 7x,18 Hz,LR,17 Hz,8 Hz,auto" // used below in LIST_COMMON, also in cli
+#define SETUP_OPT_MODE_DISP           "50 Hz,31 Hz,19 Hz,FLRC,FSK,19Hz7x,18 Hz,LR,17 Hz,8 Hz,auto" // used in display, 7 chars max, better 6 chars
 
 #define SETUP_OPT_RFBAND              "2.4,915 FCC,868,433,70,866 IN,915+2.4,868+2.4" // used below in LIST_COMMON
 #define SETUP_OPT_RF_BAND_CLI         "2.4 GHz,915 MHz FCC,868 MHz,433 MHz,70 cm HAM,866 MHz IN,915 MHz + 2.4 GHz,868 MHz + 2.4 GHz" // used in cli

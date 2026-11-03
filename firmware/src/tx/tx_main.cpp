@@ -501,6 +501,8 @@ uint16_t link_task_delay_ms;
 bool link_task_sent; // the command went out at least once
 bool doParamsStore;
 uint8_t link_startup_cnt; // cycles since the last setup request to a receiver that is not connected
+bool doLinkRestart; // Mode = auto: the link restarts with mode_auto_current
+uint8_t mode_auto_up_s, mode_auto_down_s, mode_auto_hold_s, mode_auto_lost_s, mode_auto_mismatch, mode_auto_task_s;
 
 
 void link_task_init(void)
@@ -513,6 +515,9 @@ void link_task_init(void)
     link_startup_cnt = 0;
 
     doParamsStore = false;
+    doLinkRestart = false;
+    mode_auto_up_s = mode_auto_down_s = mode_auto_hold_s = mode_auto_lost_s = mode_auto_mismatch = mode_auto_task_s = 0;
+    mode_auto_pending = MODE_AUTO;
 }
 
 
@@ -621,6 +626,17 @@ tCmdFrameHeader* head = (tCmdFrameHeader*)FRAME_DATA(frame);
         } else {
             unpack_rxcmdframe_rxsetupdata_brief(frame, rxslot[slot].device_name, &rxslot[slot].firmware_version);
         }
+        if (link_task == LINK_TASK_TX_SET_LINK && slot == rx_selected) {
+            // the receiver restarts with the mode it names; an answer to an older request names none
+            if (SetupMetaData.rx_link_mode_pending == mode_auto_pending) {
+                doLinkRestart = true;
+                link_task_reset();
+            } else if (++mode_auto_mismatch >= MODE_AUTO_ANSWER_MISMATCH_MAX) { // the receiver will not take it
+                mode_auto_pending = MODE_AUTO;
+                link_task_reset();
+            }
+            break;
+        }
         if (link_task_slot == slot) link_task_reset();
         break;
     }
@@ -648,8 +664,116 @@ void pack_txcmdframe(tTxFrame* const frame, tFrameStats* const frame_stats)
         pack_txcmdframe_cmd(frame, frame_stats, FRAME_CMD_STORE_RX_PARAMS, link_task_slot);
         transmit_frame_type = TRANSMIT_FRAME_TYPE_NORMAL;
         break;
+    case LINK_TASK_TX_SET_LINK:
+        pack_txcmdframe_cmd(frame, frame_stats, FRAME_CMD_SET_LINK, link_task_slot, mode_auto_pending);
+        break;
     }
 }
+
+
+//-- Mode = auto: the Tx steps the mode up while the link has margin to spare, down when it gets poor
+
+void mode_auto_set(uint8_t mode)
+{
+    mode_auto_pending = mode;
+    mode_auto_mismatch = 0;
+    mode_auto_task_s = 0;
+    mode_auto_hold_s = MODE_AUTO_HOLD_S;
+    mode_auto_up_s = mode_auto_down_s = 0;
+    link_task_set(LINK_TASK_TX_SET_LINK, 0);
+}
+
+// called at 1 Hz
+void mode_auto_update_1hz(void)
+{
+    if (!Config.ModeAuto || bind.IsInBind()) return;
+
+    uint8_t base = mode_auto_base();
+    if (!connected()) { // without a link both ends meet again at the base mode
+        mode_auto_up_s = mode_auto_down_s = 0;
+        if (Config.Mode != base && ++mode_auto_lost_s >= MODE_AUTO_REVERT_S) {
+            mode_auto_current = base;
+            doLinkRestart = true;
+        }
+        return;
+    }
+    mode_auto_lost_s = 0;
+
+    if (link_task == LINK_TASK_TX_SET_LINK && ++mode_auto_task_s >= MODE_AUTO_REVERT_S) { // never answered: the data must flow
+        mode_auto_pending = MODE_AUTO;
+        link_task_reset();
+    }
+    if (mode_auto_hold_s) { mode_auto_hold_s--; return; }
+    if (link_task != LINK_TASK_NONE || !SetupMetaData.rx_available) return;
+
+    uint16_t allowed = SetupMetaData.Mode_allowed_mask & ~(1 << MODE_AUTO);
+    if (SetupMetaData.rx_Mode_allowed_mask) allowed &= SetupMetaData.rx_Mode_allowed_mask;
+    bool is_2p4 = Config.IsDualBand || (Config.Sx.FrequencyBand == SX_FHSS_FREQUENCY_BAND_2P4_GHZ);
+    uint8_t up = mode_auto_next(Config.Mode, allowed, true);
+    uint8_t down = mode_auto_next(Config.Mode, allowed, false);
+
+    // what each end hears, with the power Dyn Power is holding back added: it would come back at once
+    uint8_t tx_power_idx = Setup.Tx[Config.ConfigId].Power;
+    if (tx_power_idx > Config.PowerIdxMax) tx_power_idx = Config.PowerIdxMax;
+    int16_t headroom_tx = rfpower_list[tx_power_idx].dbm - rfpower.Current_dbm();
+    int16_t headroom_rx = 0;
+    if (stats.received_power_code && stats.received_power_code - 1 < RFPOWER_LIST_NUM && Setup.Rx.Power < RFPOWER_LIST_NUM) {
+        headroom_rx = rfpower_list[Setup.Rx.Power].dbm - rfpower_list[stats.received_power_code - 1].dbm;
+        if (headroom_rx < 0) headroom_rx = 0;
+    }
+    int16_t rssi_at_rx = stats.received_rssi + headroom_tx;
+    int16_t rssi_at_tx = stats.GetLastRssi() + headroom_rx;
+    int16_t rssi_min = (rssi_at_rx < rssi_at_tx) ? rssi_at_rx : rssi_at_tx;
+    uint8_t lq_tx = stats.valid_frames_received.GetLQ();
+    uint8_t lq = (lq_tx < stats.received_LQ_link) ? lq_tx : stats.received_LQ_link;
+
+    if (up != MODE_AUTO && rssi_min - mode_sensitivity_dbm(up, is_2p4) >= MODE_AUTO_UP_MARGIN_DB && lq >= MODE_AUTO_UP_LQ) {
+        if (++mode_auto_up_s >= MODE_AUTO_UP_S) { mode_auto_set(up); return; }
+    } else {
+        mode_auto_up_s = 0;
+    }
+    if (down != MODE_AUTO && (lq < MODE_AUTO_DOWN_LQ || stats.GetLastRssi() - mode_sensitivity_dbm(Config.Mode, is_2p4) < MODE_AUTO_DOWN_MARGIN_DB)) {
+        if (++mode_auto_down_s >= MODE_AUTO_DOWN_S) { mode_auto_set(down); return; }
+    } else {
+        mode_auto_down_s = 0;
+    }
+}
+
+// for the CLI: the mode in use
+uint8_t tx_mode_current(void) { return Config.Mode; }
+
+
+//-- dual band: the band of each frame, the one that gets through more, the other probed now and then
+
+uint8_t band_q[2]; // 0..255, an average of the frames that got through on each band
+uint8_t band_last_sent;
+uint8_t band_probe_cnt;
+
+void band_init(void)
+{
+    band_q[0] = band_q[1] = 255;
+    band_last_sent = 0;
+    band_probe_cnt = 0;
+}
+
+// the reply to the last frame said whether it got through
+void band_feed(bool ok)
+{
+    uint8_t* q = &band_q[band_last_sent & 0x01];
+    if (ok) *q += (255 - *q) / 8; else *q -= *q / 8;
+}
+
+uint8_t band_pick(void)
+{
+    uint8_t good = (band_q[0] >= band_q[1]) ? 0 : 1;
+    uint8_t poor = good ^ 0x01;
+    if (band_q[poor] >= BAND_AUTO_GOOD || band_q[good] < BAND_AUTO_GOOD) return fhss_band_next(); // both fine, or both poor: as random as before
+    if (band_q[poor] >= BAND_AUTO_POOR) return (nr_randq1() < UINT32_MAX / 4) ? poor : good; // the better one mostly
+    band_probe_cnt++;
+    return (band_probe_cnt & 0x07) ? good : poor; // one in eight probes the poor one
+}
+
+uint8_t tx_band_q(uint8_t band) { return band_q[band & 0x01]; }
 
 
 // the receiver whose parameters, setup data and stats the Tx shows and sets
@@ -754,7 +878,8 @@ uint8_t payload_b_len = 0;
     // It is then important however that fhss1_curr_i and fhss2_curr_i are identical, as otherwise
     // the receiver would jump to wrong frequencies
     // this must be ensured by setup
-    uint8_t fhss_band = (Config.IsDualBand) ? fhss_band_next() : 0; // dual band: randomly toggles between 0 and 1; one band: the 2nd sequencer follows the 1st
+    uint8_t fhss_band = (Config.IsDualBand) ? band_pick() : 0; // dual band: the band that gets through, else at random; one band: the 2nd sequencer follows the 1st
+    band_last_sent = fhss_band;
     frame_stats.tx_fhss_index_band = fhss_band;
     frame_stats.tx_fhss_index = ((fhss_band & 0x01) == 0) ? fhss1_curr_i : fhss2_curr_i;
 
@@ -1027,6 +1152,8 @@ void tarq_update(void)
         }
     }
 
+    if (Config.IsDualBand && any_connected) band_feed(any_heard && all_acked);
+
     if (!any_connected) { tarq[0].Disconnected(); return; }
     if (!any_heard) { tarq[0].FrameMissed(); return; }
     tarq[0].AckReceived((all_acked) ? want : (want ^ 0x01));
@@ -1131,6 +1258,7 @@ RESTARTCONTROLLER
     tarq[0].Init();
     tarq[1].Init();
     bond_init();
+    band_init();
     crypto.Init(tCrypto::TX,
         Setup.Common[Config.ConfigId].BindPhrase,
         Config.Uid, Setup.tx_random[Config.ConfigId],
@@ -1446,6 +1574,7 @@ IF_SX2(
             stats.Update1Hz();
             for (uint8_t s = 0; s < link_frames(); s++) rxslot[s].lq.Update1Hz();
             bond_update_1hz();
+            mode_auto_update_1hz();
         }
         stats.Next();
         if (!connected()) stats.Clear();
@@ -1474,6 +1603,14 @@ IF_SX2(
             sx2.SetToIdle();
             leds.SetToParamStore();
             setup_store_to_EEPROM();
+            GOTO_RESTARTCONTROLLER;
+        }
+
+        // Mode = auto: the link restarts with the mode chosen, nothing stored
+        if (doLinkRestart) {
+            sx.SetToIdle();
+            sx2.SetToIdle();
+            if (mode_auto_pending != MODE_AUTO) mode_auto_current = mode_auto_pending;
             GOTO_RESTARTCONTROLLER;
         }
 

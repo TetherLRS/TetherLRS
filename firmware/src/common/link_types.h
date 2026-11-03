@@ -81,6 +81,7 @@ typedef enum {
     LINK_TASK_TX_STORE_RX_PARAMS,
     LINK_TASK_TX_GET_RX_SETUPDATA_WRELOAD,
     LINK_TASK_TX_GET_RX_SETUPDATA_STARTUP,
+    LINK_TASK_TX_SET_LINK, // Mode = auto: the mode to restart with
 #endif
 
 #ifdef DEVICE_IS_RECEIVER

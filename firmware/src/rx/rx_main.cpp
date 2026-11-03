@@ -277,6 +277,9 @@ void rx_output(uint8_t* const data, uint8_t len)
 uint8_t link_task;
 uint8_t transmit_frame_type;
 bool doParamsStore;
+bool doLinkRestart; // Mode = auto: the link restarts with mode_auto_current
+bool link_restart_after_ack; // the answer naming the new mode went out: restart once the Tx has it
+uint8_t mode_auto_lost_s;
 
 
 void link_task_init(void)
@@ -285,6 +288,10 @@ void link_task_init(void)
     transmit_frame_type = TRANSMIT_FRAME_TYPE_NORMAL;
 
     doParamsStore = false;
+    doLinkRestart = false;
+    link_restart_after_ack = false;
+    mode_auto_lost_s = 0;
+    mode_auto_pending = MODE_AUTO;
 }
 
 
@@ -336,6 +343,12 @@ tCmdFrameHeader* head = (tCmdFrameHeader*)FRAME_DATA(frame);
         Config.SessionRandom = crypto.SessionRandom(); // only for reporting
         link_task_set(LINK_TASK_RX_SEND_RX_SETUPDATA);
         break;
+    case FRAME_CMD_SET_LINK: {
+        // Mode = auto: the mode to restart with; the answer names it, the restart waits for the Tx to have the answer
+        uint8_t mode = FRAME_DATA(frame)[1];
+        if (Config.ModeAuto && mode < MODE_AUTO && (SetupMetaData.Mode_allowed_mask & (1 << mode))) mode_auto_pending = mode;
+        link_task_set(LINK_TASK_RX_SEND_RX_SETUPDATA);
+        break; }
     }
 }
 
@@ -346,6 +359,7 @@ void pack_rxcmdframe(tRxFrame* const frame, tFrameStats* const frame_stats)
     case LINK_TASK_RX_SEND_RX_SETUPDATA:
         // send rx setup data
         pack_rxcmdframe_rxsetupdata(frame, frame_stats);
+        if (mode_auto_pending != MODE_AUTO) link_restart_after_ack = true;
         break;
     }
 }
@@ -396,6 +410,11 @@ uint8_t payload_b_len = 0;
         tarq[1].Settle(get_fresh_payload);
     } else {
         get_fresh_payload = tarq[0].GetFreshPayload();
+    }
+
+    if (get_fresh_payload && link_restart_after_ack) { // the Tx has the answer naming the new mode: restart with it
+        link_restart_after_ack = false;
+        doLinkRestart = true;
     }
 
     if (get_fresh_payload) {
@@ -1087,6 +1106,16 @@ dbg.puts(s8toBCD_s(stats.last_rssi2));*/
         DECc(tick_1hz_commensurate, Config.frame_rate_hz);
         if (!tick_1hz_commensurate) {
             stats.Update1Hz();
+            // Mode = auto: without a link both ends meet again at the base mode
+            if (Config.ModeAuto && !bind.IsInBind()) {
+                if (connected()) {
+                    mode_auto_lost_s = 0;
+                } else if (Config.Mode != mode_auto_base() && ++mode_auto_lost_s >= MODE_AUTO_REVERT_S) {
+                    mode_auto_pending = MODE_AUTO;
+                    mode_auto_current = mode_auto_base();
+                    doLinkRestart = true;
+                }
+            }
         }
         stats.Next();
         if (!connected()) stats.Clear();
@@ -1155,6 +1184,14 @@ dbg.puts(s8toBCD_s(stats.last_rssi2));*/
         sx2.SetToIdle();
         leds.SetToParamStore();
         setup_store_to_EEPROM();
+        GOTO_RESTARTCONTROLLER;
+    }
+
+    // Mode = auto: the link restarts with the mode the Tx chose, nothing stored
+    if (doLinkRestart) {
+        sx.SetToIdle();
+        sx2.SetToIdle();
+        if (mode_auto_pending != MODE_AUTO) mode_auto_current = mode_auto_pending;
         GOTO_RESTARTCONTROLLER;
     }
 

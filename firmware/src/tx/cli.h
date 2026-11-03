@@ -31,6 +31,8 @@ extern bool slot_connected(uint8_t slot);
 extern uint8_t tx_rx_selected(void);
 extern uint8_t tx_bond_lanes(void);
 extern uint8_t tx_antenna_lq(uint8_t antenna);
+extern uint8_t tx_mode_current(void);
+extern uint8_t tx_band_q(uint8_t band);
 extern bool tx_rx_slot_info(uint8_t slot, char* const name_21, uint32_t* const version, uint8_t* const lq, int8_t* const rssi);
 extern tSetup Setup;
 extern tGlobalConfig Config;
@@ -825,6 +827,18 @@ void tTxCli::stream(void)
             puts("; split ");
             putc('0' + Setup.Common[Config.ConfigId].LinkSplit);
             puts(";");
+            if (Config.ModeAuto) { // the mode in use, MODE_ENUM
+                puts(" mode ");
+                puts(u8toBCD_s(tx_mode_current()));
+                puts(";");
+            }
+            if (Config.IsDualBand) { // how much gets through on each band, 0..255
+                puts(" band ");
+                puts(u8toBCD_s(tx_band_q(0)));
+                putc('/');
+                puts(u8toBCD_s(tx_band_q(1)));
+                puts(";");
+            }
             if (Config.Bonded) { // 2: a lane out of each radio, 1: one frame on both while a channel is poor
                 puts(" lanes ");
                 putc('0' + tx_bond_lanes());
@@ -1289,7 +1303,7 @@ bool rx_param_changed;
 // SiK AT commands, see sik_at.h
 //-------------------------------------------------------
 
-const uint16_t sik_mode_rates[] = { 4100, 2562, 1547, 9111, 4100, 1547, 1490, 146, 1367, 683 }; // downlink bytes/s, by MODE_ENUM
+const uint16_t sik_mode_rates[] = { 4100, 2562, 1547, 9111, 4100, 1547, 1490, 146, 1367, 683, 1547 }; // downlink bytes/s, by MODE_ENUM, auto as its base
 static_assert(sizeof(sik_mode_rates)/sizeof(sik_mode_rates[0]) == MODE_NUM, "sik_mode_rates");
 
 
@@ -1366,7 +1380,7 @@ bool tTxCli::sik_set(uint8_t n, bool remote, uint32_t v)
         ok = param_set_val_fromint(&rx_param_changed, idx, sik_param_idx((remote) ? "RX_SER_BAUDRATE" : "TX_SER_BAUDRATE"));
         }break;
     case SIK_S_AIR_SPEED: {
-        int8_t mode = sik_pick_rate(v, sik_mode_rates, MODE_NUM, SetupMetaData.Mode_allowed_mask);
+        int8_t mode = sik_pick_rate(v, sik_mode_rates, MODE_NUM, SetupMetaData.Mode_allowed_mask & ~(1 << MODE_AUTO)); // a rate, never auto
         if (mode < 0) return false;
         if (mode == Setup.Common[cid].Mode) return true; // the closest is the one in use
         ok = param_set_val_fromint(&rx_param_changed, mode, sik_param_idx("MODE"));
