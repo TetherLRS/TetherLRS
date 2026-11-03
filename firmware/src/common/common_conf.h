@@ -147,6 +147,11 @@
 #define FRAME_LEN_MAX                   109
 #define RX_SLOT_NUM                     4 // receivers one Tx can serve, a reply slot each
 #define RX_SLOT_GUARD_US                2000 // between one reply and the next: the Tx re-arms, the Rx listens before talk
+#define BOND_LANE_LQ_MIN                70 // bonded radios: a lane under this for BOND_SINGLE_AFTER_S puts one frame on both
+#define BOND_SINGLE_AFTER_S             2
+#define BOND_LANES_LQ_MIN               95 // both antennas above this for BOND_LANES_AFTER_S bring the two lanes back
+#define BOND_LANES_AFTER_S              10
+#define BOND_GRACE_S                    3 // seconds after a connect before the lanes are judged
 
 #define CONNECT_TMO_MS                  1250 // time to disconnect, was 500, then 750 to better handle 19 Hz mode, now 1250
 

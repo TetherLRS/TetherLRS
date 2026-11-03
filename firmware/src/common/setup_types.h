@@ -535,6 +535,7 @@ typedef struct
     uint8_t CustomLbt; // Region = custom: listen before every transmission
     uint8_t RadioScheme; // RADIO_SCHEME_ENUM resolved for this pair, never auto
     bool TransmitBoth; // the same frame goes out of both radios, dual band or dual redundant
+    bool Bonded; // two radios, two lanes with a frame each: twice the data, one frame on both when a lane is poor
     uint8_t RxCount; // receivers in the cycle, 1 .. RX_SLOT_NUM
     uint8_t RxSlot; // Rx: the slot it answers in; a slot beyond RxCount never answers
     uint16_t SlotPeriod_ms; // a receiver's reply slot: its frame's air time and a guard

@@ -153,11 +153,12 @@ void setup_configure_metadata(void)
     SetupMetaData.Privacy_allowed_mask = 0b1111; // all
 #endif
 
-    //-- Radio Scheme: "auto,single,dual redund,dual bonded,dual band": bonded is not there yet, dual band only on that hardware
+    //-- Radio Scheme: "auto,single,dual redund,dual bonded,dual band": dual band only on that hardware, which has one
+    //   radio per band, so never two on one band
 #if defined DEVICE_HAS_DUAL_SX126x_SX128x || defined DEVICE_HAS_DUAL_SX126x_SX126x
-    SetupMetaData.RadioScheme_allowed_mask = 0b10111;
+    SetupMetaData.RadioScheme_allowed_mask = 0b10011;
 #elif defined USE_SX2
-    SetupMetaData.RadioScheme_allowed_mask = 0b00111;
+    SetupMetaData.RadioScheme_allowed_mask = 0b01111;
 #else
     SetupMetaData.RadioScheme_allowed_mask = 0b00011; // auto and single, one radio
 #endif
@@ -1188,15 +1189,21 @@ void setup_configure_config(uint8_t config_id)
     bool pair_two_radios = false;
 #endif
     Config.RadioScheme = RADIO_SCHEME_SINGLE;
+    Config.Bonded = false;
     if (Config.IsDualBand) {
         Config.RadioScheme = RADIO_SCHEME_DUAL_BAND;
     } else if (pair_two_radios && Setup.Common[config_id].RadioScheme != RADIO_SCHEME_SINGLE && Config.Fhss.Num >= 2) {
-        Config.RadioScheme = RADIO_SCHEME_DUAL_REDUNDANT; // auto, redundant, and bonded until it exists
+        // auto is bonded: twice the data while both channels are good, one frame on both when one is poor; one
+        // receiver only, the lanes and the reply slots both need the link header's bits
+        bool bonded = (Setup.Common[config_id].RadioScheme != RADIO_SCHEME_DUAL_REDUNDANT) && (Config.RxCount == 1);
+        Config.RadioScheme = (bonded) ? RADIO_SCHEME_DUAL_BONDED : RADIO_SCHEME_DUAL_REDUNDANT;
+        Config.Bonded = bonded;
         Config.Fhss2.Offset = Config.Fhss.Num / 2; // never the same frequency in the same slot
         Config.ReceiveUseAntenna1 = Config.ReceiveUseAntenna2 = true; // both radios, whatever Diversity says
         Config.TransmitUseAntenna1 = Config.TransmitUseAntenna2 = true;
     }
     Config.TransmitBoth = (Config.RadioScheme != RADIO_SCHEME_SINGLE);
+    if (Config.Bonded) Config.LinkHeader = true;
 
 #if defined DEVICE_HAS_DUAL_SX126x_SX128x
     if (Config.IsDualBand) { // only modify if in dual band mode, otherwise keep fhss1 = fhss2

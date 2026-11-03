@@ -133,9 +133,10 @@ void tBindBase::ConfigForBind(void)
     }
     Config.FrameLenTx = Config.FrameLenRx = FRAME_TX_RX_LEN; // the bind frames
     Config.TransmitBoth = Config.IsDualBand; // one band: one radio sends, both are on the bind channel
-    Config.RxCount = 1; // one receiver at a time, no link header, no reply slots
+    Config.RxCount = 1; // one receiver at a time, no link header, no reply slots, no lanes
     Config.RxSlot = 0;
     Config.LinkHeader = false;
+    Config.Bonded = false;
 
     // we may need them both, so ensure they are both started up
     sx.StartUp(&Config.Sx);

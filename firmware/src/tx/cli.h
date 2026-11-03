@@ -29,6 +29,8 @@ extern bool connected(void);
 extern bool connected_and_rx_setup_available(void);
 extern bool slot_connected(uint8_t slot);
 extern uint8_t tx_rx_selected(void);
+extern uint8_t tx_bond_lanes(void);
+extern uint8_t tx_antenna_lq(uint8_t antenna);
 extern bool tx_rx_slot_info(uint8_t slot, char* const name_21, uint32_t* const version, uint8_t* const lq, int8_t* const rssi);
 extern tSetup Setup;
 extern tGlobalConfig Config;
@@ -823,6 +825,18 @@ void tTxCli::stream(void)
             puts("; split ");
             putc('0' + Setup.Common[Config.ConfigId].LinkSplit);
             puts(";");
+            if (Config.Bonded) { // 2: a lane out of each radio, 1: one frame on both while a channel is poor
+                puts(" lanes ");
+                putc('0' + tx_bond_lanes());
+                puts(";");
+            }
+            if (USE_ANTENNA1 && USE_ANTENNA2) { // valid frames on each antenna, a channel's health
+                puts(" ant ");
+                puts(u8toBCD_s(tx_antenna_lq(ANTENNA_1)));
+                putc('/');
+                puts(u8toBCD_s(tx_antenna_lq(ANTENNA_2)));
+                puts(";");
+            }
             if (Config.RxCount > 1) { // the receivers: slot:LQ/RSSI, - when not connected, * the selected one
                 puts(" mp");
                 for (uint8_t slot = 0; slot < Config.RxCount; slot++) {

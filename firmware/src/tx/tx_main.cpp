@@ -124,6 +124,7 @@
 #include "../common/antenna_switch.h"
 #endif
 #include "../common/arq.h"
+#include "../common/bond.h"
 #include "../common/crypto.h"
 //#include "../common/time_stats.h" // un-comment if you want to use
 //#include "../common/test.h" // un-comment if you want to compile for board test
@@ -139,8 +140,8 @@ tTDiversity tdiversity;
 #ifdef DEVICE_HAS_ANTENNA_SWITCH
 tAntennaSwitch antsw;
 #endif
-tReceiveArq rarq[RX_SLOT_NUM]; // one per receiver
-tTransmitArq tarq; // one for all: a new payload once every connected receiver acked the last
+tReceiveArq rarq[RX_SLOT_NUM]; // one per receiver, or per lane of bonded radios
+tTransmitArq tarq[2]; // one for all receivers: a new payload once every connected one acked the last; two lanes when bonded
 tCrypto crypto;
 tConfigId config_id;
 tTxInfo txinfo;
@@ -381,8 +382,66 @@ uint8_t link_rx_last_slot; // the slot of the last frame read, for re-arming the
 
 bool slot_connected(uint8_t slot)
 {
+    if (Config.Bonded) slot = 0; // the lanes share the one receiver's connection
     return (slot < Config.RxCount && rxslot[slot].connect_state == CONNECT_STATE_CONNECTED);
 }
+
+
+// reply frames a cycle brings: one per receiver, or one per lane
+uint8_t link_frames(void)
+{
+    return (Config.Bonded) ? 2 : Config.RxCount;
+}
+
+
+//-- bonded radios: two lanes, or one frame on both while a channel is poor
+
+bool bond_single; // the Tx's choice, in every frame's link header; the receiver follows it
+uint8_t bond_cnt; // seconds the condition for a switch has held
+uint8_t bond_connected_s; // seconds since the connect, the lanes are judged after a few
+tStatsLQ ant_lq[2]; // valid frames on each antenna: a lane's health, also when one frame goes out on both
+tBondReorder bond; // the receiver's lanes, put out in order
+
+void bond_emit(uint8_t* const data, uint8_t len) { sx_serial.putbuf(data, len); }
+
+void bond_init(void)
+{
+    bond_single = false;
+    bond_cnt = 0;
+    bond_connected_s = 0;
+    ant_lq[0].Init(Config.frame_rate_hz);
+    ant_lq[1].Init(Config.frame_rate_hz);
+    bond.Init(bond_emit, FRAME_PAYLOAD_MAX);
+}
+
+// called at 1 Hz
+void bond_update_1hz(void)
+{
+    ant_lq[0].Update1Hz();
+    ant_lq[1].Update1Hz();
+    if (!Config.Bonded) return;
+
+    if (!slot_connected(0)) { bond_single = false; bond_cnt = 0; bond_connected_s = 0; return; } // a connect starts with the lanes
+    if (bond_connected_s < BOND_GRACE_S) { bond_connected_s++; return; }
+
+    uint8_t lq = (ant_lq[0].GetLQ() < ant_lq[1].GetLQ()) ? ant_lq[0].GetLQ() : ant_lq[1].GetLQ();
+    if (!bond_single) {
+        if (lq < BOND_LANE_LQ_MIN) { if (++bond_cnt >= BOND_SINGLE_AFTER_S) { bond_single = true; bond_cnt = 0; } } else bond_cnt = 0;
+    } else {
+        if (lq > BOND_LANES_LQ_MIN) {
+            if (++bond_cnt >= BOND_LANES_AFTER_S) {
+                bond_single = false;
+                bond_cnt = 0;
+                tarq[1].Disconnected(); // lane B starts afresh
+                rarq[1].Disconnected();
+            }
+        } else bond_cnt = 0;
+    }
+}
+
+// for the CLI: 0 not bonded, 1 one frame on both radios, 2 lanes; and an antenna's LQ
+uint8_t tx_bond_lanes(void) { return (!Config.Bonded) ? 0 : (bond_single) ? 1 : 2; }
+uint8_t tx_antenna_lq(uint8_t antenna) { return ant_lq[(antenna == ANTENNA_1) ? 0 : 1].GetLQ(); }
 
 
 void slot_init(uint8_t slot)
@@ -624,12 +683,25 @@ void prepare_transmit_frame(uint8_t antenna, uint8_t fhss1_curr_i, uint8_t fhss2
 {
 uint8_t payload[FRAME_PAYLOAD_MAX];
 uint8_t payload_len = 0;
+uint8_t payload_b[FRAME_PAYLOAD_MAX];
+uint8_t payload_b_len = 0;
+
+    // bonded radios: a frame per lane, unless a channel is poor and one frame goes out on both
+    bool lanes = (Config.Bonded && !bond_single);
 
     // a silent receiver never acks: its data goes one way, every frame a new payload
     bool one_way = (Setup.Tx[Config.ConfigId].Downlink == TX_DOWNLINK_OFF);
-    if (one_way) tarq.SetRetryCnt(0);
+    if (one_way) { tarq[0].SetRetryCnt(0); tarq[1].SetRetryCnt(0); }
 
-    bool get_fresh_payload = tarq.GetFreshPayload();
+    // new data only when every lane is free, so the receiver can keep the lanes in order
+    bool get_fresh_payload;
+    if (lanes) {
+        get_fresh_payload = tarq[0].WouldAdvance() && tarq[1].WouldAdvance();
+        tarq[0].Settle(get_fresh_payload);
+        tarq[1].Settle(get_fresh_payload);
+    } else {
+        get_fresh_payload = tarq[0].GetFreshPayload();
+    }
 
     if (get_fresh_payload) {
         if (transmit_frame_type == TRANSMIT_FRAME_TYPE_NORMAL) {
@@ -637,8 +709,9 @@ uint8_t payload_len = 0;
             if (connected() || one_way) {
                 uint8_t len_max = FRAME_PAYLOAD_LEN(Config.FrameLenTx) - FRAME_HDR_LEN - crypto.NonceLen();
                 while (payload_len < len_max && sx_serial.available()) payload[payload_len++] = sx_serial.getc();
+                if (lanes) while (payload_b_len < len_max && sx_serial.available()) payload_b[payload_b_len++] = sx_serial.getc();
 
-                stats.bytes_transmitted.Add(payload_len);
+                stats.bytes_transmitted.Add(payload_len + payload_b_len);
                 stats.serial_data_transmitted.Inc();
             } else {
                 sx_serial.flush();
@@ -662,7 +735,7 @@ uint8_t payload_len = 0;
     }
 
     tFrameStats frame_stats;
-    frame_stats.seq_no = tarq.SeqNo();
+    frame_stats.seq_no = tarq[0].SeqNo();
     frame_stats.ack = rarq[0].AckSeqNo();
     frame_stats.antenna = rxslot[stats_slot].antenna;
     frame_stats.transmit_antenna = antenna;
@@ -674,6 +747,7 @@ uint8_t payload_len = 0;
             if (rarq[s].AckSeqNo() & 0x01) frame_stats.link_header |= (1 << s);
         }
         frame_stats.link_header |= (stats_slot & LINK_HDR_SLOT_MASK) << LINK_HDR_TX_SLOT_SHIFT;
+        if (Config.Bonded && bond_single) frame_stats.link_header |= LINK_HDR_BOND_SINGLE;
     }
 
     // Note: the receiver wants to see both bands, also single band receivers.
@@ -707,7 +781,25 @@ if (!Config.TransmitBoth && (fhss1_curr_i != fhss2_curr_i)) while(1){} // must n
 
         stats.cntFrameSkipped();
     }
-    if (!one_way) tarq.SetRetryCntAuto(stats.GetFrameCnt(), Config.Mode);
+
+    if (lanes) { // lane B: the same stats and hop, its own seq no and ack; empty beside a command frame
+        static bool txFrameB_valid = false;
+        tFrameStats frame_stats_b = frame_stats;
+        frame_stats_b.seq_no = tarq[1].SeqNo();
+        frame_stats_b.ack = rarq[1].AckSeqNo();
+        frame_stats_b.transmit_antenna = ANTENNA_2;
+        if (get_fresh_payload || !txFrameB_valid) { // the lanes may have just come back: nothing to send again yet
+            pack_txframe(&txFrameB, &frame_stats_b, payload_b, (transmit_frame_type == TRANSMIT_FRAME_TYPE_NORMAL) ? payload_b_len : 0);
+            txFrameB_valid = true;
+        } else {
+            update_txframe_stats(&txFrameB, &frame_stats_b);
+        }
+    }
+
+    if (!one_way) {
+        tarq[0].SetRetryCntAuto(stats.GetFrameCnt(), Config.Mode);
+        tarq[1].SetRetryCntAuto(stats.GetFrameCnt(), Config.Mode);
+    }
 }
 
 
@@ -737,8 +829,12 @@ void process_received_frame(uint8_t slot, bool do_payload, tRxFrame* const frame
         return;
     }
 
-    // output data on serial
-    sx_serial.putbuf(FRAME_DATA(frame), FRAME_DATA_LEN(frame));
+    // output data on serial; bonded lanes go out in order
+    if (Config.Bonded) {
+        bond.Accepted(slot, frame->status.seq_no, FRAME_DATA(frame), FRAME_DATA_LEN(frame));
+    } else {
+        sx_serial.putbuf(FRAME_DATA(frame), FRAME_DATA_LEN(frame));
+    }
 
     stats.bytes_received.Add(FRAME_DATA_LEN(frame));
     stats.serial_data_received.Inc();
@@ -765,7 +861,11 @@ void do_transmit_send(uint8_t antenna) // we send a TX frame to receiver
        return;
     }
 
-    sxSendFrame(antenna, &txFrame, Config.FrameLenTx, SEND_FRAME_TMO_MS); // 10 ms tmo
+    if (Config.Bonded && !bond_single) {
+        sxSendFrames(&txFrame, &txFrameB, Config.FrameLenTx, SEND_FRAME_TMO_MS); // a lane out of each radio
+    } else {
+        sxSendFrame(antenna, &txFrame, Config.FrameLenTx, SEND_FRAME_TMO_MS); // 10 ms tmo
+    }
 }
 
 
@@ -801,9 +901,15 @@ uint8_t rx_status = RX_STATUS_INVALID; // this also signals that a frame was rec
     // we want to have the rssi,snr stats even if it's a bad packet
     sxGetPacketStatus(antenna, &stats);
 
-    // the slot it answers in: its link header, or the reply window when the frame could not be read
+    if (rx_status == RX_STATUS_VALID) ant_lq[(antenna == ANTENNA_1) ? 0 : 1].Inc();
+
+    // the slot it answers in: its link header, or the reply window when the frame could not be read; bonded
+    // radios: the antenna is the lane, unless the frame says one went out on both (then the better copy)
     uint8_t slot = 0;
-    if (Config.LinkHeader) {
+    if (Config.Bonded) {
+        bool single = (rx_status == RX_STATUS_VALID) ? (frame->payload[0] & LINK_HDR_BOND_SINGLE) : bond_single;
+        slot = (single) ? 0 : ((antenna == ANTENNA_1) ? BOND_LANE_A : BOND_LANE_B);
+    } else if (Config.LinkHeader) {
         slot = (rx_status == RX_STATUS_VALID) ? (frame->payload[0] & LINK_HDR_RX_SLOT_MASK) : slot_from_time();
         if (slot >= Config.RxCount) slot = Config.RxCount - 1;
     }
@@ -892,11 +998,23 @@ void handle_receive_none(uint8_t slot) // called if RX_STATUS_NONE
 
 
 // called in doPreTransmit loop, after every slot: the transmit ARQ hears from all connected receivers, and moves
-// to a new payload only once each of them acked the last one
+// to a new payload only once each of them acked the last one; bonded lanes each hear their own
 void tarq_update(void)
 {
+    if (Config.Bonded) {
+        for (uint8_t lane = 0; lane < 2; lane++) {
+            if (!slot_connected(0) || (bond_single && lane == BOND_LANE_B)) { tarq[lane].Disconnected(); continue; }
+            if (rxslot[lane].rx_status == RX_STATUS_VALID && rxslot[lane].decrypt_ok) {
+                tarq[lane].AckReceived(rxslot[lane].ack);
+            } else {
+                tarq[lane].FrameMissed();
+            }
+        }
+        return;
+    }
+
     bool any_connected = false, any_heard = false, all_acked = true;
-    uint8_t want = tarq.SeqNo() & 0x01;
+    uint8_t want = tarq[0].SeqNo() & 0x01;
 
     for (uint8_t s = 0; s < Config.RxCount; s++) {
         if (!slot_connected(s)) continue;
@@ -909,9 +1027,9 @@ void tarq_update(void)
         }
     }
 
-    if (!any_connected) { tarq.Disconnected(); return; }
-    if (!any_heard) { tarq.FrameMissed(); return; }
-    tarq.AckReceived((all_acked) ? want : (want ^ 0x01));
+    if (!any_connected) { tarq[0].Disconnected(); return; }
+    if (!any_heard) { tarq[0].FrameMissed(); return; }
+    tarq[0].AckReceived((all_acked) ? want : (want ^ 0x01));
 }
 
 
@@ -1010,7 +1128,9 @@ RESTARTCONTROLLER
 #ifdef DEVICE_HAS_ANTENNA_SWITCH
     antsw.Init();
 #endif
-    tarq.Init();
+    tarq[0].Init();
+    tarq[1].Init();
+    bond_init();
     crypto.Init(tCrypto::TX,
         Setup.Common[Config.ConfigId].BindPhrase,
         Config.Uid, Setup.tx_random[Config.ConfigId],
@@ -1234,7 +1354,7 @@ IF_SX2(
 
         bool valid_frame_received = false; // from any receiver
 
-        for (uint8_t s = 0; s < Config.RxCount; s++) {
+        for (uint8_t s = 0; s < link_frames(); s++) {
             tRxSlot* rs = &rxslot[s];
             bool valid = false;
             if (rs->rx_status > RX_STATUS_NONE) { // frame received
@@ -1244,6 +1364,11 @@ IF_SX2(
             }
             rs->decrypt_ok = valid;
             if (valid) valid_frame_received = true;
+
+            if (Config.Bonded && s == BOND_LANE_B) { // the lanes share lane A's connection
+                if (!slot_connected(0) || bond_single) rarq[s].Disconnected();
+                continue;
+            }
 
             // this receiver's connection
             if (valid) {
@@ -1301,7 +1426,7 @@ IF_SX2(
 
         link_state = LINK_STATE_TRANSMIT;
         link_rx1_status = link_rx2_status = RX_STATUS_NONE;
-        for (uint8_t s = 0; s < Config.RxCount; s++) rxslot[s].rx_status = RX_STATUS_NONE;
+        for (uint8_t s = 0; s < link_frames(); s++) rxslot[s].rx_status = RX_STATUS_NONE;
 
         // a setup request to a receiver that is not connected goes out once, the data frames come back after it
         if (link_task == LINK_TASK_TX_GET_RX_SETUPDATA_STARTUP && link_task_sent && !slot_connected(link_task_slot)) {
@@ -1319,6 +1444,8 @@ IF_SX2(
         DECc(tick_1hz_commensurate, Config.frame_rate_hz);
         if (!tick_1hz_commensurate) {
             stats.Update1Hz();
+            for (uint8_t s = 0; s < link_frames(); s++) rxslot[s].lq.Update1Hz();
+            bond_update_1hz();
         }
         stats.Next();
         if (!connected()) stats.Clear();

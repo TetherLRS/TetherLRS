@@ -322,10 +322,10 @@ tDebugPort dbg;
 
 #ifdef DEVICE_IS_RECEIVER
 tTxFrame txFrame, txFrame2;
-tRxFrame rxFrame;
+tRxFrame rxFrame, rxFrameB; // B: the second lane of bonded radios
 #endif
 #ifdef DEVICE_IS_TRANSMITTER
-tTxFrame txFrame;
+tTxFrame txFrame, txFrameB; // B: the second lane of bonded radios
 tRxFrame rxFrame, rxFrame2;
 #endif
 
@@ -373,6 +373,16 @@ void sxSendFrame(uint8_t antenna, void* const data, uint8_t len, uint16_t tmo_ms
         sx2.SendFrame((uint8_t*)data, len, tmo_ms); // should never happen that SX2 is not set up when antenna2
         IF_SX(sx.SetToIdle();)
     }
+}
+
+
+// bonded radios: a frame of its own out of each
+void sxSendFrames(void* const data_a, void* const data_b, uint8_t len, uint16_t tmo_ms)
+{
+    sx.SendFrame((uint8_t*)data_a, len, tmo_ms);
+#ifdef USE_SX2
+    sx2.SendFrame((uint8_t*)data_b, len, tmo_ms);
+#endif
 }
 
 
