@@ -26,7 +26,7 @@ describe('a session with the demo Tx', () => {
     const params = await tx.params();
     expect(params.find((p) => p.name === 'Mode')?.text).toBe('31 Hz');
     expect(params.find((p) => p.name === 'RF Ortho')?.unavailable).toBe(true);
-    expect((await tx.options('Mode')).list?.map((o) => o.text)).toEqual(['31 Hz', '19 Hz', 'FSK', '19 Hz 7x', '18 Hz', 'LR']);
+    expect((await tx.options('Mode')).list?.map((o) => o.text)).toEqual(['31 Hz', '19 Hz', 'FSK', '19 Hz 7x', '18 Hz', 'LR', '17 Hz', '8 Hz']);
     const ok = await tx.setParam('Tx Power', 2);
     expect(ok).toMatchObject({ ok: true, param: { text: '100 mW', index: 2 } });
     expect(await tx.setParam('Tx Power', 9)).toMatchObject({ ok: false, message: 'invalid value' });
@@ -65,6 +65,25 @@ describe('a session with the demo Tx', () => {
     const n = got.length;
     await new Promise((r) => setTimeout(r, 700));
     expect(got.length).toBe(n);
+    await link.close();
+  }, 10000);
+});
+
+describe('the 2.0 commands on the demo Tx', () => {
+  it('link key and custom plan', async () => {
+    const { link, tx } = await session();
+    await tx.enterCommandMode();
+    expect(await tx.linkKey()).toBe(false);
+    expect((await tx.setLinkKey('00ff'.repeat(16))).ok).toBe(true);
+    expect(await tx.linkKey()).toBe(true);
+    expect(await tx.setLinkKey('zz')).toMatchObject({ ok: false, message: '64 hex digits, or none' });
+    expect((await tx.setLinkKey('none')).ok).toBe(true);
+    expect(await tx.linkKey()).toBe(false);
+    expect(await tx.customPlan()).toMatchObject({ centreKHz: 869525, spanKHz: 250, lbt: true, maxDbm: 27 });
+    const r = await tx.setCustomPlan({ centreKHz: 869500, spanKHz: 300, lbt: false, maxDbm: 20 });
+    expect(r.ok).toBe(true);
+    expect(r.plan).toMatchObject({ centreKHz: 869500, spanKHz: 300, lbt: false, maxDbm: 20, bwKHz: 500 });
+    expect(await tx.setCustomPlan({ centreKHz: 1, spanKHz: 300, lbt: false, maxDbm: 20 })).toMatchObject({ ok: false });
     await link.close();
   }, 10000);
 });

@@ -11,6 +11,17 @@ export function randomPhrase(): string {
   return Array.from(crypto.getRandomValues(new Uint8Array(6)), (b) => chars[b % chars.length]).join('');
 }
 
+export const validKey = (s: string) => /^[0-9a-fA-F]{64}$/.test(s);
+
+export function randomKey(): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+export function keyBytes(hex: string): Uint8Array {
+  if (!validKey(hex)) throw new Error('The link key is 64 hex digits');
+  return Uint8Array.from({ length: 32 }, (_, i) => parseInt(hex.slice(2 * i, 2 * i + 2), 16));
+}
+
 // any value but the two the firmware reads as "nothing written" (0xFFFFFFFF) or a blank setup could hold
 export function randomStamp(): number {
   const v = crypto.getRandomValues(new Uint32Array(1))[0];

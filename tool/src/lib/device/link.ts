@@ -9,6 +9,7 @@ export class DeviceLink {
   private lastRxMs = 0;
   private reading?: Promise<void>;
   private listeners = new Set<(text: string) => void>();
+  private byteListeners = new Set<(bytes: Uint8Array) => void>();
   private raw: number[] = []; // the same bytes undecoded, for a receiver's binary MAVLink answer
   isOpen = false;
   onLost?: () => void; // the port went away without close(): unplugged
@@ -55,6 +56,7 @@ export class DeviceLink {
         if (this.raw.length > 4096) this.raw.splice(0, this.raw.length - 4096);
         this.lastRxMs = performance.now();
         for (const l of this.listeners) l(text);
+        for (const l of this.byteListeners) l(value);
       }
     } catch {
       // the port went away; isOpen tells the caller
@@ -65,6 +67,12 @@ export class DeviceLink {
       this.isOpen = false;
       if (lost) this.onLost?.();
     }
+  }
+
+  // the same bytes undecoded, as they arrive: the loopback test counts them
+  onBytes(listener: (bytes: Uint8Array) => void): () => void {
+    this.byteListeners.add(listener);
+    return () => this.byteListeners.delete(listener);
   }
 
   onText(listener: (text: string) => void): () => void {

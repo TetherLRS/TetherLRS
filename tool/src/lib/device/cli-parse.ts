@@ -43,6 +43,20 @@ export interface LinkStats {
   limited?: number; // EU region: frames held back, time limits
   txPower?: number; // dBm the Tx transmits with now, lower than set with Dyn Power
   rxPower?: string; // the receiver's power now, as its Rx Power option names it; missing from an mLRS receiver
+  scheme?: number; // RADIO_SCHEME_ENUM the pair runs, from a 2.0 Tx
+  split?: number; // LINK_SPLIT_ENUM
+}
+
+export const SCHEMES = ['auto', 'single', 'dual redundant', 'dual bonded', 'dual band'];
+export const SPLITS = ['balanced', 'downlink', 'uplink'];
+
+export interface CustomPlan {
+  centreKHz: number;
+  spanKHz: number;
+  lbt: boolean;
+  maxDbm: number;
+  channels?: number; // in the current air mode, as the Tx counts them
+  bwKHz?: number;
 }
 
 // the CLI prints list indices as '0' + index, so 10 and above come out as ':' ';' '<' ...
@@ -129,7 +143,7 @@ export function parseRxVersion(text: string): DeviceVersion | undefined {
 
 // one line of the "stats" stream, e.g. " 98(100), 97,-61/-127,-63, 8/ 0; 120, 410; cca 0, lim 2;"
 export function parseStatsLine(line: string): LinkStats | undefined {
-  const m = /^\s*(-?\d+)\(\s*(-?\d+)\),\s*(-?\d+),\s*(-?\d+)\/\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)\/\s*(-?\d+);\s*(\d+),\s*(\d+);(?:\s*cca\s*(\d+),\s*lim\s*(\d+);)?(?:\s*pwr\s*(-?\d+);)?(?:\s*rxp\s*([^;]*);)?/.exec(line);
+  const m = /^\s*(-?\d+)\(\s*(-?\d+)\),\s*(-?\d+),\s*(-?\d+)\/\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)\/\s*(-?\d+);\s*(\d+),\s*(\d+);(?:\s*cca\s*(\d+),\s*lim\s*(\d+);)?(?:\s*pwr\s*(-?\d+);)?(?:\s*rxp\s*([^;]*);)?(?:\s*sch\s*(\d);\s*split\s*(\d);)?/.exec(line);
   if (!m) return undefined;
   const n = (i: number) => parseInt(m[i], 10);
   const s: LinkStats = {
@@ -142,5 +156,29 @@ export function parseStatsLine(line: string): LinkStats | undefined {
   }
   if (m[13] !== undefined) s.txPower = n(13);
   if (m[14] !== undefined && m[14].trim() !== '-') s.rxPower = m[14].trim();
+  if (m[15] !== undefined) {
+    s.scheme = n(15);
+    s.split = n(16);
+  }
   return s;
+}
+
+// "  link key: set", "  link key: not set", after a change "  link key: set, pstore keeps it..." or "cleared, ..."
+export function parseLinkKey(text: string): boolean | undefined {
+  const m = /link key: (set|not set|cleared)/.exec(text);
+  if (!m) return undefined;
+  return m[1] === 'set';
+}
+
+// "  custom plan: 869525 kHz centre, 250 kHz span, LBT on, 27 dBm max" and "  2 channel(s) of 125 kHz in the current mode"
+export function parseCustomPlan(text: string): CustomPlan | undefined {
+  const m = /custom plan: (\d+) kHz centre, (\d+) kHz span, (LBT on|no LBT), (\d+) dBm max/.exec(text);
+  if (!m) return undefined;
+  const cp: CustomPlan = { centreKHz: parseInt(m[1], 10), spanKHz: parseInt(m[2], 10), lbt: m[3] === 'LBT on', maxDbm: parseInt(m[4], 10) };
+  const c = /(\d+) channel\(s\) of (\d+) kHz/.exec(text);
+  if (c) {
+    cp.channels = parseInt(c[1], 10);
+    cp.bwKHz = parseInt(c[2], 10);
+  }
+  return cp;
 }

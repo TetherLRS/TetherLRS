@@ -17,5 +17,7 @@ describe('which parameters the page shows', () => {
     expect(paramSection('Region')).toBe('link');
     expect(paramSection('Tx Ser Port2')).toBe('ground');
     expect(paramSection('Rx Snd RadioStat')).toBe('air');
+    expect(paramSection('Link Split')).toBe('advanced');
+    expect(paramSection('Rx Test')).toBe('advanced');
   });
 });

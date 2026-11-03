@@ -11,19 +11,22 @@ export const SECTIONS = [
   { id: 'link', title: 'Radio link', help: 'Changing these restarts the Tx and the receiver.' },
   { id: 'ground', title: 'Ground radio (Tx)' },
   { id: 'air', title: 'Aircraft radio (Rx)', help: 'Read from the receiver while it is connected.' },
+  { id: 'advanced', title: 'Advanced', help: 'Two receivers on one Tx, custom plans, the link key, tests.' },
 ] as const;
+
+const ADVANCED = new Set(['Link Split', 'Radio Scheme', 'Rx Downlink', 'Rx Ser Out2', 'Rx Ser Baudrate2', 'Rx Test']);
 
 export type SectionId = (typeof SECTIONS)[number]['id'];
 
 const META: Record<string, ParamMeta> = {
   'Bind Phrase': { label: 'Bind phrase', help: 'Six characters, the same on both radios. SiK programs set it as NETID: sik025 is NETID 25.' },
-  Mode: { label: 'Air mode', help: 'Faster modes carry more data, slower ones reach further.' },
+  Mode: { label: 'Air mode', help: 'Faster modes carry more data, slower ones reach further. 17 Hz and 8 Hz are narrow, for custom plans below 1 GHz.' },
   'RF Band': { label: 'Band' },
   'RF Ortho': { label: 'Orthogonal hopping', help: 'Lets three links share the band without colliding.' },
   Privacy: { label: 'Encryption' },
   Region: {
     label: 'Region',
-    help: 'EU follows the European rules: listen before talk, on-time limits per channel, power caps. Free sets no limits: the local rules are up to you.',
+    help: 'EU follows the European rules: listen before talk, on-time limits per channel, power caps. Free sets no limits: the local rules are up to you. Custom runs the plan set under Advanced.',
   },
   'Dyn Power': {
     label: 'Dynamic power',
@@ -49,6 +52,24 @@ const META: Record<string, ParamMeta> = {
   'Rx Ser Link Mode': { label: 'Serial protocol', help: 'Transparent passes any data. MAVLink modes add flow control towards the autopilot; mavlinkX also compresses.' },
   'Rx Mav System ID': { label: 'MAVLink system ID' },
   'Rx Snd RadioStat': { label: 'RADIO_STATUS to the autopilot', help: 'ardu_1 for ArduPilot and PX4.' },
+  'Link Split': {
+    label: 'Link split',
+    help: 'How the air time is shared: balanced carries 82 bytes a frame each way, downlink 64 up and 100 down (telemetry), uplink the other way round (corrections, commands).',
+  },
+  'Radio Scheme': {
+    label: 'Radio scheme',
+    help: 'With two radios on both ends, dual redundant sends every frame on two channels at once. Auto picks what the pair can do; single keeps the second radio for receiving only.',
+  },
+  'Rx Downlink': {
+    label: 'Receiver transmits',
+    help: 'Off keeps this receiver silent: a second receiver beside the one that answers, both hearing the same Tx. It cannot be read or changed over the air then.',
+  },
+  'Rx Ser Out2': {
+    label: 'Second serial output',
+    help: 'A second TX pin carrying the same data as the serial port: on the port\'s own RX pin (which then reads nothing, transparent mode only), or on the board\'s second serial pad.',
+  },
+  'Rx Ser Baudrate2': { label: 'Second output baud rate' },
+  'Rx Test': { label: 'Test', help: 'Loopback sends what came down back up instead of out of the serial port: the loopback test on the Link page uses it.' },
   'Rx Mav Coalesce': {
     label: 'Freshest telemetry',
     help: 'MAVLink modes: when the link falls behind, an older copy of attitude, position and other state messages still waiting is dropped for the newer one. Parameters, missions and messages are never dropped. GCS link statistics count the dropped copies as lost.',
@@ -65,6 +86,7 @@ export function paramHidden(p: Param): boolean {
 }
 
 export function paramSection(name: string): SectionId {
+  if (ADVANCED.has(name)) return 'advanced';
   if (name.startsWith('Tx ')) return 'ground';
   if (name.startsWith('Rx ')) return 'air';
   return 'link';

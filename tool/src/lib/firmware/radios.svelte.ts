@@ -14,7 +14,7 @@ import { forget, listPorts, rememberRx, rememberTx, type PortEntry } from '$lib/
 import { openPassthrough } from '$lib/serial/passthrough';
 import type { Running } from './detect';
 import { elrsToBootloader, romAnswers } from './elrs';
-import { randomStamp, writeBindPhrase } from './bindphrase';
+import { keyBytes, randomStamp, writeBindPhrase } from './bindphrase';
 import { chooseEnv, loadImage } from './manifest';
 import { HEARTBEAT, listen, probeReceiver, RADIO_STATUS, receiverToBootloader } from './mavlink';
 import { RomSession, type Progress } from './rom-session';
@@ -58,6 +58,7 @@ class Radios {
   log = $state<string[]>([]);
   progress = $state(0);
   phrase = $state(''); // the bind phrase for the next flash: kept while the app runs, never stored
+  linkKey = $state(''); // 64 hex digits written with the phrase; empty: the radio drops the key it held
 
   private session?: RomSession;
 
@@ -357,8 +358,8 @@ class Radios {
       const image = await loadImage(app.firmwareBase, info, !update);
       if (this.phrase) {
         const esp8266 = info.chip === 'esp8266'; // its application sits behind the boot loader in either file
-        await writeBindPhrase(image, esp8266 ? 0x1000 : update ? 0 : info.app_offset, !esp8266, this.phrase, randomStamp());
-        this.cb().log('bind phrase written into the image: it takes it when it starts');
+        await writeBindPhrase(image, esp8266 ? 0x1000 : update ? 0 : info.app_offset, !esp8266, this.phrase, randomStamp(), this.linkKey ? keyBytes(this.linkKey) : undefined);
+        this.cb().log(`bind phrase${this.linkKey ? ' and link key' : ''} written into the image: it takes ${this.linkKey ? 'them' : 'it'} when it starts`);
       } else if (!update) {
         throw new Error('Type the bind phrase first: the same on the ground radio and on the aircraft radio.');
       }

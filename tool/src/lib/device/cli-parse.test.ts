@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cliName, parseParamLine, parseParamList, parseParamOptions, parseRxVersion, parseStatsLine, parseVersion } from './cli-parse';
+import { cliName, parseCustomPlan, parseLinkKey, parseParamLine, parseParamList, parseParamOptions, parseRxVersion, parseStatsLine, parseVersion } from './cli-parse';
 
 describe("a receiver's own settings session", () => {
   it('answers v with its device and version, as rx_cli.h prints them', () => {
@@ -70,6 +70,19 @@ describe('options, versions, stats', () => {
     expect(parseStatsLine('098(100),096, -029/ 127,-071,  009/ 127; 00000, 00000; pwr -018; rxp -;')?.rxPower).toBeUndefined();
     expect(parseStatsLine('098(100),097, -061/-127,-063,  008/ 000; 00120, 00410; cca 0000000003, lim 0000000002; pwr  012;')).toMatchObject({ ccaBusy: 3, txPower: 12 });
     expect(parseStatsLine('  starts streaming stats')).toBeUndefined();
+    // a 2.0 Tx ends with the scheme the pair runs and the Link Split
+    expect(parseStatsLine('098(100),096, -029/ 127,-071,  009/ 127; 00000, 00000; pwr -018; rxp 100 mW; sch 2; split 1;')).toMatchObject({ scheme: 2, split: 1 });
+  });
+  it('the link key and the custom plan, as cli.h answers', () => {
+    expect(parseLinkKey('linkkey\r\n>\r\n  link key: not set\r\n')).toBe(false);
+    expect(parseLinkKey('  link key: set, pstore keeps it, the receiver needs the same')).toBe(true);
+    expect(parseLinkKey('  link key: cleared, pstore keeps it')).toBe(false);
+    expect(parseLinkKey('err: 64 hex digits, or none')).toBeUndefined();
+    expect(parseCustomPlan('  custom plan: 869525 kHz centre, 250 kHz span, LBT on, 27 dBm max\r\n  2 channel(s) of 125 kHz in the current mode\r\n')).toEqual({
+      centreKHz: 869525, spanKHz: 250, lbt: true, maxDbm: 27, channels: 2, bwKHz: 125,
+    });
+    expect(parseCustomPlan('  custom plan: 915000 kHz centre, 2000 kHz span, no LBT, 20 dBm max')).toMatchObject({ lbt: false, maxDbm: 20 });
+    expect(parseCustomPlan('err: the span is 25 kHz up to the band\'s width')).toBeUndefined();
   });
   it('CLI names', () => {
     expect(cliName('Tx Ser Baudrate')).toBe('TX_SER_BAUDRATE');

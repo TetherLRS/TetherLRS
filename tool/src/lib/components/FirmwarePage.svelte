@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import { app, DEFAULT_FIRMWARE_BASE } from '$lib/app.svelte';
-  import { randomPhrase, validPhrase } from '$lib/firmware/bindphrase';
+  import { randomKey, randomPhrase, validKey, validPhrase } from '$lib/firmware/bindphrase';
   import { byCommand, byMavlink, radios, type Found, type Radio } from '$lib/firmware/radios.svelte';
   import { hasWebSerial, isDesktop, requestPort, watchPorts } from '$lib/serial/ports';
   import Icon from './Icon.svelte';
@@ -27,7 +27,7 @@
   const info = $derived(app.manifest?.[radios.env]);
   const update = $derived(f?.family === 'TetherLRS' && f.role === radios.role);
   // a new install needs one; an update may keep the phrase the radio has
-  const phraseOk = $derived(radios.phrase ? validPhrase(radios.phrase) : update);
+  const phraseOk = $derived((radios.phrase ? validPhrase(radios.phrase) : update) && (!radios.linkKey || validKey(radios.linkKey)));
   let editSource = $state(false);
   let ptUart = $state(7);
   // a flight controller is reached only through its passthrough
@@ -267,6 +267,27 @@
             <button class="btn" onclick={() => (radios.phrase = randomPhrase())} disabled={radios.busy}>Random</button>
             <span class="caption hint" class:err={!!radios.phrase && radios.phrase.length === 6 && !validPhrase(radios.phrase)}>
               The same on both radios of a pair: a to z, 0 to 9, # . _ -. Written into this flash only; the app forgets it when it closes.
+            </span>
+          </div>
+          <div class="line phrase">
+            <label>
+              <span class="caption">Link key</span>
+              <input
+                class="mono key"
+                type="text"
+                maxlength="64"
+                value={radios.linkKey}
+                oninput={(e) => (radios.linkKey = e.currentTarget.value.toLowerCase())}
+                placeholder="none"
+                spellcheck="false"
+                autocomplete="off"
+                aria-invalid={!!radios.linkKey && !validKey(radios.linkKey)}
+                disabled={radios.busy}
+              />
+            </label>
+            <button class="btn" onclick={() => (radios.linkKey = randomKey())} disabled={radios.busy}>New</button>
+            <span class="caption hint">
+              Optional, 64 hex digits, the same on both radios: the encryption then rests on it too, not on the phrase alone. Goes with the phrase into this flash only.
             </span>
           </div>
           <div class="line">

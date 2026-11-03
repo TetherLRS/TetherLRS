@@ -3,7 +3,8 @@
 import { DeviceLink, sleep } from './device/link';
 import { TX_BAUDS, TxSession } from './device/tx';
 import { RX_BAUDS, RxSession } from './device/rx';
-import type { DeviceVersion, Param, ParamOptions } from './device/cli-parse';
+import type { CustomPlan, DeviceVersion, Param, ParamOptions } from './device/cli-parse';
+import { runLoopback, type BenchmarkOptions, type BenchmarkProgress, type BenchmarkResult } from './device/benchmark';
 import { resumeHistory, type History } from './link-metrics';
 import { rememberRx, rememberTx, type PortEntry } from './serial/ports';
 import { loadManifest, type Manifest } from './firmware/manifest';
@@ -55,6 +56,10 @@ class App {
   streaming = $state(false);
   linkMetric = $state('lq'); // the measure the Link page shows large
   terminal = $state<string[]>([]); // the CLI conversation on the Terminal page
+  linkKeySet = $state<boolean | undefined>(); // the connected radio holds a link key; undefined before 2.0 firmware answers
+  customPlan = $state<CustomPlan | undefined>(); // Tx only
+  bench = $state<{ running: boolean; progress?: BenchmarkProgress; result?: BenchmarkResult; error?: string }>({ running: false });
+  private benchStop = false;
 
   firmwareBase = $state(savedSource());
   manifest = $state<Manifest | undefined>();
@@ -167,6 +172,9 @@ class App {
     this.options = {};
     this.unsaved = false;
     this.status = '';
+    this.linkKeySet = undefined;
+    this.customPlan = undefined;
+    this.bench = { running: false };
   }
 
   // the Tx was unplugged: nothing more can go to it, so everything goes back without a word to the port
@@ -186,6 +194,9 @@ class App {
     this.options = {};
     this.unsaved = false;
     this.status = '';
+    this.linkKeySet = undefined;
+    this.customPlan = undefined;
+    this.bench = { running: false };
     this.error = `${this.entry?.label ?? 'The radio'} was unplugged.`;
   }
 
@@ -194,6 +205,83 @@ class App {
     this.version = await this.tx.version();
     this.params = await this.tx.params();
     this.options = {};
+    // 2.0 firmware: the key and the plan are commands, not parameters; older firmware answers neither
+    this.linkKeySet = await this.tx.linkKey();
+    this.customPlan = this.version?.onlyRx ? undefined : await this.tx.customPlan();
+  }
+
+  async setLinkKey(key: string): Promise<boolean> {
+    return this.exclusive(async () => {
+      if (!this.tx) return false;
+      this.state = 'busy';
+      try {
+        const r = await this.tx.setLinkKey(key);
+        if (!r.ok) {
+          this.error = `Link key: ${r.message ?? 'not accepted'}`;
+          return false;
+        }
+        this.linkKeySet = key !== 'none';
+        this.unsaved = true;
+        this.error = '';
+        return true;
+      } finally {
+        this.state = 'connected';
+      }
+    });
+  }
+
+  async setCustomPlan(cp: CustomPlan): Promise<boolean> {
+    return this.exclusive(async () => {
+      if (!this.tx) return false;
+      this.state = 'busy';
+      try {
+        const r = await this.tx.setCustomPlan(cp);
+        if (!r.ok) {
+          this.error = `Custom plan: ${r.message ?? 'not accepted'}`;
+          return false;
+        }
+        this.customPlan = r.plan;
+        this.unsaved = true;
+        this.error = '';
+        return true;
+      } finally {
+        this.state = 'connected';
+      }
+    });
+  }
+
+  // the loopback test: the receiver into loopback, the stream paced through the data port, then everything back
+  async startBenchmark(opts: BenchmarkOptions): Promise<void> {
+    if (this.bench.running) return;
+    const wanted = this.statsWanted;
+    await this.stopStats();
+    this.benchStop = false;
+    this.bench = { running: true };
+    await this.exclusive(async () => {
+      if (!this.tx || !this.link) return;
+      this.state = 'busy';
+      try {
+        const on = await this.tx.setParam('Rx Test', 1);
+        if (!on.ok) throw new Error(`the receiver did not take Rx Test = loopback: ${on.message ?? 'not accepted'}`);
+        try {
+          const result = await runLoopback(this.link, this.tx, opts, (progress) => (this.bench = { running: true, progress }), () => this.benchStop);
+          this.bench = { running: false, result };
+        } finally {
+          const off = await this.tx.setParam('Rx Test', 0);
+          if (!off.ok) this.error = 'The receiver is still in loopback: set Test to off under Advanced.';
+          await this.refresh();
+        }
+      } catch (e) {
+        this.bench = { running: false, error: e instanceof Error ? e.message : String(e) };
+      } finally {
+        this.state = 'connected';
+      }
+    });
+    if (wanted) await this.startStats();
+  }
+
+  stopBenchmark(): void {
+    this.benchStop = true;
   }
 
   async loadOptions(name: string): Promise<ParamOptions | undefined> {

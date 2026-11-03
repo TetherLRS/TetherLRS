@@ -3,6 +3,7 @@
 </script>
 
 <script lang="ts">
+  import { SCHEMES, SPLITS } from '$lib/device/cli-parse';
   import { onDestroy, onMount } from 'svelte';
   import { app, statsPage } from '$lib/app.svelte';
   import { forget, hasWebSerial, isDesktop, listPorts, probeable, rememberRx, rememberTx, requestPort, watchPorts, type PortEntry } from '$lib/serial/ports';
@@ -89,6 +90,8 @@
   onDestroy(() => unwatch());
 
   const region = $derived(app.param('Region')?.text);
+  const last = $derived(app.stats.findLast((s) => s !== undefined));
+  const runs = $derived(last?.scheme !== undefined ? `${SCHEMES[last.scheme] ?? '?'}, ${SPLITS[last.split ?? 0] ?? '?'}` : app.param('Radio Scheme')?.text);
 
   // the link at a glance, live while this page is open; a measure opens large on the Link page
   const live = $derived(app.connected && app.state === 'connected' && !app.version?.onlyRx); // a receiver alone has no link
@@ -176,7 +179,7 @@
     <span class="caption">Link</span>
     {#if app.connected}
       <span class="name">{app.param('Mode')?.text ?? '–'} · {app.param('RF Band')?.text ?? '–'}</span>
-      <span class="caption">Region {region ?? '–'}{region === 'EU' ? ': European rules apply' : ''}</span>
+      <span class="caption">Region {region ?? '–'}{region === 'EU' ? ': European rules apply' : ''}{runs ? ` · ${runs}` : ''}</span>
     {:else}
       <span class="name muted">–</span>
       <span class="caption">Mode, band and region of the link.</span>

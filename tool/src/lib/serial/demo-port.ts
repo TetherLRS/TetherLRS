@@ -16,7 +16,7 @@ interface DemoParam {
   unit?: string;
 }
 
-const MODES = ['50 Hz', '31 Hz', '19 Hz', 'FLRC', 'FSK', '19 Hz 7x', '18 Hz', 'LR'];
+const MODES = ['50 Hz', '31 Hz', '19 Hz', 'FLRC', 'FSK', '19 Hz 7x', '18 Hz', 'LR', '17 Hz', '8 Hz'];
 const BANDS = ['2.4 GHz', '915 MHz FCC', '868 MHz', '433 MHz', '70 cm HAM', '866 MHz IN', '915 MHz + 2.4 GHz', '868 MHz + 2.4 GHz'];
 
 export class DemoSerialPort {
@@ -33,6 +33,8 @@ export class DemoSerialPort {
   private line = '';
   private statsTimer?: ReturnType<typeof setInterval>;
   private params: DemoParam[];
+  private linkKey = false;
+  private plan = { centre: 869525, span: 250, lbt: 1, dbm: 27 };
   rxConnected = true;
 
   constructor() {
@@ -43,16 +45,18 @@ export class DemoSerialPort {
       { name: 'Bind Phrase', kind: 'phrase', value: 'mlrs.0' },
       {
         name: 'Mode', kind: 'list', options: MODES, value: 1,
-        allowed: () => (band() === 2 ? (region() === 1 ? [4, 6, 7] : [1, 2, 4, 5, 6, 7]) : [1, 2, 4, 5]),
+        allowed: () => (band() === 2 ? (region() === 1 ? [4, 6, 7] : [1, 2, 4, 5, 6, 7, 8, 9]) : [1, 2, 4, 5, 8, 9]),
       },
       { name: 'RF Band', kind: 'list', options: BANDS, value: 2, allowed: () => (region() === 1 ? [2] : [1, 2]) },
       { name: 'RF Ortho', kind: 'list', options: ['off', '1/3', '2/3', '3/3'], value: 0, allowed: () => (band() === 1 ? [0, 1, 2, 3] : []) },
       { name: 'Privacy', kind: 'list', options: ['off', 'lvl 1', 'lvl 2', 'lvl 3'], value: 0 },
-      { name: 'Region', kind: 'list', options: ['free', 'EU'], value: 0 },
+      { name: 'Region', kind: 'list', options: ['free', 'EU', 'custom'], value: 0 },
       { name: 'Dyn Power', kind: 'list', options: ['off', 'on'], value: 1 },
+      { name: 'Link Split', kind: 'list', options: ['balanced', 'downlink', 'uplink'], value: 0 },
+      { name: 'Radio Scheme', kind: 'list', options: ['auto', 'single', 'dual redund', 'dual bonded', 'dual band'], value: 0, allowed: () => [0, 1, 2] },
       { name: 'Tx Power', kind: 'list', options: ['25 mW', '50 mW', '100 mW', '250 mW', '500 mW'], value: 0 },
       { name: 'Tx Diversity', kind: 'list', options: ['enabled', 'antenna1', 'antenna2', 'r:en. t:ant1', 'r:en. t:ant2'], value: 1, allowed: () => [1] },
-      { name: 'Tx Ser Port', kind: 'list', options: ['serial', 'wbridge', 'serial2', 'com'], value: 0, allowed: () => [0] },
+      { name: 'Tx Ser Port', kind: 'list', options: ['serial', 'wbridge', 'serial2', 'com', 'usb'], value: 0, allowed: () => [0, 4] },
       { name: 'Tx Ser Baudrate', kind: 'list', options: ['57600', '115200', '230400'], value: 1 },
       { name: 'Tx Ser Port2', kind: 'list', options: ['none', 'serial', 'wbridge', 'serial2'], value: 0, allowed: () => [] },
       { name: 'Tx Ser Baudrate2', kind: 'list', options: ['57600', '115200', '230400'], value: 1, allowed: () => [] },
@@ -62,12 +66,16 @@ export class DemoSerialPort {
       { name: 'Tx Downlink', kind: 'list', options: ['on', 'off'], value: 0 },
       { name: 'Rx Power', kind: 'list', options: ['10 mW', '25 mW', '50 mW', '100 mW', '250 mW', '500 mW'], value: 1 },
       { name: 'Rx Diversity', kind: 'list', options: ['enabled', 'antenna1', 'antenna2', 'r:en. t:ant1', 'r:en. t:ant2'], value: 1, allowed: () => [1] },
-      { name: 'Rx Ser Port', kind: 'list', options: ['serial', 'can', 'canfd'], value: 0, allowed: () => [0] },
+      { name: 'Rx Ser Port', kind: 'list', options: ['serial', 'can', 'canfd', 'usb'], value: 0, allowed: () => [0, 3] },
       { name: 'Rx Ser Baudrate', kind: 'list', options: ['57600', '115200', '230400'], value: 1 },
       { name: 'Rx Ser Link Mode', kind: 'list', options: ['transp.', 'mavlink', 'mavlinkX', 'mspX'], value: 0 },
       { name: 'Rx Mav System ID', kind: 'list', options: ['51', '52', '53', '54', '55'], value: 0 },
       { name: 'Rx Snd RadioStat', kind: 'list', options: ['off', 'ardu_1', 'meth_b'], value: 0 },
       { name: 'Rx Mav Coalesce', kind: 'list', options: ['off', 'on'], value: 0 },
+      { name: 'Rx Downlink', kind: 'list', options: ['as Tx', 'off'], value: 0 },
+      { name: 'Rx Ser Out2', kind: 'list', options: ['off', 'tx on rx pin', 'serial 1'], value: 0, allowed: () => [0, 1] },
+      { name: 'Rx Ser Baudrate2', kind: 'list', options: ['57600', '115200', '230400'], value: 1 },
+      { name: 'Rx Test', kind: 'list', options: ['off', 'loopback'], value: 0 },
     ];
   }
 
@@ -106,8 +114,19 @@ export class DemoSerialPort {
     this.send(s + '\r\n');
   }
 
+  private sendBytes(b: Uint8Array) {
+    try {
+      this.out?.enqueue(b);
+    } catch {
+      // closed
+    }
+  }
+
   private fromHost(chunk: Uint8Array) {
     const now = performance.now();
+    // the receiver in loopback: what went down the link comes back up, a frame or two later
+    // (the firmware holds a possible escape back until its guard is over, so a run of '+' is not echoed)
+    if (!this.command && this.find('RX_TEST')!.value === 1 && !/^\+{1,3}$/.test(this.dec.decode(chunk))) setTimeout(() => this.sendBytes(chunk.slice()), 60);
     for (const ch of this.dec.decode(chunk)) {
       if (this.command) {
         this.cliChar(ch);
@@ -197,8 +216,8 @@ export class DemoSerialPort {
   private cli(line: string) {
     const isRx = (p: DemoParam) => p.name.startsWith('Rx ');
     if (line === 'v') {
-      this.putsn('  Tx: DAKEFPV 900 MAX 1W TX, v1.0-RC1');
-      this.putsn(this.rxConnected ? '  Rx: DAKEFPV 900 NANOPRO, v1.0-RC1' : '  Rx: receiver not connected');
+      this.putsn('  Tx: DAKEFPV 900 MAX 1W TX, v2.0-dev');
+      this.putsn(this.rxConnected ? '  Rx: DAKEFPV 900 NANOPRO, v2.0-dev' : '  Rx: receiver not connected');
     } else if (line === 'pl' || line === 'pl c' || line === 'pl tx' || line === 'pl rx') {
       this.putsn('ConfigId:0');
       if (!this.rxConnected) this.putsn('warn: receiver not connected');
@@ -257,11 +276,42 @@ export class DemoSerialPort {
       for (const l of ['  help, h, ?      -> this help page', '  v               -> print device and version', '  pl              -> list all parameters',
         '  p name          -> get parameter value', '  p name = value  -> set parameter value', '  pstore          -> store parameters',
         '  listfreqs       -> lists frequencies used in fhss scheme', '  ATI5, ATSn=v... -> SiK AT commands, RT... for the receiver']) this.putsn(l);
+    } else if (/^linkkey\s*$/.test(line)) {
+      this.putsn(this.linkKey ? '  link key: set' : '  link key: not set');
+    } else if (/^linkkey\s*=/.test(line)) {
+      const v = line.slice(line.indexOf('=') + 1).trim();
+      if (v === 'none') {
+        this.linkKey = false;
+        this.putsn('  link key: cleared, pstore keeps it');
+      } else if (/^[0-9a-fA-F]{64}$/.test(v)) {
+        this.linkKey = true;
+        this.putsn('  link key: set, pstore keeps it, the receiver needs the same');
+      } else this.putsn('err: 64 hex digits, or none');
+    } else if (/^customplan\s*$/.test(line)) {
+      this.printPlan();
+    } else if (/^customplan\s*=/.test(line)) {
+      const v = line.slice(line.indexOf('=') + 1).split('/').map((x) => x.trim());
+      if (v.length !== 4 || v.some((x) => !/^\d+$/.test(x))) return this.putsn('err: customplan = <centre kHz>/<span kHz>/<lbt 0 or 1>/<max dBm>');
+      const [centre, span, lbt, dbm] = v.map((x) => parseInt(x, 10));
+      if (centre < 863000 || centre > 870000) return this.putsn('err: the centre is outside the band, 863000 to 870000 kHz');
+      if (span < 25 || span > 7000) return this.putsn("err: the span is 25 kHz up to the band's width");
+      if (lbt > 1) return this.putsn('err: lbt is 0 or 1');
+      if (dbm > 33) return this.putsn('err: the power cap is 0 to 33 dBm');
+      this.plan = { centre, span, lbt, dbm };
+      this.printPlan();
+      this.putsn('  pstore keeps it, Region = custom runs it');
     } else if (line === 'listfreqs') {
       [863.325, 865.333, 864.0, 867.667, 868.3].forEach((f, i) => this.putsn(`  ${i}: ${Math.round(f * 1000)} kHz`));
     } else {
       this.putsn('  invalid cmd');
     }
+  }
+
+  private printPlan() {
+    const { centre, span, lbt, dbm } = this.plan;
+    this.putsn(`  custom plan: ${centre} kHz centre, ${span} kHz span, ${lbt ? 'LBT on' : 'no LBT'}, ${dbm} dBm max`);
+    const bw = [500, 500, 500, 1000, 250, 500, 500, 125, 250, 125][this.find('MODE')!.value as number] ?? 500;
+    this.putsn(`  ${Math.min(32, Math.max(1, Math.floor(span / bw)))} channel(s) of ${bw} kHz in the current mode`);
   }
 
   private statsLine() {
@@ -274,6 +324,7 @@ export class DemoSerialPort {
     let line = `${p3(lq)}(${p3(Math.min(100, lq + r(0, 4)))}),${p3(r(90, 100))}, ${s8(r(-75, -60))}/${s8(-127)},${s8(r(-78, -62))}, ${s8(r(5, 9))}/${s8(0)}; ${p5(r(80, 400))}, ${p5(r(900, 1450))};`;
     if (this.find('REGION')!.value === 1) line += ` cca ${p10(r(0, 3))}, lim ${p10(0)};`;
     line += ` pwr ${s8(this.find('DYN_POWER')!.value === 1 ? r(10, 14) : 14)}; rxp ${this.find('RX_POWER')!.options![this.find('RX_POWER')!.value as number]};`;
+    line += ` sch ${this.find('RADIO_SCHEME')!.value === 2 ? 2 : 1}; split ${this.find('LINK_SPLIT')!.value};`;
     this.putsn(line);
   }
 }

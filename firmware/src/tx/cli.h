@@ -562,7 +562,7 @@ void tTxCli::print_customplan(tCommonSetup* const c)
 }
 
 
-// customplan, customplan = <centre kHz>,<span kHz>,<lbt 0 or 1>,<max dBm>: the plan Region = custom runs, pstore keeps it
+// customplan, customplan = <centre kHz>/<span kHz>/<lbt 0 or 1>/<max dBm>: the plan Region = custom runs, pstore keeps it
 bool tTxCli::cmd_customplan(void)
 {
     if (strncmp(buf, "customplan", 10) != 0) return false;
@@ -581,10 +581,10 @@ bool tTxCli::cmd_customplan(void)
         while (isdigit((uint8_t)*s) && v[n] < 10000000) { v[n] = v[n] * 10 + (*s - '0'); s++; }
         n++;
         while (*s == ' ') s++;
-        if (*s != ',') break;
+        if (*s != '/') break; // the CLI ends a line at a comma
         s++;
     }
-    if (n != 4 || *s != '\0') { putsn("err: customplan = <centre kHz>,<span kHz>,<lbt 0 or 1>,<max dBm>"); return true; }
+    if (n != 4 || *s != '\0') { putsn("err: customplan = <centre kHz>/<span kHz>/<lbt 0 or 1>/<max dBm>"); return true; }
     uint32_t fmin, fmax;
     band_range_khz(c->FrequencyBand, &fmin, &fmax);
     if (fmax == 0) { putsn("err: a dual band pair has no custom plan"); return true; }
@@ -813,8 +813,11 @@ void tTxCli::stream(void)
                 }
                 puts(s);
             }
-            puts(";");
-            putsn("");
+            puts("; sch "); // what the pair runs, RADIO_SCHEME_ENUM, and its Link Split
+            putc('0' + Config.RadioScheme);
+            puts("; split ");
+            putc('0' + Setup.Common[Config.ConfigId].LinkSplit);
+            putsn(";");
         }
     }
 }
@@ -928,7 +931,7 @@ void tTxCli::print_help_do(void)
         case 14: putsn("  stats           -> starts streaming statistics"); break;
         case 15:
             putsn("  linkkey [= hex] -> show, set (64 hex digits) or clear (none) the link key");
-            putsn("  customplan [= kHz,span,lbt,dBm] -> show or set the plan of Region = custom");
+            putsn("  customplan [= kHz/span/lbt/dBm] -> show or set the plan of Region = custom");
             break;
         case 16:
             putsn("  listfreqs       -> lists frequencies used in fhss scheme");

@@ -5,6 +5,7 @@
   import { linkMetrics } from '$lib/link-metrics';
   import LinkGraph from './LinkGraph.svelte';
   import LinkTiles from './LinkTiles.svelte';
+  import BenchmarkCard from './BenchmarkCard.svelte';
 
   // live from the moment the page opens; leaving the page gives the serial port back
   onMount(() => {
@@ -27,6 +28,8 @@
 
   <LinkGraph metric={current} />
 </div>
+
+<BenchmarkCard />
 
 {#if eu}
   <section class="card eu">

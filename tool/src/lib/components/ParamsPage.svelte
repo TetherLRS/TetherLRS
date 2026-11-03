@@ -2,6 +2,7 @@
   import { app } from '$lib/app.svelte';
   import { SECTIONS, paramHidden, paramSection } from '$lib/param-meta';
   import ParamRow from './ParamRow.svelte';
+  import AdvancedTools from './AdvancedTools.svelte';
   import InfoBar from './InfoBar.svelte';
   import Icon from './Icon.svelte';
 
@@ -38,6 +39,7 @@
         {#each bySection[s.id] as p (p.name)}
           <ParamRow param={p} />
         {/each}
+        {#if s.id === 'advanced'}<AdvancedTools />{/if}
       </section>
     {/if}
   {/each}

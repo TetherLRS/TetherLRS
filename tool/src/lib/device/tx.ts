@@ -6,8 +6,11 @@ import {
   parseParamLine,
   parseParamList,
   parseParamOptions,
+  parseCustomPlan,
+  parseLinkKey,
   parseStatsLine,
   parseVersion,
+  type CustomPlan,
   type DeviceVersion,
   type LinkStats,
   type Param,
@@ -72,6 +75,31 @@ export class TxSession {
   // the Tx restarts when a common parameter changed, and is then back in data mode
   async store(): Promise<string> {
     return this.command('pstore', 400, 4000);
+  }
+
+  // the link key: set or not, never shown; 64 hex digits set it, 'none' clears it; pstore keeps it
+  async linkKey(): Promise<boolean | undefined> {
+    return parseLinkKey(await this.command('linkkey'));
+  }
+
+  async setLinkKey(key: string): Promise<SetResult> {
+    const out = await this.command(`linkkey = ${key}`);
+    const err = /err: (.*?)\r?$/m.exec(out);
+    if (err) return { ok: false, message: err[1] };
+    return { ok: parseLinkKey(out) !== undefined };
+  }
+
+  // the plan Region = custom runs, Tx only; pstore keeps it
+  async customPlan(): Promise<CustomPlan | undefined> {
+    return parseCustomPlan(await this.command('customplan'));
+  }
+
+  async setCustomPlan(cp: CustomPlan): Promise<SetResult & { plan?: CustomPlan }> {
+    const out = await this.command(`customplan = ${cp.centreKHz}/${cp.spanKHz}/${cp.lbt ? 1 : 0}/${cp.maxDbm}`); // the CLI ends a line at a comma
+    const err = /err: (.*?)\r?$/m.exec(out);
+    if (err) return { ok: false, message: err[1] };
+    const plan = parseCustomPlan(out);
+    return { ok: plan !== undefined, plan };
   }
 
   async exitCommandMode(): Promise<void> {

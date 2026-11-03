@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { validPhrase, writeBindPhrase } from './bindphrase';
+import { keyBytes, randomKey, validKey, validPhrase, writeBindPhrase } from './bindphrase';
 
 // an ESP32 application image: 24 byte header with the SHA-256 flag, one data segment holding tlrs_bind, checksum, SHA
 function esp32Image(): Uint8Array {
@@ -31,6 +31,14 @@ describe('the bind phrase in the image', () => {
     expect(validPhrase('ABC.9_')).toBe(false);
     expect(validPhrase('abc')).toBe(false);
     expect(validPhrase('abc 12')).toBe(false);
+  });
+
+  it('the link key: 64 hex digits, random ones differ', () => {
+    const k = randomKey();
+    expect(validKey(k)).toBe(true);
+    expect(k).not.toBe(randomKey());
+    expect(validKey('00ff')).toBe(false);
+    expect(Array.from(keyBytes('00ff'.repeat(16))).slice(0, 3)).toEqual([0, 255, 0]);
   });
 
   it('writes phrase, stamp and key, then checksum and SHA-256 again', async () => {
