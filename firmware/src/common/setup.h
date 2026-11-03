@@ -194,6 +194,9 @@ void setup_configure_metadata(void)
 #ifdef USE_COM
     SetupMetaData.Tx_SerialPort_allowed_mask |= 0b01000; // add com
 #endif
+#ifdef DEVICE_HAS_USB_CDC
+    SetupMetaData.Tx_SerialPort_allowed_mask |= 0b10000; // add usb
+#endif
 #if !((defined STM32G4 || defined ESP32) && defined USE_SERIAL && defined USE_SERIAL2)
     SetupMetaData.Tx_SerialPort2_allowed_mask = 0; // only for devices with a fast processor and two serial ports
 #endif
@@ -236,17 +239,6 @@ void setup_configure_metadata(void)
     SetupMetaData.Rx_Diversity_allowed_mask = 0b00010; // antenna1, not editable
 #endif
 
-    // Rx OutMode: "sbus,crsf,sbus inv"
-#ifdef DEVICE_HAS_OUT
-    SetupMetaData.Rx_OutMode_allowed_mask = 0b111; // all
-#elif defined DEVICE_HAS_OUT_NORMAL
-    SetupMetaData.Rx_OutMode_allowed_mask = 0b110; // crsf,sbus inv
-#elif defined DEVICE_HAS_OUT_INVERTED
-    SetupMetaData.Rx_OutMode_allowed_mask = 0b001; // sbus, not editable
-#else
-    SetupMetaData.Rx_OutMode_allowed_mask = 0; // not available, do not display
-#endif
-
     // Rx SerialPort: "serial,can,canfd"
     SetupMetaData.Rx_SerialPort_allowed_mask = 0; // not available, do not display
 #ifdef USE_SERIAL
@@ -256,6 +248,16 @@ void setup_configure_metadata(void)
     SetupMetaData.Rx_SerialPort_allowed_mask |= 0b010; // add can
 #elif defined DEVICE_HAS_DRONECAN_FD
     SetupMetaData.Rx_SerialPort_allowed_mask |= 0b110; // add can, canfd
+#endif
+#ifdef DEVICE_HAS_USB_CDC
+    SetupMetaData.Rx_SerialPort_allowed_mask |= 0b1000; // add usb
+#endif
+
+    // Rx SerialOut2: "off,tx on rx pin,serial 1": any pin is a UART TX on the ESP32 family, not on the ESP8285 or STM32
+#if defined ESP32
+    SetupMetaData.Rx_SerialOut2_allowed_mask = 0b011;
+#else
+    SetupMetaData.Rx_SerialOut2_allowed_mask = 0; // not available, do not display
 #endif
 
     //-- Tx: Receiver setup meta data
@@ -333,6 +335,13 @@ void setup_default(uint8_t config_id)
     Setup.Common[config_id].Privacy = SETUP_PRIVACY;
     Setup.Common[config_id].Region = SETUP_REGION;
     Setup.Common[config_id].DynPower = SETUP_DYN_POWER;
+    Setup.Common[config_id].LinkSplit = LINK_SPLIT_BALANCED;
+    Setup.Common[config_id].RadioScheme = RADIO_SCHEME_AUTO;
+    Setup.Common[config_id].CustomBw = 0;
+    Setup.Common[config_id].CustomFreqKHz = 869525; // the EU 500 mW channel, as the LR mode
+    Setup.Common[config_id].CustomSpanKHz = 250;
+    Setup.Common[config_id].CustomLbt = 1;
+    Setup.Common[config_id].CustomPowerMaxDbm = 27;
 
     Setup.Tx[config_id].Power = SETUP_TX_POWER;
     Setup.Tx[config_id].Diversity = SETUP_TX_DIVERSITY;
@@ -340,13 +349,9 @@ void setup_default(uint8_t config_id)
     Setup.Tx[config_id].SerialPort2 = SETUP_TX_SERIAL_PORT2;
     Setup.Tx[config_id].SerialBaudrate = SETUP_TX_SERIAL_BAUDRATE;
     Setup.Tx[config_id].SerialBaudrate2 = SERIAL_BAUDRATE_115200;
-    Setup.Tx[config_id].ChannelsSource = SETUP_TX_CHANNELS_SOURCE;
-    Setup.Tx[config_id].ChannelOrder = SETUP_TX_CHANNEL_ORDER;
-    Setup.Tx[config_id].InMode = SETUP_TX_IN_MODE;
     Setup.Tx[config_id].SendRadioStatus = SETUP_TX_SEND_RADIO_STATUS;
     Setup.Tx[config_id].Buzzer = SETUP_TX_BUZZER;
     Setup.Tx[config_id].MavlinkComponent = SETUP_TX_MAV_COMPONENT;
-    Setup.Tx[config_id].PowerSwitchChannel = POWER_SWITCH_CHANNEL_OFF;
     Setup.Tx[config_id].Downlink = TX_DOWNLINK_ON;
 
     Setup.Tx[config_id].WifiProtocol = WIFI_PROTOCOL_UDP;
@@ -355,20 +360,15 @@ void setup_default(uint8_t config_id)
 
     Setup.Rx.Power = SETUP_RX_POWER;
     Setup.Rx.Diversity = SETUP_RX_DIVERSITY;
-    Setup.Rx.ChannelOrder = SETUP_RX_CHANNEL_ORDER;
-    Setup.Rx.OutMode = SETUP_RX_OUT_MODE;
-    Setup.Rx.OutRssiChannelMode = SETUP_RX_OUT_RSSI_CHANNEL;
-    Setup.Rx.FailsafeMode = SETUP_RX_FAILSAFE_MODE;
     Setup.Rx.SerialPort = SETUP_RX_SERIAL_PORT;
     Setup.Rx.SerialBaudrate = SETUP_RX_SERIAL_BAUDRATE;
     Setup.Rx.SerialLinkMode = SETUP_RX_SERIAL_LINK_MODE;
     Setup.Rx.SendRadioStatus = SETUP_RX_SEND_RADIO_STATUS;
-    Setup.Rx.SendRcChannels = SETUP_RX_SEND_RC_CHANNELS;
-    Setup.Rx.PowerSwitchChannel = POWER_SWITCH_CHANNEL_OFF;
     Setup.Rx.MavCoalesce = 0;
-
-    for (uint8_t ch = 0; ch < 12; ch++) { Setup.Rx.FailsafeOutChannelValues_Ch1_Ch12[ch] = 0; }
-    for (uint8_t ch = 0; ch < 4; ch++) { Setup.Rx.FailsafeOutChannelValues_Ch13_Ch16[ch] = 1; }
+    Setup.Rx.Downlink = RX_DOWNLINK_AS_TX;
+    Setup.Rx.SerialOut2 = RX_SERIAL_OUT2_OFF;
+    Setup.Rx.SerialBaudrate2 = SERIAL_BAUDRATE_115200;
+    Setup.Rx.Test = RX_TEST_OFF;
 }
 
 
@@ -403,6 +403,9 @@ void _setup_sanitize_config(uint8_t config_id, bool only_rx)
     // the region limits the bands, so it comes first
     SANITIZE(Common[config_id].Region, REGION_NUM, SETUP_REGION, REGION_FREE);
     SANITIZE(Common[config_id].DynPower, 2, SETUP_DYN_POWER, 1);
+    SANITIZE(Common[config_id].LinkSplit, LINK_SPLIT_NUM, LINK_SPLIT_BALANCED, LINK_SPLIT_BALANCED);
+    SANITIZE(Common[config_id].RadioScheme, RADIO_SCHEME_NUM, RADIO_SCHEME_AUTO, RADIO_SCHEME_AUTO);
+    SANITIZE(Common[config_id].CustomLbt, 2, 1, 1);
     TST_NOTALLOWED(Region_allowed_mask, Common[config_id].Region, REGION_FREE);
     if (Setup.Common[config_id].Region == REGION_EU) {
         SetupMetaData.FrequencyBand_allowed_mask &= (1 << SETUP_FREQUENCY_BAND_2P4_GHZ) | (1 << SETUP_FREQUENCY_BAND_868_MHZ);
@@ -511,9 +514,6 @@ if (!only_rx) {
     SANITIZE(Tx[config_id].Diversity, DIVERSITY_NUM, SETUP_TX_DIVERSITY, DIVERSITY_DEFAULT);
     TST_NOTALLOWED(Tx_Diversity_allowed_mask, Tx[config_id].Diversity, DIVERSITY_ANTENNA1);
 
-    Setup.Tx[config_id].ChannelsSource = 0; // no radio bay: no channels from a radio
-    Setup.Tx[config_id].InMode = 0;
-
     SANITIZE(Tx[config_id].SerialPort, TX_SERIAL_PORT_NUM, SETUP_TX_SERIAL_PORT, TX_SERIAL_PORT_SERIAL);
     TST_NOTALLOWED(Tx_SerialPort_allowed_mask, Tx[config_id].SerialPort, TX_SERIAL_PORT_SERIAL);
 
@@ -523,16 +523,12 @@ if (!only_rx) {
     SANITIZE(Tx[config_id].SerialBaudrate, SERIAL_BAUDRATE_NUM, SETUP_TX_SERIAL_BAUDRATE, SERIAL_BAUDRATE_115200);
     SANITIZE(Tx[config_id].SerialBaudrate2, SERIAL_BAUDRATE_NUM, SERIAL_BAUDRATE_115200, SERIAL_BAUDRATE_115200);
 
-    SANITIZE(Tx[config_id].ChannelOrder, CHANNEL_ORDER_NUM, SETUP_TX_CHANNEL_ORDER, CHANNEL_ORDER_AETR);
-
     SANITIZE(Tx[config_id].SendRadioStatus, TX_SEND_RADIO_STATUS_NUM, SETUP_TX_SEND_RADIO_STATUS, TX_SEND_RADIO_STATUS_OFF);
     SANITIZE(Tx[config_id].MavlinkComponent, TX_MAVLINK_COMPONENT_NUM, SETUP_TX_MAV_COMPONENT, TX_MAVLINK_COMPONENT_OFF);
 
     SANITIZE(Tx[config_id].Buzzer, BUZZER_NUM, SETUP_TX_BUZZER, BUZZER_OFF);
     TST_NOTALLOWED(Tx_Buzzer_allowed_mask, Tx[config_id].Buzzer, BUZZER_OFF);
     SANITIZE(Tx[config_id].Downlink, TX_DOWNLINK_NUM, TX_DOWNLINK_ON, TX_DOWNLINK_ON); // a former spare byte, 0xFF
-
-    SANITIZE(Tx[config_id].PowerSwitchChannel, POWER_SWITCH_CHANNEL_NUM, POWER_SWITCH_CHANNEL_OFF, POWER_SWITCH_CHANNEL_OFF);
 
     // device cannot use same serial for both SerialPort and SerialPort2 !
     // also exclude "com" & "serial"
@@ -566,25 +562,6 @@ if (!only_rx) {
     SANITIZE(Rx.Diversity, DIVERSITY_NUM, SETUP_RX_DIVERSITY, DIVERSITY_DEFAULT);
     TST_NOTALLOWED(Rx_Diversity_allowed_mask, Rx.Diversity,  DIVERSITY_ANTENNA1);
 
-    SANITIZE(Rx.ChannelOrder, CHANNEL_ORDER_NUM, SETUP_RX_CHANNEL_ORDER, CHANNEL_ORDER_AETR);
-
-    SANITIZE(Rx.OutMode, OUT_CONFIG_NUM, SETUP_RX_OUT_MODE, OUT_CONFIG_SBUS);
-    TST_NOTALLOWED(Rx_OutMode_allowed_mask, Rx.OutMode, OUT_CONFIG_SBUS);
-
-    SANITIZE(Rx.OutRssiChannelMode, OUT_RSSI_LQ_CHANNEL_NUM, SETUP_RX_OUT_RSSI_CHANNEL, OUT_RSSI_LQ_CHANNEL_OFF);
-
-    SANITIZE(Rx.OutLqChannelMode, OUT_RSSI_LQ_CHANNEL_NUM, SETUP_RX_OUT_LQ_CHANNEL, OUT_RSSI_LQ_CHANNEL_OFF);
-
-    SANITIZE(Rx.FailsafeMode, FAILSAFE_MODE_NUM, SETUP_RX_FAILSAFE_MODE, FAILSAFE_MODE_NO_SIGNAL);
-
-    for (uint8_t ch = 0; ch < 12; ch++) {
-        if (Setup.Rx.FailsafeOutChannelValues_Ch1_Ch12[ch] < -120) Setup.Rx.FailsafeOutChannelValues_Ch1_Ch12[ch] = 0;
-        if (Setup.Rx.FailsafeOutChannelValues_Ch1_Ch12[ch] > 120) Setup.Rx.FailsafeOutChannelValues_Ch1_Ch12[ch] = 0;
-    }
-    for (uint8_t ch = 0; ch < 4; ch++) {
-        if (Setup.Rx.FailsafeOutChannelValues_Ch13_Ch16[ch] > 2) Setup.Rx.FailsafeOutChannelValues_Ch13_Ch16[ch] = 1;
-    }
-
     SANITIZE(Rx.SerialPort, RX_SERIAL_PORT_NUM, SETUP_RX_SERIAL_PORT, RX_SERIAL_PORT_SERIAL);
     TST_NOTALLOWED(Rx_SerialPort_allowed_mask, Rx.SerialPort, RX_SERIAL_PORT_SERIAL);
 
@@ -595,24 +572,18 @@ if (!only_rx) {
 
     SANITIZE(Rx.SendRadioStatus, RX_SEND_RADIO_STATUS_NUM, SETUP_RX_SEND_RADIO_STATUS, RX_SEND_RADIO_STATUS_OFF);
 
-    SANITIZE(Rx.SendRcChannels, SEND_RC_CHANNELS_NUM, SETUP_RX_SEND_RC_CHANNELS, SEND_RC_CHANNELS_OFF);
-
-    SANITIZE(Rx.PowerSwitchChannel, POWER_SWITCH_CHANNEL_NUM, POWER_SWITCH_CHANNEL_OFF, POWER_SWITCH_CHANNEL_OFF);
-
     SANITIZE(Rx.MavlinkSystemID, 5, SETUP_RX_MAVLINK_SYSTEM_ID, 0);
 
     SANITIZE(Rx.MavCoalesce, 2, 0, 0);
 
-#ifdef TLRS_NO_RC // their parameters are not in the list, so they stay off whatever an older setup held
-    if (!only_rx) {
-        Setup.Tx[config_id].ChannelsSource = CHANNEL_SOURCE_NONE;
-        Setup.Tx[config_id].PowerSwitchChannel = POWER_SWITCH_CHANNEL_OFF;
-    }
-    Setup.Rx.SendRcChannels = SEND_RC_CHANNELS_OFF;
-    Setup.Rx.OutRssiChannelMode = OUT_RSSI_LQ_CHANNEL_OFF;
-    Setup.Rx.OutLqChannelMode = OUT_RSSI_LQ_CHANNEL_OFF;
-    Setup.Rx.PowerSwitchChannel = POWER_SWITCH_CHANNEL_OFF;
-#endif
+    SANITIZE(Rx.Downlink, RX_DOWNLINK_NUM, RX_DOWNLINK_AS_TX, RX_DOWNLINK_AS_TX);
+
+    SANITIZE(Rx.SerialOut2, RX_SERIAL_OUT2_NUM, RX_SERIAL_OUT2_OFF, RX_SERIAL_OUT2_OFF);
+    TST_NOTALLOWED(Rx_SerialOut2_allowed_mask, Rx.SerialOut2, RX_SERIAL_OUT2_OFF);
+    SANITIZE(Rx.SerialBaudrate2, SERIAL_BAUDRATE_NUM, SERIAL_BAUDRATE_115200, SERIAL_BAUDRATE_115200);
+
+    SANITIZE(Rx.Test, RX_TEST_NUM, RX_TEST_OFF, RX_TEST_OFF);
+
 
     //-- Spares and deprecated options:
     // should be 0xFF'ed
@@ -622,8 +593,6 @@ if (!only_rx) {
     for (uint8_t n = 0; n < sizeof(Setup.Common[config_id].spare)/sizeof(Setup.Common[config_id].spare[0]); n++) Setup.Common[config_id].spare[n] = 0xFF;
     for (uint8_t n = 0; n < sizeof(Setup.Tx[config_id].spare)/sizeof(Setup.Tx[config_id].spare[0]); n++) Setup.Tx[config_id].spare[n] = 0xFF;
     for (uint8_t n = 0; n < sizeof(Setup.Rx.spare)/sizeof(Setup.Rx.spare[0]); n++) Setup.Rx.spare[n] = 0xFF;
-    Setup.Rx.spare1 = 0xFF;
-    Setup.Rx.spare2 = 0xFF;
 }
 
 
@@ -1231,47 +1200,12 @@ bool doEEPROMwrite;
 
     doEEPROMwrite = false;
     if (Setup.Layout != SETUPLAYOUT) {
-        if (Setup.Layout < SETUPLAYOUT) {
-            // changes in L10401: TX_SERIAL_PORT_ENUM, SERIAL_BAUDRATE_ENUM
-            // was L10304 before
-            for (uint8_t id = 0; id < SETUP_CONFIG_NUM; id++) {
-                switch (Setup.Tx[id].SerialPort) {
-                case L10304_SERIAL_DESTINATION_SERIAL: Setup.Tx[id].SerialPort = TX_SERIAL_PORT_SERIAL; break;
-                case L10304_SERIAL_DESTINATION_SERIAL2:
-                    #ifdef USE_WIRELESS_BRIDGE
-                    Setup.Tx[id].SerialPort = TX_SERIAL_PORT_WIRELESS_BRIDGE;
-                    #else
-                    Setup.Tx[id].SerialPort = TX_SERIAL_PORT_SERIAL2;
-                    #endif
-                    break;
-                default:
-                    Setup.Tx[id].SerialPort = TX_SERIAL_PORT_SERIAL;
-                }
-
-                switch (Setup.Tx[id].SerialBaudrate) {
-                case L10304_SERIAL_BAUDRATE_57600: Setup.Tx[id].SerialBaudrate = SERIAL_BAUDRATE_57600; break;
-                case L10304_SERIAL_BAUDRATE_115200: Setup.Tx[id].SerialBaudrate = SERIAL_BAUDRATE_115200; break;
-                case L10304_SERIAL_BAUDRATE_230400: Setup.Tx[id].SerialBaudrate = SERIAL_BAUDRATE_230400; break;
-                default:
-                    Setup.Tx[id].SerialBaudrate = SERIAL_BAUDRATE_115200;
-                }
-
-                Setup.Tx[id].SerialBaudrate2 = SERIAL_BAUDRATE_115200;
-            }
-
-            switch (Setup.Rx.SerialBaudrate) {
-            case L10304_SERIAL_BAUDRATE_57600: Setup.Rx.SerialBaudrate = SERIAL_BAUDRATE_57600; break;
-            case L10304_SERIAL_BAUDRATE_115200: Setup.Rx.SerialBaudrate = SERIAL_BAUDRATE_115200; break;
-            case L10304_SERIAL_BAUDRATE_230400: Setup.Rx.SerialBaudrate = SERIAL_BAUDRATE_230400; break;
-            default:
-                Setup.Rx.SerialBaudrate = SERIAL_BAUDRATE_57600;
-            }
-
-        } else {
-            // ups, > 10401, should not happen
-            for (uint8_t id = 0; id < SETUP_CONFIG_NUM; id++) setup_default(id);
-            Setup._ConfigId = 0;
-        }
+        // the 2.0 layout shares nothing with the 1.0 one: start from the defaults; the bind phrase and
+        // the link key come from the image again (tlrs_bind_apply())
+        for (uint8_t id = 0; id < SETUP_CONFIG_NUM; id++) setup_default(id);
+        Setup._ConfigId = 0;
+        memset(Setup.BindStamp, 0xFF, 4);
+        memset(Setup.LinkKey, 0, sizeof(Setup.LinkKey));
         Setup.Layout = SETUPLAYOUT;
         doEEPROMwrite = true;
     }
@@ -1292,11 +1226,6 @@ bool doEEPROMwrite;
 #ifdef DEVICE_IS_TRANSMITTER
     if (Setup._ConfigId >= SETUP_CONFIG_NUM) Setup._ConfigId = 0;
 
-    // ensure that all config id's have the same channel_source
-    // otherwise it can be very confusing concerning how to communicate with the module
-    for (uint8_t id = 0; id < SETUP_CONFIG_NUM; id++) {
-        Setup.Tx[id].ChannelsSource = Setup.Tx[Setup._ConfigId].ChannelsSource;
-    }
 #else // DEVICE_IS_RECEIVER
     Setup._ConfigId = 0;
 #endif

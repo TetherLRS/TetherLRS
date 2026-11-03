@@ -40,8 +40,8 @@ extern tStats stats;
 // Bind Class
 //-------------------------------------------------------
 
-#define BIND_SIGNATURE_TX_STR     "mLRS\x01\x02\x03\x04"
-#define BIND_SIGNATURE_RX_STR     "mLRS\x04\x03\x02\x01"
+#define BIND_SIGNATURE_TX_STR     "TLRS\x01\x02\x03\x04"
+#define BIND_SIGNATURE_RX_STR     "TLRS\x04\x03\x02\x01"
 #define BIND_BUTTON_DEBOUNCE_MS   50
 #define BIND_BUTTON_TMO_MS        4000
 
@@ -303,6 +303,13 @@ void tBindBase::do_transmit(uint8_t antenna)
     txBindFrame.Region = Setup.Common[Config.ConfigId].Region;
     txBindFrame.DynPower = Setup.Common[Config.ConfigId].DynPower;
 
+    txBindFrame.LinkSplit = Setup.Common[Config.ConfigId].LinkSplit;
+    txBindFrame.RadioScheme = Setup.Common[Config.ConfigId].RadioScheme;
+    txBindFrame.CustomFreqKHz = Setup.Common[Config.ConfigId].CustomFreqKHz;
+    txBindFrame.CustomSpanKHz = Setup.Common[Config.ConfigId].CustomSpanKHz;
+    txBindFrame.CustomBw = Setup.Common[Config.ConfigId].CustomBw;
+    txBindFrame.CustomLbt = Setup.Common[Config.ConfigId].CustomLbt;
+    txBindFrame.CustomPowerMaxDbm = Setup.Common[Config.ConfigId].CustomPowerMaxDbm;
     memcpy(txBindFrame.tx_uid, Config.Uid, 12); // send own uid to receiver // must both be 12 bytes
     txBindFrame.tx_random = Config.BindRandom;  // send own random to receiver
     Setup.tx_random[Config.ConfigId] = Config.BindRandom; // store the used random

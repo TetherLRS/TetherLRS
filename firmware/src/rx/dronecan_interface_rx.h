@@ -146,8 +146,6 @@ void tRxDroneCan::Init(uint8_t serial_port)
 {
     tick_1Hz = 0;
     node_status_transfer_id = 0;
-    rc_input.transfer_id = 0;
-    rc_input.tlast_ms = 0;
     node_id_allocation.transfer_id = 0;
     node_id_allocation.send_next_request_at_ms = 0;
     node_id_allocation.unique_id_offset = 0;
@@ -336,125 +334,6 @@ DBG_DC(
     dbg.puts(" tec: ");dbg.puts(utoBCD_s(dc_stats.tec_count));
     dbg.puts(" rec: ");dbg.puts(utoBCD_s(dc_stats.rec_count));
 )
-}
-
-
-//-------------------------------------------------------
-// SendRcData
-//-------------------------------------------------------
-
-// rc_out is the rc data stored in out class
-// so after handling of channel order and failsafes by out class.
-void tRxDroneCan::SendRcData(tRcData* const rc_out, bool failsafe)
-{
-    if (!id_is_allcoated()) return;
-
-    uint32_t tnow_ms = millis32();
-    if ((tnow_ms - rc_input.tlast_ms) < 19) return; // don't send too fast, DroneCAN is not for racing ...
-    rc_input.tlast_ms = tnow_ms;
-
-    uint8_t failsafe_mode = Setup.Rx.FailsafeMode;
-    if (failsafe) {
-        switch (failsafe_mode) {
-        case FAILSAFE_MODE_NO_SIGNAL:
-            // do not output anything, so jump out
-            return;
-        case FAILSAFE_MODE_CH1CH4_CENTER:
-            // in this mode do not report bad signal
-            failsafe = false;
-            break;
-        }
-    }
-
-    _p.rc_input.id = 0;
-    _p.rc_input.status = 0;
-    if (failsafe) _p.rc_input.status |= DRONECAN_SENSORS_RC_RCINPUT_STATUS_FAILSAFE;
-
-    // this message's quality is used by ArduPilot for setting rssi (not LQ)
-    // it goes from 0 ... 255
-    // so we use the same conversion as in e.g. RADIO_STATUS, so that ArduPilot shows us (nearly) the same value
-    // 6.Feb.2026: message has changed to allow more stats in round-robin
-    _p.rc_input.quality = 0;
-    if (connected()) {
-        if (mavlink.autopilot.HasDroneCanExtendedRcStats()) {  // 7.Feb.2026: not yet in AP 4.7, but DSDL is, so let's do it
-            // send LQ, RSSI_DBM, SNR round robin
-            static uint8_t slot = UINT8_MAX;
-            INCc(slot, 3);
-            if (slot == 1) { // LQ and active antenna
-                _p.rc_input.quality = stats.GetLQ_rc();
-                if (stats.last_antenna == ANTENNA_2) _p.rc_input.quality |= 0x80;
-                _p.rc_input.status |= DRONECAN_SENSORS_RC_RCINPUT_QUALITY_TYPE_LQ_ACTIVE_ANTENNA;
-            } else
-            if (slot == 2) { // SNR or TX_POWER
-                static int8_t power_dbm_last = 125;
-                static uint32_t tlast_ms = 0;
-                uint32_t tnow_ms = millis32();
-                int8_t power_dbm = sx.RfPower_dbm();
-                if ((tnow_ms - tlast_ms > 2500) || (power_dbm != power_dbm_last)) { // tx power every 2.5 sec or when changed
-                    tlast_ms = tnow_ms;
-                    power_dbm_last = power_dbm;
-                    _p.rc_input.quality = dronecan_cvt_power(power_dbm);
-                    _p.rc_input.status |= DRONECAN_SENSORS_RC_RCINPUT_QUALITY_TYPE_TX_POWER;
-                } else {
-                    _p.rc_input.quality = 128 + stats.GetLastSnr(); // that's the way to handle +- values
-                    _p.rc_input.status |= DRONECAN_SENSORS_RC_RCINPUT_QUALITY_TYPE_SNR;
-                }
-            } else { // slot 0: RSSI_DBM
-                _p.rc_input.quality = crsf_cvt_rssi_rx(stats.GetLastRssi());
-                _p.rc_input.status |= DRONECAN_SENSORS_RC_RCINPUT_QUALITY_TYPE_RSSI_DBM;
-            }
-        } else {
-            // just send RSSI
-            _p.rc_input.quality = rssi_i8_to_ap(stats.GetLastRssi());
-        }
-        _p.rc_input.status |= DRONECAN_SENSORS_RC_RCINPUT_STATUS_QUALITY_VALID;
-    }
-
-    _p.rc_input.rcin.len = (rc_out->do_32channels) ? RC_DATA_LEN : 16;
-    if (_p.rc_input.rcin.len > 32) _p.rc_input.rcin.len = 32; // should not happen, but play it safe
-    for (uint8_t i = 0; i < _p.rc_input.rcin.len; i++) {
-        // to get the same as mavlink rc we have
-        // pwm = [ (rc-1024)*15/4 ] * 5/32 + 1500 = (rc - 1024) * 75 / 128 + 1500
-        // in order to get the full range we x8 so we can add +1 to the multiplier
-        _p.rc_input.rcin.data[i] = (((int32_t)(rc_out->ch[i]) - 1024) * 601) / 1024 + 1500;
-    }
-
-    // TAO needs to be disabled for FD frame
-    // receive isr can flip FD status, but both encode() and Broadcast() must use same value
-    // hence read into variable, before calling them
-    bool canfd = dc_hal_is_canfd();
-    uint16_t len = dronecan_sensors_rc_RCInput_encode(&_p.rc_input, _buf, !canfd);
-
-    canardBroadcast(
-        &canard,
-        DRONECAN_SENSORS_RC_RCINPUT_SIGNATURE,
-        DRONECAN_SENSORS_RC_RCINPUT_ID,
-        &rc_input.transfer_id,
-        CANARD_TRANSFER_PRIORITY_HIGH,
-        _buf,
-        len,
-        canfd);
-
-#if 0
-    _p.flex_debug.id = DRONECAN_PROTOCOL_FLEXDEBUG_MLRS_RESERVE_START; // we 8mLRS) got this officially
-    memset(_p.flex_debug.u8.data, 0, 255);
-
-    static uint8_t cnt = 0;
-    _p.flex_debug.u8.data[0] = cnt++; // currently just something to test
-    _p.flex_debug.u8.len = 1;
-
-    len = dronecan_protocol_FlexDebug_encode(&_p.flex_debug, _buf, !canfd);
-
-    canardBroadcast(
-        &canard,
-        DRONECAN_PROTOCOL_FLEXDEBUG_SIGNATURE,
-        DRONECAN_PROTOCOL_FLEXDEBUG_ID,
-        &flex_debug.transfer_id,
-        CANARD_TRANSFER_PRIORITY_MEDIUM,
-        _buf,
-        len,
-        canfd);
-#endif
 }
 
 

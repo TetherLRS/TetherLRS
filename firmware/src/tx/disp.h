@@ -778,7 +778,7 @@ int8_t power;
     gdisp_puts(s);
     gdisp_setcurX(60 + 11);
     if (connected()) {
-        stoBCDstr(stats.GetReceivedLQ_rc(), s);
+        stoBCDstr(stats.GetReceivedLQ_link(), s);
         gdisp_puts(s);
     }
 

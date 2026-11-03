@@ -14,9 +14,9 @@
 
 // TetherLRS: major * 10000 + minor * 100 + patch; a patch of 51 to 63 is release candidate 1 to 13 of major.minor
 // (version_to_str), so the 6 bits the link carries it in show it as such on the other end too
-#define VERSION             10000 // leading zero makes it octal!
-#define VERSIONONLYSTR      "v1.0"
-#define SETUPLAYOUT         10401 // this should be changed then Setup struct and/or serial changes
+#define VERSION             20000 // leading zero makes it octal!
+#define VERSIONONLYSTR      "v2.0-dev"
+#define SETUPLAYOUT         20000 // this should be changed then Setup struct and/or serial changes
 
 // Note: The setup layout version does not need to be changed when parameter option lists
 // are merely extended. This is handled gracefully by sanitize.
@@ -54,11 +54,8 @@
 #define SETUP_TX_SERIAL_PORT            0 // 0: serial port, 1: wbridge (BT/ESP) port, 2: serial2, 3: com
 #define SETUP_TX_SERIAL_PORT2           0 // 0: none, 1: serial port, 2: wbridge (BT/ESP) port, 3: serial2
 
-#define SETUP_TX_CHANNELS_SOURCE        1 // 0: none, 1: Crsf (pin5), 2: In (In or pin1)
 
-#define SETUP_TX_CHANNEL_ORDER          CHANNEL_ORDER_AETR
 
-#define SETUP_TX_IN_MODE                0 // 0: IN_CONFIG_SBUS, 1: IN_CONFIG_SBUS_INVERTED
 
 #define SETUP_TX_SERIAL_BAUDRATE        1 // 0: 57600, 1: 115200, 2: 230400
 
@@ -72,11 +69,8 @@
 #define SETUP_TX_BUZZER                 0 // 0: off, 1: LP, 2: rxLQ
 
 
-#define SETUP_RX_CHANNEL_ORDER          CHANNEL_ORDER_AETR
 
-#define SETUP_RX_OUT_MODE               1 // 0: OUT_CONFIG_SBUS, 1: OUT_CONFIG_CRSF, 2: OUT_CONFIG_SBUS_INVERTED
 
-#define SETUP_RX_FAILSAFE_MODE          0 // 0: no signal 1: low throttle, 4: CH1-CH4 center signal
 
 #define SETUP_RX_SERIAL_PORT            0 // 0: serial, 1: can, 2: canfd
 
@@ -90,13 +84,10 @@
 
 #define SETUP_RX_MAVLINK_SYSTEM_ID      0 // 0: 51, 1: 52, 2: 53, 3: 54, 4: 55  // SiK uses 51, 68
 #define SETUP_RX_SEND_RADIO_STATUS      1 // 0: off, 1: ardu_1, 2: px4 aka "brad"
-#define SETUP_RX_SEND_RC_CHANNELS       0 // 0: off, 1: RC_CHANNEL_OVERRIDE, 2: RC_CHANNELS
-
-#define SETUP_RX_OUT_RSSI_CHANNEL       0 // 0: off, 5: CH5, 16: CH16
-#define SETUP_RX_OUT_LQ_CHANNEL         0 // 0: off, 5: CH5, 16: CH16
 
 
-#define BIND_PHRASE                     "mlrs.0" // string of 6 characters, allowed are 'a'-'z','0'-'9','_','-','#','.'
+
+#define BIND_PHRASE                     "tlrs.0" // string of 6 characters, allowed are 'a'-'z','0'-'9','_','-','#','.'
 
 #define SETUP_MODE                      MODE_50HZ
 //#define SETUP_MODE                      MODE_31HZ
@@ -110,7 +101,6 @@
 #define SETUP_REGION                    0 // 0: free, 1: EU
 #define SETUP_DYN_POWER                 1 // 0: off, 1: on, the power setting is then the ceiling
 
-#define TLRS_NO_RC                      // TetherLRS: no RC channels, so no RC and failsafe parameters
 
 
 //-------------------------------------------------------

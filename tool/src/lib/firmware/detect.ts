@@ -64,8 +64,8 @@ export function parseTail(tail: Uint8Array): Pick<Running, 'name' | 'role'> | un
 
 export const elrsVersion = (data: Uint8Array) => /\b(\d+\.\d+\.\d+) \([0-9a-f]{6}\)/.exec(text(data))?.[1];
 
-// mLRS's v1.4.05, TetherLRS's v1.0 and v1.0-RC1
-const VERSION = String.raw`v\d+\.\d+(?:\.\d+)?(?:-RC\d+)?`;
+// mLRS's v1.4.05, TetherLRS's v1.0, v1.0-RC1 and v2.0-dev
+const VERSION = String.raw`v\d+\.\d+(?:\.\d+)?(?:-(?:RC\d+|dev))?`;
 
 // done: only the TetherLRS marker settles it before all the data is read
 export function parseStrings(data: Uint8Array, done = true): Running | undefined {

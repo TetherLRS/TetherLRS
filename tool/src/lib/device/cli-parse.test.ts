@@ -20,12 +20,12 @@ describe('parameter lines, as cli.h print_param() writes them', () => {
     expect(parseParamLine('  Mode = 31 Hz [1]\r')).toMatchObject({ name: 'Mode', group: 'common', kind: 'list', text: '31 Hz', index: 1, unchangeable: false });
   });
   it('indices from 10 up come as the characters after 9', () => {
-    expect(parseParamLine('  Tx Power Sw Ch = 14 [:]')?.index).toBe(10);
-    expect(parseParamLine('  Rx Out LQ Ch = 16 [<]')?.index).toBe(12);
+    expect(parseParamLine('  Tx Power = 14 [:]')?.index).toBe(10);
+    expect(parseParamLine('  Rx Power = 16 [<]')?.index).toBe(12);
   });
   it('unchangeable and unavailable', () => {
     expect(parseParamLine('  Tx Diversity = antenna1 [1](unchangeable)')).toMatchObject({ group: 'tx', index: 1, unchangeable: true });
-    expect(parseParamLine('  Tx In Mode = - (unavailable)')).toMatchObject({ unavailable: true, text: '' });
+    expect(parseParamLine('  Tx Buzzer = - (unavailable)')).toMatchObject({ unavailable: true, text: '' });
   });
   it('bind phrase, with the 2.4 GHz except note dropped', () => {
     expect(parseParamLine('  Bind Phrase = mlrs.0 /e6')).toMatchObject({ kind: 'phrase', text: 'mlrs.0' });

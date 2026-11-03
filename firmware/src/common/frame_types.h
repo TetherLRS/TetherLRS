@@ -41,7 +41,7 @@ typedef struct
     uint8_t seq_no;
     uint8_t ack;
     int8_t rssi;
-    uint8_t LQ_rc; // that's the LQ we want to report to the world
+    uint8_t LQ_link; // the Rx's link LQ, what the world gets to see
     uint8_t LQ_serial;
     uint8_t antenna;
     uint8_t transmit_antenna;
@@ -54,12 +54,10 @@ typedef struct
 
 
 #define FRAME_TX_RX_HEADER_LEN  7
-#define FRAME_TX_RC1_V1_LEN     6
-// not used #define FRAME_TX_RC2_V1_LEN   10
-#define FRAME_TX_RC1_V2_LEN     11
-// not used #define FRAME_TX_RC2_V2_LEN   5
-#define FRAME_TX_PAYLOAD_LEN    64 // 82 - 10-6(rcdata) - 2(crc) = 64
+// TetherLRS carries no RC channels: both frames are header, data and CRC
+#define FRAME_TX_PAYLOAD_LEN    82
 #define FRAME_RX_PAYLOAD_LEN    82
+#define FRAME_CMD_PAYLOAD_LEN   64 // command frames fit the shortest frame of every Link Split
 
 
 PACKED(
@@ -68,7 +66,7 @@ typedef struct
     uint32_t seq_no : 3;
     uint32_t ack : 1;
     uint32_t frame_type : 3;
-    uint32_t is_32channels : 1;
+    uint32_t spare1 : 1; // was is_32channels
     uint32_t antenna : 1;
     uint32_t rssi_u7 : 7;
     uint32_t fhss_index_band : 1; // fhss index is for band 0 or 1
@@ -90,7 +88,7 @@ typedef struct
     uint32_t power_hi : 1; // TetherLRS: the Rx's power index + 1, 0 = not known (an mLRS receiver); with power_lo
     uint32_t antenna : 1;
     uint32_t rssi_u7 : 7;
-    uint32_t LQ_rc : 7; // available only for Rx->Tx frame, not for Tx->Rx
+    uint32_t LQ_link : 7; // available only for Rx->Tx frame, not for Tx->Rx
     uint32_t LQ_serial : 7;
     uint32_t transmit_antenna : 1;
     uint32_t power_lo : 2;
@@ -100,72 +98,12 @@ typedef struct
 
 //-- Tx Frame ----------
 
-// for reminder:
-// 11 bit: 1 .. 172 .. 1024 .. 1876 .. 2047
-//         pwm = ((int32_t)x - 1024) * 500 / 852 + 1500 (ca= x * 500 / 852 + 900, is slightly different)
-//             = 899us .. 1000us .. 1500us .. 2000us .. 2100us
-//             = -120% .. -100% .. 0% .. 100% .. 120%
-// 9-pos:  0 .. 4 .. 8
-//         see theory of operation
-//         rc  =   1,  359,  581,  802, 1024, 1245, 1467, 1688, 2047
-//         pwm = 900, 1109, 1240, 1369, 1500, 1629, 1759, 1889, 2100
-// 3-pos:  0 .. 1 .. 2
-//         rc  = 0, 1024, 2047
-//         pwm = 899us .. 1500us .. 2100us
-
-PACKED(
-typedef struct
-{
-    uint16_t ch0  : 11; // 0 .. 1024 .. 2047, 11 bits
-    uint16_t ch1  : 11;
-    uint16_t ch2  : 11;
-    uint16_t ch3  : 11;
-    uint16_t ch12 :  2; // 0 .. 1 .. 2, 2 bits, 3-way
-    uint16_t ch13 :  2;
-    uint16_t crc1;
-    uint16_t ch4  : 11; // 0 .. 1024 .. 2047, 11 bits
-    uint16_t ch5  : 11;
-    uint16_t ch6  : 11;
-    uint16_t ch7  : 11;
-    uint16_t ch14 :  2; // 0 .. 1 .. 2, 2 bits, 3-way
-    uint16_t ch15 :  2;
-    uint8_t ch8;        // 0 .. 128 .. 255, 8 bits
-    uint8_t ch9;        // 0 .. 128 .. 255, 8 bits
-    uint8_t ch10;       // 0 .. 128 .. 255, 8 bits
-    uint8_t ch11;       // 0 .. 128 .. 255, 8 bits
-}) tFrameRcDataV1; // 6 bytes rc1 + 2 bytes crc1 + 10 bytes rc2 = 18 bytes
-
-
-PACKED(
-typedef struct
-{
-    uint16_t ch0  : 11; // 0 .. 1024 .. 2047, 11 bits
-    uint16_t ch1  : 11;
-    uint16_t ch2  : 11;
-    uint16_t ch3  : 11;
-    uint16_t ch4  : 11;
-    uint16_t ch5  : 11;
-    uint16_t ch6  : 11;
-    uint16_t ch7  : 11;
-    uint16_t crc1;
-    uint8_t ch8_12;     // 0 .. 128 .. 255, 8 bits.  interlaced with 1:2
-    uint8_t ch9_13;     // 0 .. 128 .. 255, 8 bits
-    uint8_t ch10_14;    // 0 .. 128 .. 255, 8 bits
-    uint8_t ch11_15;    // 0 .. 128 .. 255, 8 bits
-    uint8_t ch16x_20x_24x_28x; // 1x 9-pos and 3x 3-pos, interlaced with 1:4, = ch16 * 1 + ch20 * 9 + ch24 * 9*3 + ch28 * 9*3*3
-}) tFrameRcDataV2; // 11 bytes rc1 + 2 bytes crc1 + 5 bytes rc2 interlaced = 18 bytes
-
-
 PACKED(
 typedef struct
 {
     uint16_t sync_word; // 2 bytes
     tTxFrameStatus status; // 5 bytes
-    PACKED(union{
-        tFrameRcDataV1 rcV1; // 6 bytes + 2 bytes + 10 bytes
-        tFrameRcDataV2 rcV2; // 11 bytes + 2 bytes + 5 bytes
-    });
-    uint8_t payload[64]; // = FRAME_TX_PAYLOAD_LEN
+    uint8_t payload[82]; // = FRAME_TX_PAYLOAD_LEN
     uint16_t crc;
 }) tTxFrame; // 91 bytes
 
@@ -204,10 +142,17 @@ typedef struct
     uint8_t Mode : 4;
     uint8_t Ortho : 4;
     uint8_t Privacy : 4;
-    uint8_t Region; // 0 = free from an mLRS transmitter
-    uint8_t DynPower; // 0 = off from an mLRS transmitter
+    uint8_t Region;
+    uint8_t DynPower;
+    uint8_t LinkSplit;
+    uint8_t RadioScheme;
+    uint32_t CustomFreqKHz;
+    uint16_t CustomSpanKHz;
+    uint8_t CustomBw;
+    uint8_t CustomLbt;
+    uint8_t CustomPowerMaxDbm;
 
-    uint8_t spare3[49];
+    uint8_t spare3[38];
 
     uint8_t tx_uid[12]; // 12 bytes = 96 bits
     uint64_t tx_random; //  8 bytes = 64 bits
@@ -231,7 +176,9 @@ typedef struct
     uint32_t firmware_version;
     char device_name_20[20];
 
-    uint8_t spare3[43];
+    uint8_t radio_count; // radios this receiver has, 1 or 2
+    uint8_t radio_bands; // bit per SX_FHSS_FREQUENCY_BAND_ENUM it can run
+    uint8_t spare3[41];
 
     uint8_t rx_uid[12]; // 12 bytes = 96 bits
 
@@ -273,100 +220,78 @@ typedef struct
 {
     uint8_t Power : 4;
     uint8_t Diversity : 4;
-    uint8_t ChannelOrder : 4;
-    uint8_t OutMode : 4;
-    uint8_t OutRssiChannelMode : 4;
-    uint8_t FailsafeMode : 4;
     uint8_t SerialBaudrate : 4;
     uint8_t SerialLinkMode : 4;
     uint8_t SendRadioStatus : 4;
-    uint8_t spare : 4;
-    uint8_t SendRcChannels : 4;
-    uint8_t spare2 : 4;
-    uint8_t OutLqChannelMode : 4;
-    uint8_t PowerSwitchChannel : 4;
     uint8_t SerialPort : 4;
     uint8_t MavlinkSystemID : 4;
-
-    uint8_t MavCoalesce; // 0 from an mLRS transmitter
-    uint8_t spare3[2];
-
-    int8_t FailsafeOutChannelValues_Ch1_Ch12[12]; // -120 .. +120
-    uint8_t FailsafeOutChannelValue_Ch13 : 2;
-    uint8_t FailsafeOutChannelValue_Ch14 : 2;
-    uint8_t FailsafeOutChannelValue_Ch15 : 2;
-    uint8_t FailsafeOutChannelValue_Ch16 : 2;
-}) tCmdFrameRxParameters; // 24 bytes
+    uint8_t MavCoalesce : 4;
+    uint8_t Downlink : 4;
+    uint8_t SerialOut2 : 4;
+    uint8_t SerialBaudrate2 : 4;
+    uint8_t Test : 4;
+    uint8_t spare[2];
+}) tCmdFrameRxParameters; // 8 bytes
 
 
 // send from Rx as response to commands GET_RX_SETUPDATA, SET_RX_PARAMS, GET_RX_SETUPDATA_WRELOAD, GET_RX_SETUPDATA_STARTUP
-// Note: This structure CANNOT be shortened by 12 bytes for nonce and MAC, and is thus not encryptable.
+// Note: not encrypted, it carries no secret; 64 bytes so that it fits every link split
 PACKED(
 typedef struct
 {
     uint8_t cmd;
     uint8_t spare;
-
     // rx setup meta data 1
     uint16_t firmware_version_u16; // 16.64.64
     uint16_t setup_layout_u16; // 16.64.64
     char device_name_20[20];
     int8_t actual_power_dbm;
     uint8_t actual_diversity;
-
     // rx parameter values
     // BindPhrase, FrequencyBand, Mode must be equal to Tx, otherwise Rx wouldn't connect, so don't have to be send
-    tCmdFrameRxParameters RxParams; // 24 bytes
-
+    tCmdFrameRxParameters RxParams; // 8 bytes
     // rx setup meta data 2, parameter metadata
-    uint16_t FrequencyBand_allowed_mask; // TetherLRS fills these two, mLRS sends 0
+    uint16_t FrequencyBand_allowed_mask;
     uint8_t Mode_allowed_mask;
-    uint8_t Ortho_allowed_mask_XXX; // TODO
-    uint8_t Privacy_allowed_mask_XXX; // TODO
-
     uint8_t spare2;
-
     int16_t Power_list[8];
     uint8_t Diversity_allowed_mask;
-    uint8_t OutMode_allowed_mask;
-    uint8_t SerialPort_allowed_mask; // was uint8_t __Buzzer_allowed_mask; // deprecated
-
-    uint8_t spare3[5];
-}) tRxCmdFrameRxSetupData; // 82 bytes
+    uint8_t SerialPort_allowed_mask;
+    uint8_t SerialOut2_allowed_mask;
+    uint8_t radio_count; // radios the receiver has, 1 or 2
+    uint8_t radio_bands; // bit per SX_FHSS_FREQUENCY_BAND_ENUM it can run
+    uint8_t spare3[3];
+}) tRxCmdFrameRxSetupData; // 64 bytes
 
 
 // send from Tx to do SET_RX_PARAMS
-// Note: The strange arrangement is to allow for encryption.
-// Unfortunately, the version and layout fields were placed at the end of the structure.
-// This prevents reserving the up to 12 bytes required for nonce and MAC.
-// Hence, on the Tx side these data are copied into the copy fields, and on the Rx side
-// are moved for privacy > 0 back to the end. This maintains backwards compatibility.
+// Note: encryptable, the last 12 bytes are the room for nonce and MAC
 PACKED(
 typedef struct
 {
     uint8_t cmd;
     uint8_t spare;
-
     // rx parameter values
     char BindPhrase_6[6];
     uint8_t FrequencyBand : 4;
     uint8_t Mode : 4;
     uint8_t Ortho : 4;
     uint8_t Privacy : 4;
-    uint8_t Region; // 0 = free from an mLRS transmitter
-    uint8_t DynPower; // 0 = off from an mLRS transmitter
-
-    tCmdFrameRxParameters RxParams; // 24 bytes
-
-    uint8_t spare3[12];
-
-    uint16_t tx_firmware_version_u16_new; // 16.64.64
-    uint16_t tx_setup_layout_u16_new; // 16.64.64
-
+    uint8_t Region;
+    uint8_t DynPower;
+    uint8_t LinkSplit;
+    uint8_t RadioScheme;
+    tCmdFrameRxParameters RxParams; // 8 bytes
+    uint32_t CustomFreqKHz;
+    uint16_t CustomSpanKHz;
+    uint8_t CustomBw;
+    uint8_t CustomLbt;
+    uint8_t CustomPowerMaxDbm;
+    uint16_t tx_firmware_version_u16; // 16.64.64
+    uint16_t tx_setup_layout_u16; // 16.64.64
+    uint8_t spare3[17];
     //--
-    uint8_t reserved_for_crypto[8]; // do not use
-    uint16_t tx_firmware_version_u16_old; // 16.64.64
-    uint16_t tx_setup_layout_u16_old; // 16.64.64
+    uint8_t reserved_for_crypto[12]; // do not use
 }) tTxCmdFrameRxParams; // 64 bytes
 
 

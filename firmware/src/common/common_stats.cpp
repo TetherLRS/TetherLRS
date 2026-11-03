@@ -18,9 +18,6 @@
 void tStats::Init(uint8_t _maverage_period, uint16_t _frame_rate_hz, uint16_t _frame_rate_ms)
 {
     frames_received.Init(_frame_rate_hz);
-#ifdef DEVICE_IS_RECEIVER
-    valid_crc1_received.Init(_frame_rate_hz);
-#endif
     valid_frames_received.Init(_frame_rate_hz);
     serial_data_transmitted.Init(_frame_rate_hz);
     serial_data_received.Init(_frame_rate_hz);
@@ -33,7 +30,6 @@ void tStats::Init(uint8_t _maverage_period, uint16_t _frame_rate_hz, uint16_t _f
 
     Clear();
 
-//    LQma_valid_crc1.Init(_maverage_period);
 //    LQma_valid.Init(_maverage_period);
 //    LQma_received.Init(_maverage_period);
 }
@@ -50,7 +46,7 @@ void tStats::Clear(void) // called then not connected
 
     received_rssi = RSSI_INVALID;
 #ifdef DEVICE_IS_TRANSMITTER
-    received_LQ_rc = 0; //UINT8_MAX;
+    received_LQ_link = 0;
     received_power_code = 0;
 #endif
     received_LQ_serial = 0; //UINT8_MAX;
@@ -73,9 +69,6 @@ void tStats::JustConnected(void) // called upon first connection
 void tStats::Update1Hz(void)
 {
     frames_received.Update1Hz();
-#ifdef DEVICE_IS_RECEIVER
-    valid_crc1_received.Update1Hz();
-#endif
     valid_frames_received.Update1Hz();
     serial_data_transmitted.Update1Hz();
     serial_data_received.Update1Hz();
@@ -92,7 +85,6 @@ void tStats::Update1Hz(void)
 
 void tStats::Next(void)
 {
-//    LQma_valid_crc1.Next();
 //    LQma_valid.Next();
 //    LQma_received.Next();
 }
@@ -104,16 +96,6 @@ void tStats::doFrameReceived(void)
 
 //    LQma_received.Set();
 }
-
-
-#ifdef DEVICE_IS_RECEIVER
-void tStats::doValidCrc1FrameReceived(void)
-{
-    valid_crc1_received.Inc();
-
-//    LQma_valid_crc1.Set();
-}
-#endif
 
 
 void tStats::doValidFrameReceived(void)
@@ -159,11 +141,11 @@ int8_t tStats::GetLastSnr(void)
 
 
 #ifdef DEVICE_IS_RECEIVER
-uint8_t tStats::GetLQ_rc(void)
+uint8_t tStats::GetLQ_link(void)
 {
     if (!connected()) return 0;
 
-    uint8_t LQ = valid_crc1_received.GetLQ();
+    uint8_t LQ = valid_frames_received.GetLQ();
     if (LQ == 0) return 1;
     return LQ;
 }
@@ -185,11 +167,11 @@ uint8_t tStats::GetLQ_serial(void)
 
 
 #ifdef DEVICE_IS_TRANSMITTER
-uint8_t tStats::GetReceivedLQ_rc(void)
+uint8_t tStats::GetReceivedLQ_link(void)
 {
     if (just_connected_cnt) return 100; // when just connected, report back 100% for two secs
 
-    return received_LQ_rc;
+    return received_LQ_link;
 }
 #endif
 

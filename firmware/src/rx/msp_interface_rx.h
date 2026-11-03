@@ -36,7 +36,6 @@ class tRxMsp
   public:
     void Init(void);
     void Do(void);
-    void SendRcData(tRcData* const rc_out, bool frame_missed, bool failsafe);
     void FrameLost(void);
 
     void putc(char c);
@@ -57,21 +56,15 @@ class tRxMsp
     tFifo<char,1024> fifo_link_out; // needs to be at least ??
     void parse_serial_in_link_out(void);
 
-    // to inject MSP_SET_RAW_RC, MSP2_COMMON_SET_MSP_RC_LINK_STATS, MSP2_COMMON_SET_MSP_RC_INFO
-    tMspSetRawRc rc_channels; // holds the rc data in MSP format
-    tMspInavSetAuxRc_16x2bit rc_channels_16to32;
-    bool inject_rc_channels;
+    // to inject MSP2_COMMON_SET_MSP_RC_LINK_STATS, MSP2_COMMON_SET_MSP_RC_INFO
     bool inject_rc_link_stats;
     bool inject_rc_info;
     bool rc_link_stats_disabled;
     bool rc_info_disabled;
-    uint32_t rc_channels_tlast_ms;
-    bool rc_channels_do_32;
     uint32_t rc_link_stats_tlast_ms;
     uint32_t rc_info_tlast_ms = 0;
     int8_t rc_info_power_dbm_last = 125;
 
-    void send_rc_channels(void);
     void send_rc_link_stats(void);
     void send_rc_info(void);
     void send_request(uint16_t function);
@@ -127,13 +120,10 @@ void tRxMsp::Init(void)
     status_ser_in = {};
     fifo_link_out.Init();
 
-    inject_rc_channels = false;
     inject_rc_link_stats = false;
     inject_rc_info = false;
     rc_link_stats_disabled = false;
     rc_info_disabled = false;
-    rc_channels_tlast_ms = 0;
-    rc_channels_do_32 = false;
     rc_link_stats_tlast_ms = 0;
     rc_info_tlast_ms = 0;
     rc_info_power_dbm_last = 125;
@@ -151,59 +141,6 @@ void tRxMsp::Init(void)
 }
 
 
-// rc_out is the rc data stored in out class
-// so after handling of channel order and failsafes by out class.
-void tRxMsp::SendRcData(tRcData* const rc_out, bool frame_missed, bool failsafe)
-{
-    if (Setup.Rx.SendRcChannels == SEND_RC_CHANNELS_OFF) return;
-
-    uint8_t failsafe_mode = Setup.Rx.FailsafeMode;
-
-    if (failsafe) {
-        switch (failsafe_mode) {
-        case FAILSAFE_MODE_NO_SIGNAL:
-            // do not output anything, so jump out
-            return;
-        case FAILSAFE_MODE_CH1CH4_CENTER:
-            // in this mode do not report bad signal
-            break;
-        }
-    }
-
-    for (uint8_t i = 0; i < 16; i++) {
-        rc_channels.rc[i] = rc_to_mavlink(rc_out->ch[i]);
-    }
-
-    if (rc_out->do_32channels) {
-        // Note: the 9-pos channels CH16-CH20 are broken down to three positions !
-        #define MSP_RC_FROM_2BIT(rc)  (rc >= 1500) ? 3 : ((rc <= 548) ? 1 : 2) // 1 .. 2 .. 3, bits, 3-way
-        rc_channels_do_32 = true;
-        rc_channels_16to32.resolutionMode = 0;
-        rc_channels_16to32.startChannel = 16;
-        rc_channels_16to32.ch0 = MSP_RC_FROM_2BIT(rc_out->ch[16]);
-        rc_channels_16to32.ch1 = MSP_RC_FROM_2BIT(rc_out->ch[17]);
-        rc_channels_16to32.ch2 = MSP_RC_FROM_2BIT(rc_out->ch[18]);
-        rc_channels_16to32.ch3 = MSP_RC_FROM_2BIT(rc_out->ch[19]);
-        rc_channels_16to32.ch4 = MSP_RC_FROM_2BIT(rc_out->ch[20]);
-        rc_channels_16to32.ch5 = MSP_RC_FROM_2BIT(rc_out->ch[21]);
-        rc_channels_16to32.ch6 = MSP_RC_FROM_2BIT(rc_out->ch[22]);
-        rc_channels_16to32.ch7 = MSP_RC_FROM_2BIT(rc_out->ch[23]);
-        rc_channels_16to32.ch8 = MSP_RC_FROM_2BIT(rc_out->ch[24]);
-        rc_channels_16to32.ch9 = MSP_RC_FROM_2BIT(rc_out->ch[25]);
-        rc_channels_16to32.ch10 = MSP_RC_FROM_2BIT(rc_out->ch[26]);
-        rc_channels_16to32.ch11 = MSP_RC_FROM_2BIT(rc_out->ch[27]);
-        rc_channels_16to32.ch12 = MSP_RC_FROM_2BIT(rc_out->ch[28]);
-        rc_channels_16to32.ch13 = MSP_RC_FROM_2BIT(rc_out->ch[29]);
-        rc_channels_16to32.ch14 = MSP_RC_FROM_2BIT(rc_out->ch[30]);
-        rc_channels_16to32.ch15 = MSP_RC_FROM_2BIT(rc_out->ch[31]);
-    }
-
-    inject_rc_channels = true;
-    inject_rc_link_stats = !rc_link_stats_disabled; // true if not disabled
-    inject_rc_info = !rc_info_disabled; // true if not disabled
-}
-
-
 void tRxMsp::Do(void)
 {
     if (!connected()) {
@@ -216,12 +153,10 @@ void tRxMsp::Do(void)
     // parse serial in -> link out
     parse_serial_in_link_out();
 
-    // inject radio rc channels
-
-    if (inject_rc_channels) { // give it priority // && serial.tx_is_empty()) // check available size!?
-        inject_rc_channels = false;
-        send_rc_channels();
-        return;
+    // the link stats and info, which rate themselves (200 ms, 2.5 s)
+    if (connected()) {
+        inject_rc_link_stats = !rc_link_stats_disabled;
+        inject_rc_info = !rc_info_disabled;
     }
 
     if (inject_rc_link_stats) {
@@ -459,36 +394,6 @@ void tRxMsp::send_request(uint16_t function)
 }
 
 
-void tRxMsp::send_rc_channels(void)
-{
-    uint32_t tnow_ms = millis32();
-    if ((tnow_ms - rc_channels_tlast_ms) < 19) return; // don't send too fast, MSP-RC is not for racing
-    rc_channels_tlast_ms = tnow_ms;
-
-    uint16_t len = msp_generate_v2_frame_buf(
-        _buf,
-        MSP_TYPE_REQUEST,
-        MSP_FLAG_SOURCE_ID_RC_LINK | MSP_FLAG_NO_RESPONSE, // avoid response message from flight controller
-        MSP_SET_RAW_RC,
-        (uint8_t*)&rc_channels,
-        MSP_SET_RAW_RC_LEN);
-
-    serial->putbuf(_buf, len);
-
-    if (!rc_channels_do_32) return;
-
-    len = msp_generate_v2_frame_buf(
-        _buf,
-        MSP_TYPE_REQUEST,
-        MSP_FLAG_SOURCE_ID_RC_LINK | MSP_FLAG_NO_RESPONSE, // avoid response message from flight controller
-        MSP2_INAV_SET_AUX_RC,
-        (uint8_t*)&rc_channels_16to32,
-        MSP_INAV_SET_AUX_RC_16X2BIT);
-
-    serial->putbuf(_buf, len);
-}
-
-
 void tRxMsp::send_rc_link_stats(void)
 {
 tMspCommonSetMspRcLinkStats payload;
@@ -502,7 +407,7 @@ tMspCommonSetMspRcLinkStats payload;
     payload.uplink_rssi_perc = crsf_cvt_rssi_percent(stats.GetLastRssi(), sx.ReceiverSensitivity_dbm());
     payload.uplink_rssi = crsf_cvt_rssi_rx(stats.GetLastRssi());
     payload.downlink_link_quality = stats.received_LQ_serial;
-    payload.uplink_link_quality = stats.GetLQ_rc();
+    payload.uplink_link_quality = stats.GetLQ_link();
     payload.uplink_snr = stats.GetLastSnr();
 
     uint16_t len = msp_generate_v2_frame_buf(

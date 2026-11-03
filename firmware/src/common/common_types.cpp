@@ -81,88 +81,8 @@ uint8_t rssi_i8_to_mavradio(int8_t rssi_i8, bool connected)
 
 
 // convert rssi to internal rc range, then further converted to output, -120 ... -50 -> 172 .. 1877
-uint16_t rssi_i8_to_rc(int8_t rssi_i8)
-{
-    if (rssi_i8 == RSSI_INVALID) return 0;
-    if (rssi_i8 > -50) return 1877; // max value
-    if (rssi_i8 < -120) return 172; // min value
-
-    int32_t r = (int32_t)rssi_i8 - (-120);
-    constexpr int32_t m = (int32_t)(-50) - (-120);
-
-    return (r * 1705 + m/2) / m + 172;
-}
-
-
 // convert lq to internal rc range, then further converted to output, 0 ... 100 -> 172 .. 1877 = 1000 .. 2000 us
-uint16_t lq_to_rc(uint8_t lq)
-{
-    if (lq >= 100) return 1877; // max value
-
-    return ((uint32_t)lq * 1705 + 50) / 100 + 172;
-}
-
-
 //-- rc data
-
-uint16_t clip_rc(int32_t x)
-{
-    if (x <= 1) return 1;
-    if (x >= 2047) return 2047;
-    return x;
-}
-
-
-uint16_t rc_from_sbus(uint16_t sbus_ch)
-{
-    return clip_rc( (((int32_t)(sbus_ch) - 992) * 2047) / 1966 + 1024 );
-}
-
-
-uint16_t rc_from_crsf(uint16_t crsf_ch)
-{
-    return clip_rc( (((int32_t)(crsf_ch) - 992) * 2047) / 1966 + 1024 );
-}
-
-
-uint16_t rc_from_crsf_0x17_11bit(uint16_t crsf_ch)
-{
-    return clip_rc(crsf_ch);
-}
-
-
-uint16_t rc_to_sbus(uint16_t rc_ch)
-{
-    return (((int32_t)(rc_ch) - 1024) * 1920) / 2047 + 992;
-}
-
-
-uint16_t rc_to_crsf(uint16_t rc_ch)
-{
-    return (((int32_t)(rc_ch) - 1024) * 1920) / 2047 + 992;
-}
-
-
-uint16_t rc_to_crsf_0x17_11bit(uint16_t rc_ch)
-{
-    return rc_ch;
-}
-
-
-uint16_t rc_to_mavlink(uint16_t rc_ch)
-{
-    return (((int32_t)(rc_ch) - 1024) * 1200) / 2047 + 1500; // 1200 = 1920 * 5/8
-}
-
-
-int16_t rc_to_mavlink_13bcentered(uint16_t rc_ch)
-{
-//    return ((int32_t)(rc_ch) - 1024) * 4;
-    return (((int32_t)(rc_ch) - 1024) * 15) / 4; // let's mimic rc_to_mavlink()
-}
-
-
-//-- CRSF
 
 uint8_t crsf_cvt_power(int8_t power_dbm)
 {
@@ -375,14 +295,6 @@ const uint16_t power_table_dBm_to_mW[] = {
     1500, // 32 dBm
     2000, // 33 dBm
 };
-
-
-uint8_t dronecan_cvt_power(int8_t power_dbm)
-{
-    if (power_dbm < 0) return 0;
-    if (power_dbm > 31) return 250; // 1250 / 5;
-    return power_table_dBm_to_mW[power_dbm] / 5;
-}
 
 
 uint16_t cvt_power(int8_t power_dbm)

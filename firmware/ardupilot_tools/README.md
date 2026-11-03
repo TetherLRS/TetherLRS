@@ -1,21 +1,20 @@
-# mLRS - ArduPilot Tools #
+# TetherLRS - ArduPilot Tools #
 
 This folder contains a collection of scripts for use with ArduPilot systems.
 
 ## Link Statistics Logging: mlrs_mavlink_link_stats.lua
 
-This Lua script is intended to be installed on an ArduPilot flight controller. It logs extensive mLRS link statistics to the DataFlash log.
+This Lua script is intended to be installed on an ArduPilot flight controller. It logs the TetherLRS link statistics (the MLRS_RADIO_LINK_STATS and MLRS_RADIO_LINK_INFORMATION messages the receiver sends to ArduPilot 4.7 or later) to the DataFlash log.
 
-Works with mLRS v1.3.04 and later.
+Works with TetherLRS v2.0 and later, and with mLRS v1.3.04 and later.
 
 Installation:
 - set SCR_ENABLE = 1
 - copy the Lua script to the APM/SCRIPTS/ directory on the flight controller's microSD card
 - restart the flight controller
 
-Required mLRS Receiver Settings:
-- 'Rx Ser Link Mode' = 'mavlink' or 'mavlinkX' ('mavlinkX' should be prefered)
-- 'Rx Snd RcChannel' = 'rc channels' (do not use 'rc override')
+Required receiver settings:
+- 'Rx Ser Link Mode' = 'mavlink' or 'mavlinkX' ('mavlinkX' should be preferred)
 
 The script creates two ArduPilot parameters:
 - MLRS_SCR_ENABLE: enables or disables logging. 0: disabled, >= 1: enabled (default is 1)

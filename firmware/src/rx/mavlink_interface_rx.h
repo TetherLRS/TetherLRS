@@ -62,7 +62,6 @@ class tRxAutoPilot
 
     bool RequestAutopilotVersion(void);
     bool HasMFtpFlowControl(void);
-    bool HasDroneCanExtendedRcStats(void);
     bool HasMlrsRadioLinkStats(void);
 
     void handle_heartbeat(fmav_message_t* const msg);
@@ -86,7 +85,6 @@ class tRxMavlink
   public:
     void Init(void);
     void Do(void);
-    void SendRcData(tRcData* const rc_out, bool frame_missed, bool failsafe);
     void FrameLost(void);
 
     void putc(char c);
@@ -99,8 +97,6 @@ class tRxMavlink
   private:
     void send_msg_serial_out(void);
     void send_radio_status(void);
-    void send_rc_channels_override(void);
-    void send_radio_rc_channels(void);
 
     void send_mlrs_radio_link_stats(void);
     void send_mlrs_radio_link_information(void);
@@ -152,16 +148,7 @@ class tRxMavlink
     } TXBUF_STATE_ENUM;
     uint8_t txbuf_state;
 
-    // to inject RC_CHANNELS_OVERRIDE or RADIO_RC_CHANNELS & RADIO_LINK_STATS
-    bool inject_rc_channels;
-    uint16_t rc_chan[32]; // holds the rc data in MAVLink format
-    int16_t rc_chan_13b[32]; // holds the rc data in MAVLink RADIO_RC_CHANNELS format
-    bool rc_failsafe;
-    uint32_t rc_channels_tlast_ms; // time of last update of RC channels values
-    bool rc_channels_uptodate;
-    bool rc_channels_do_32;
-    uint32_t rc_channels32_tlast_ms;
-
+    // RADIO_LINK_STATS go to an autopilot that reads them, at 10 Hz while connected
     uint32_t mlrs_radio_link_stats_tlast_ms;
     uint32_t mlrs_radio_link_information_tlast_ms;
     int8_t mlrs_radio_link_information_power_dbm_last;
@@ -215,14 +202,6 @@ void tRxMavlink::Init(void)
     bytes_link_out_cnt = 0;
     bytes_link_out_rate_filt.Reset();
 
-    inject_rc_channels = false;
-    for (uint8_t i = 0; i < 32; i++) { rc_chan[i] = 0; rc_chan_13b[i] = 0; }
-    rc_failsafe = false;
-    rc_channels_tlast_ms = 0;
-    rc_channels_uptodate = false;
-    rc_channels_do_32 = false;
-    rc_channels32_tlast_ms = 0;
-
     mlrs_radio_link_stats_tlast_ms = 0;
     mlrs_radio_link_information_tlast_ms = 0;
     mlrs_radio_link_information_power_dbm_last = 125;
@@ -234,42 +213,6 @@ void tRxMavlink::Init(void)
     cmd_ack.texe_ms = 0;
 
     autopilot.Init();
-}
-
-
-// rc_out is the rc data stored in out class
-// so after handling of channel order and failsafes by out class.
-// Need to take care of specific failsafe flag however.
-void tRxMavlink::SendRcData(tRcData* const rc_out, bool frame_missed, bool failsafe)
-{
-    if (Setup.Rx.SendRcChannels == SEND_RC_CHANNELS_OFF) return;
-
-    uint8_t failsafe_mode = Setup.Rx.FailsafeMode;
-
-    if (failsafe) {
-        switch (failsafe_mode) {
-        case FAILSAFE_MODE_NO_SIGNAL:
-            // do not output anything, so jump out
-            return;
-        case FAILSAFE_MODE_CH1CH4_CENTER:
-            // in this mode do not report bad signal
-            failsafe = false;
-            break;
-        }
-    }
-
-    if (RC_DATA_LEN < 32) while(1){} // must not happen, play it safe
-    for (uint8_t i = 0; i < 32; i++) {
-        rc_chan[i] = rc_to_mavlink(rc_out->ch[i]);
-        rc_chan_13b[i] = rc_to_mavlink_13bcentered(rc_out->ch[i]);
-    }
-    if (rc_out->do_32channels) rc_channels_do_32 = true;
-
-    // rc_channels_tlast_ms is updated in send_rc_channels_override(), send_radio_rc_channels()
-    rc_failsafe = failsafe;
-    rc_channels_uptodate = !frame_missed;
-
-    inject_rc_channels = true;
 }
 
 
@@ -321,20 +264,8 @@ void tRxMavlink::Do(void)
 
     // TODO: either the buffer must be guaranteed to be large, or we need to check filling
 
-    if (inject_rc_channels) { // give it priority // && serial.tx_is_empty()) // check available size!?
-        inject_rc_channels = false;
-        if ((tnow_ms - rc_channels_tlast_ms) >= 19) { // don't send too fast, MAVLink RC is not for racing
-            rc_channels_tlast_ms = tnow_ms;
-            switch (Setup.Rx.SendRcChannels) {
-            case SEND_RC_CHANNELS_RCCHANNELSOVERRIDE:
-                send_rc_channels_override();
-                break;
-            case SEND_RC_CHANNELS_RADIORCCHANNELS:
-                send_radio_rc_channels();
-                inject_radio_link_stats = true;
-                break;
-            }
-        }
+    if (connected() && autopilot.HasMlrsRadioLinkStats() && (tnow_ms - mlrs_radio_link_stats_tlast_ms) >= 100) {
+        inject_radio_link_stats = true;
     }
 
     if (inject_radio_link_stats) { // check available size!?
@@ -571,7 +502,7 @@ void tRxMavlink::link_out_flush(void)
 //-------------------------------------------------------
 // Handle txbuf
 //-------------------------------------------------------
-// for the txbuf rate-based mechanism see design_decissions.h for details
+// txbuf tells ArduPilot how full our buffer is, it slows its stream rates on it
 
 uint16_t tRxMavlink::serial_in_available(void)
 {
@@ -825,7 +756,6 @@ if(txbuf>50) dbg.puts("*1.025 "); else dbg.puts("*1 ");
 //-------------------------------------------------------
 // send to the fc (serial out)
 
-// see design_decissions.h for details
 void tRxMavlink::send_radio_status(void)
 {
 uint8_t rssi, remrssi, txbuf, noise;
@@ -845,60 +775,6 @@ uint8_t rssi, remrssi, txbuf, noise;
         RADIO_LINK_SYSTEM_ID, MAV_COMP_ID_TELEMETRY_RADIO, // SiK uses 51, 68
         rssi, remrssi, txbuf, noise, UINT8_MAX, 0, 0,
         //uint8_t rssi, uint8_t remrssi, uint8_t txbuf, uint8_t noise, uint8_t remnoise, uint16_t rxerrors, uint16_t fixed,
-        &status_serial_out);
-
-    send_msg_serial_out();
-}
-
-
-void tRxMavlink::send_rc_channels_override(void)
-{
-    fmav_msg_rc_channels_override_pack(
-        &msg_serial_out,
-        GCS_SYSTEM_ID, MAV_COMP_ID_TELEMETRY_RADIO, // ArduPilot accepts it only if it comes from its GCS sysid
-        autopilot.sysid, 0, // targets, we send to our autopilot sysid only, if not known it is zero // 0, 0,
-        rc_chan[0], rc_chan[1], rc_chan[2], rc_chan[3], rc_chan[4], rc_chan[5], rc_chan[6], rc_chan[7],
-        rc_chan[8], rc_chan[9], rc_chan[10], rc_chan[11], rc_chan[12], rc_chan[13], rc_chan[14], rc_chan[15],
-        0, 0,
-        //uint8_t target_system, uint8_t target_component,
-        //uint16_t chan1_raw, uint16_t chan2_raw, uint16_t chan3_raw, uint16_t chan4_raw, uint16_t chan5_raw, uint16_t chan6_raw, uint16_t chan7_raw, uint16_t chan8_raw,
-        //uint16_t chan9_raw, uint16_t chan10_raw, uint16_t chan11_raw, uint16_t chan12_raw, uint16_t chan13_raw, uint16_t chan14_raw, uint16_t chan15_raw, uint16_t chan16_raw,
-        //uint16_t chan17_raw, uint16_t chan18_raw,
-        &status_serial_out);
-
-    send_msg_serial_out();
-}
-
-
-void tRxMavlink::send_radio_rc_channels(void)
-{
-int16_t channels[32]; // FASTMAVLINK_MSG_RADIO_RC_CHANNELS_FIELD_CHANNELS_NUM = 32
-uint16_t rc_len;
-
-//    rc_len = (rc_channels_do_32) ? 32 : 16;
-// this needs update to AP's AP_RCProtocol_MAVLinkRadio.h/cpp to work
-    rc_len = 16;
-    if ((millis32() - rc_channels32_tlast_ms) >= 200) { // send 32 channels only at 5 Hz
-        rc_channels32_tlast_ms += 200;
-        rc_len = (rc_channels_do_32) ? 32 : 16;
-    }
-
-    memcpy(channels, rc_chan_13b, rc_len*2); // for (uint8_t n = 0; n < rc_len; n++) channels[n] = rc_chan_13b[n];
-    for (uint8_t n = rc_len; n < 32; n++) channels[n] = 0;
-
-    uint8_t flags = 0;
-    if (rc_failsafe) flags |= RADIO_RC_CHANNELS_FLAGS_FAILSAFE;
-    if (!rc_channels_uptodate) flags |= RADIO_RC_CHANNELS_FLAGS_OUTDATED;
-
-    fmav_msg_radio_rc_channels_pack(
-        &msg_serial_out,
-        RADIO_LINK_SYSTEM_ID, MAV_COMP_ID_TELEMETRY_RADIO,
-        autopilot.sysid, 0, // targets, we send to our autopilot sysid only, if not known it is zero // 0, 0,
-        rc_channels_tlast_ms, flags,
-        rc_len, channels,
-        //uint8_t target_system, uint8_t target_component,
-        //uint32_t time_last_update_ms, uint16_t flags,
-        //uint8_t count, const int16_t* channels,
         &status_serial_out);
 
     send_msg_serial_out();
@@ -986,7 +862,7 @@ uint8_t tx_rssi1, tx_rssi2;
     payload.target_component = 0;
     payload.flags = flags;
     // rx stats
-    payload.rx_LQ_rc = stats.GetLQ_rc();
+    payload.rx_LQ_rc = stats.GetLQ_link();
     payload.rx_LQ_ser = stats.GetLQ_serial();
     payload.rx_rssi1 = rx_rssi1;
     payload.rx_snr1 = rx_snr1;
@@ -1298,18 +1174,6 @@ bool tRxAutoPilot::HasMFtpFlowControl(void)
     if (autopilot != MAV_AUTOPILOT_ARDUPILOTMEGA) return false; // we don't know for this autopilot
 
     return (version >= 040600);
-}
-
-
-bool tRxAutoPilot::HasDroneCanExtendedRcStats(void)
-{
-    if (autopilot != MAV_AUTOPILOT_ARDUPILOTMEGA) return false; // we don't know for this autopilot
-
-    if (middleware_sw_version != 0) { // not native ArduPilot
-        return (version >= 040600); // BetaPilot has it
-    }
-
-    return (version >= 040700); // is in dev 4.7 (since 24.Feb.2026)
 }
 
 

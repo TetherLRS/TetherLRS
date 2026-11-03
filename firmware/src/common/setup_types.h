@@ -84,6 +84,7 @@ typedef enum {
 typedef enum {
     REGION_FREE = 0, // as mLRS, compliance left to the user
     REGION_EU,
+    REGION_CUSTOM, // the user's own frequency plan, see Setup.Common.Custom*
     REGION_NUM,
 } REGION_ENUM;
 
@@ -134,25 +135,6 @@ typedef enum {
 } SERIAL_BAUDRATE_ENUM;
 
 typedef enum {
-    L10304_SERIAL_BAUDRATE_9600 = 0,
-    L10304_SERIAL_BAUDRATE_19200,
-    L10304_SERIAL_BAUDRATE_38400,
-    L10304_SERIAL_BAUDRATE_57600,
-    L10304_SERIAL_BAUDRATE_115200,
-    L10304_SERIAL_BAUDRATE_230400,
-    L10304_SERIAL_BAUDRATE_NUM,
-} L10304_SERIAL_BAUDRATE_ENUM;
-
-
-typedef enum {
-    CHANNEL_ORDER_AETR = 0, // most common
-    CHANNEL_ORDER_TAER, // spektrum/graupner/jr
-    CHANNEL_ORDER_ETAR,
-    CHANNEL_ORDER_NUM,
-} CHANNEL_ORDER_ENUM;
-
-
-typedef enum {
     SERIAL_LINK_MODE_TRANSPARENT = 0,
     SERIAL_LINK_MODE_MAVLINK,
     SERIAL_LINK_MODE_MAVLINK_X,
@@ -187,24 +169,6 @@ typedef enum {
 } RX_SEND_RADIO_STATUS_ENUM;
 
 
-typedef enum {
-    POWER_SWITCH_CHANNEL_OFF = 0,
-    POWER_SWITCH_CHANNEL_CH5,
-    POWER_SWITCH_CHANNEL_CH6,
-    POWER_SWITCH_CHANNEL_CH7,
-    POWER_SWITCH_CHANNEL_CH8,
-    POWER_SWITCH_CHANNEL_CH9,
-    POWER_SWITCH_CHANNEL_CH10,
-    POWER_SWITCH_CHANNEL_CH11,
-    POWER_SWITCH_CHANNEL_CH12,
-    POWER_SWITCH_CHANNEL_CH13,
-    POWER_SWITCH_CHANNEL_CH14,
-    POWER_SWITCH_CHANNEL_CH15,
-    POWER_SWITCH_CHANNEL_CH16,
-    POWER_SWITCH_CHANNEL_NUM,
-} POWER_SWITCH_CHANNEL_ENUM;
-
-
 //-- Tx only
 
 typedef enum {
@@ -212,16 +176,9 @@ typedef enum {
     TX_SERIAL_PORT_WIRELESS_BRIDGE,
     TX_SERIAL_PORT_SERIAL2,
     TX_SERIAL_PORT_COM,
+    TX_SERIAL_PORT_USB, // the chip's own USB (CDC), where the board brings it out
     TX_SERIAL_PORT_NUM,
 } TX_SERIAL_PORT_ENUM;
-
-
-typedef enum {
-    L10304_SERIAL_DESTINATION_SERIAL = 0,
-    L10304_SERIAL_DESTINATION_SERIAL2,
-    L10304_SERIAL_DESTINATION_MBRIDGE,
-    L10304_SERIAL_DESTINATION_NUM,
-} L10304_TX_SERIAL_DESTINATION_ENUM;
 
 
 typedef enum {
@@ -231,21 +188,6 @@ typedef enum {
     TX_SERIAL_PORT2_SERIAL2,
     TX_SERIAL_PORT2_NUM,
 } TX_SERIAL_PORT2_ENUM;
-
-
-typedef enum {
-    CHANNEL_SOURCE_NONE = 0,
-    CHANNEL_SOURCE_CRSF, // JR pin5
-    CHANNEL_SOURCE_INPORT, // In port
-    CHANNEL_SOURCE_NUM,
-} TX_CHANNELS_SOURCE_ENUM;
-
-
-typedef enum {
-    IN_CONFIG_SBUS = 0,
-    IN_CONFIG_SBUS_INVERTED,
-    IN_CONFIG_NUM,
-} TX_IN_CONFIG_ENUM;
 
 
 typedef enum {
@@ -260,6 +202,50 @@ typedef enum {
     TX_DOWNLINK_OFF, // the receiver stays silent: data only to the aircraft, no telemetry, no link stats on the ground
     TX_DOWNLINK_NUM,
 } TX_DOWNLINK_ENUM;
+
+
+// how the two frames of a period share the 182 bytes of air time, see frame_types.h
+typedef enum {
+    LINK_SPLIT_BALANCED = 0, // 82 bytes of data each way
+    LINK_SPLIT_DOWNLINK, // 64 up, 100 down: telemetry
+    LINK_SPLIT_UPLINK, // 100 up, 64 down: corrections, commands
+    LINK_SPLIT_NUM,
+} LINK_SPLIT_ENUM;
+
+
+// what a pair with two radios on each side does with them
+typedef enum {
+    RADIO_SCHEME_AUTO = 0, // the best the pair can do
+    RADIO_SCHEME_SINGLE, // one link, the second radio for diversity
+    RADIO_SCHEME_DUAL_REDUNDANT, // the same frame on two channels at once
+    RADIO_SCHEME_DUAL_BONDED, // two links in lock-step, twice the data
+    RADIO_SCHEME_DUAL_BAND, // the same frame on both bands at once
+    RADIO_SCHEME_NUM,
+} RADIO_SCHEME_ENUM;
+
+
+//-- Rx only
+
+typedef enum {
+    RX_DOWNLINK_AS_TX = 0, // transmits unless the Tx says not to
+    RX_DOWNLINK_OFF, // never transmits: a second receiver beside one that answers
+    RX_DOWNLINK_NUM,
+} RX_DOWNLINK_ENUM;
+
+
+typedef enum {
+    RX_SERIAL_OUT2_OFF = 0,
+    RX_SERIAL_OUT2_TX_ON_RX_PIN, // the link's data also out of the serial port's RX pin, which then receives nothing
+    RX_SERIAL_OUT2_SERIAL1, // the board's second serial port, where the layout has one
+    RX_SERIAL_OUT2_NUM,
+} RX_SERIAL_OUT2_ENUM;
+
+
+typedef enum {
+    RX_TEST_OFF = 0,
+    RX_TEST_LOOPBACK, // the link's data goes back up instead of out of the serial port, for the tool's benchmark
+    RX_TEST_NUM,
+} RX_TEST_ENUM;
 
 
 typedef enum {
@@ -293,53 +279,10 @@ typedef enum {
 //-- Rx only
 
 typedef enum {
-    OUT_CONFIG_SBUS = 0,
-    OUT_CONFIG_CRSF,
-    OUT_CONFIG_SBUS_INVERTED,
-    OUT_CONFIG_NUM,
-} RX_OUT_CONFIG_ENUM;
-
-
-typedef enum {
-    OUT_RSSI_LQ_CHANNEL_OFF = 0,
-    OUT_RSSI_LQ_CHANNEL_CH5,
-    OUT_RSSI_LQ_CHANNEL_CH6,
-    OUT_RSSI_LQ_CHANNEL_CH7,
-    OUT_RSSI_LQ_CHANNEL_CH8,
-    OUT_RSSI_LQ_CHANNEL_CH9,
-    OUT_RSSI_LQ_CHANNEL_CH10,
-    OUT_RSSI_LQ_CHANNEL_CH11,
-    OUT_RSSI_LQ_CHANNEL_CH12,
-    OUT_RSSI_LQ_CHANNEL_CH13,
-    OUT_RSSI_LQ_CHANNEL_CH14,
-    OUT_RSSI_LQ_CHANNEL_CH15,
-    OUT_RSSI_LQ_CHANNEL_CH16,
-    OUT_RSSI_LQ_CHANNEL_NUM,
-} RX_OUT_RSSI_LQ_CHANNEL_ENUM;
-
-
-typedef enum {
-    FAILSAFE_MODE_NO_SIGNAL = 0,
-    FAILSAFE_MODE_LOW_THROTTLE,
-    FAILSAFE_MODE_AS_CONFIGURED,
-    FAILSAFE_MODE_LOW_THROTTLE_ELSE_CENTER,
-    FAILSAFE_MODE_CH1CH4_CENTER,
-    FAILSAFE_MODE_NUM,
-} RX_FAILSAFE_MODE_ENUM;
-
-
-typedef enum {
-    SEND_RC_CHANNELS_OFF = 0,
-    SEND_RC_CHANNELS_RCCHANNELSOVERRIDE,
-    SEND_RC_CHANNELS_RADIORCCHANNELS,
-    SEND_RC_CHANNELS_NUM,
-} RX_SEND_RCCHANNELS_ENUM;
-
-
-typedef enum {
     RX_SERIAL_PORT_SERIAL = 0,
     RX_SERIAL_PORT_CAN,
     RX_SERIAL_PORT_CANFD,
+    RX_SERIAL_PORT_USB, // the chip's own USB (CDC), e.g. towards a companion computer
     RX_SERIAL_PORT_NUM,
 } RX_SERIAL_PORT_ENUM;
 
@@ -407,18 +350,22 @@ typedef struct
     uint8_t Privacy;
     uint8_t Region;
     uint8_t DynPower;
+    uint8_t LinkSplit;
+    uint8_t RadioScheme;
+    uint8_t CustomBw; // index among the chip's LoRa bandwidths
+    uint32_t CustomFreqKHz; // centre of the custom plan
+    uint16_t CustomSpanKHz; // its width, the channels come from span / bandwidth
+    uint8_t CustomLbt;
+    uint8_t CustomPowerMaxDbm;
 
-    uint8_t spare[3];
-} tCommonSetup; // 16 bytes
+    uint8_t spare[4];
+} tCommonSetup; // 28 bytes
 
 
 typedef struct
 {
     uint8_t Power;
     uint8_t Diversity;
-    uint8_t ChannelsSource;
-    uint8_t ChannelOrder;
-    uint8_t InMode;
     uint8_t SerialPort;
     uint8_t SerialBaudrate;
     uint8_t SerialPort2;
@@ -426,41 +373,32 @@ typedef struct
     uint8_t Buzzer;
     uint8_t SerialBaudrate2;
     uint8_t MavlinkComponent;
-    uint8_t PowerSwitchChannel;
     uint8_t WifiProtocol;
     uint8_t WifiChannel;
     uint8_t WifiPower;
     uint8_t Downlink;
 
     uint8_t spare[3];
-} tTxSetup; // 20 bytes
+} tTxSetup; // 16 bytes
 
 
 typedef struct
 {
     uint8_t Power;
     uint8_t Diversity;
-    uint8_t ChannelOrder;
-    uint8_t OutMode;
-    uint8_t OutRssiChannelMode;
-    uint8_t FailsafeMode;
     uint8_t SerialBaudrate;
     uint8_t SerialLinkMode;
     uint8_t SendRadioStatus;
-    uint8_t spare1;
-    uint8_t SendRcChannels;
-    uint8_t spare2;
-    uint8_t OutLqChannelMode;
-    uint8_t PowerSwitchChannel;
     uint8_t SerialPort;
     uint8_t MavlinkSystemID;
-    uint8_t MavCoalesce; // TetherLRS: drop stale copies of state messages waiting for the link
+    uint8_t MavCoalesce; // drop stale copies of state messages waiting for the link
+    uint8_t Downlink; // RX_DOWNLINK_ENUM
+    uint8_t SerialOut2; // RX_SERIAL_OUT2_ENUM
+    uint8_t SerialBaudrate2;
+    uint8_t Test; // RX_TEST_ENUM
 
-    uint8_t spare[3];
-
-    int8_t FailsafeOutChannelValues_Ch1_Ch12[12]; // -120 .. +120
-    uint8_t FailsafeOutChannelValues_Ch13_Ch16[4]; // 0,1,2 = -120, 0, +120
-} tRxSetup; // 36 bytes
+    uint8_t spare[4];
+} tRxSetup; // 16 bytes
 
 
 #define SETUP_MARKER_RX_STR   "SetupStartStx4Rx"
@@ -484,7 +422,7 @@ typedef struct
 
     uint8_t _ConfigId; // strange name to avoid mistake
 
-    uint8_t spare1[6];
+    uint8_t spare1[8]; // 8 keeps Common, with its uint32_t, 4-byte aligned without hidden padding
 
     // parameters specific to Rx, can be changed on the fly
     // for transmitters this is populated upon first connection, see SetupMetaData.rx_available mechanism
@@ -501,6 +439,7 @@ typedef struct
     // crypto
     uint8_t peer_uid[SETUP_CONFIG_NUM][12]; // 12 bytes = 96 bits
     uint64_t tx_random[SETUP_CONFIG_NUM];   //  8 bytes = 64 bits
+    uint8_t LinkKey[32]; // from the image's marker or the local CLI, never over the air; all zero = not set
 
     char MarkerEnd[8];
 } tSetup;
@@ -528,8 +467,8 @@ typedef struct
 
     char Rx_Power_optstr[67+1];
     uint16_t Rx_Diversity_allowed_mask;
-    uint16_t Rx_OutMode_allowed_mask;
     uint16_t Rx_SerialPort_allowed_mask;
+    uint16_t Rx_SerialOut2_allowed_mask;
 
     bool rx_available;
 
@@ -538,8 +477,10 @@ typedef struct
     char rx_device_name[20+1];
     int8_t rx_actual_power_dbm;
     uint8_t rx_actual_diversity;
-    uint16_t rx_FrequencyBand_allowed_mask; // TetherLRS: what the connected receiver can take, 0 = it did not say (mLRS)
+    uint16_t rx_FrequencyBand_allowed_mask; // what the connected receiver can take
     uint16_t rx_Mode_allowed_mask;
+    uint8_t rx_radio_count; // radios the connected receiver has
+    uint8_t rx_radio_bands; // bit per SX_FHSS_FREQUENCY_BAND_ENUM it can run
 } tSetupMetaData;
 
 

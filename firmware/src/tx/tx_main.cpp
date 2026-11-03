@@ -116,7 +116,6 @@
 #include "../common/mavlink/fmav.h"
 #include "../common/setup.h"
 #include "../common/common.h"
-#include "../common/channel_order.h"
 #include "../common/diversity.h"
 #ifdef DEVICE_HAS_ANTENNA_SWITCH
 #include "../common/antenna_switch.h"
@@ -139,7 +138,6 @@ tAntennaSwitch antsw;
 #endif
 tReceiveArq rarq;
 tCrypto crypto;
-tChannelOrder channelOrder(tChannelOrder::DIRECTION_TX_TO_MLRS);
 tConfigId config_id;
 tTxInfo txinfo;
 
@@ -436,23 +434,23 @@ tCmdFrameHeader* head = (tCmdFrameHeader*)(frame->payload);
 }
 
 
-void pack_txcmdframe(tTxFrame* const frame, tFrameStats* const frame_stats, tRcData* const rc)
+void pack_txcmdframe(tTxFrame* const frame, tFrameStats* const frame_stats)
 {
     switch (link_task) {
     case LINK_TASK_TX_GET_RX_SETUPDATA:
-        pack_txcmdframe_cmd(frame, frame_stats, rc, FRAME_CMD_GET_RX_SETUPDATA);
+        pack_txcmdframe_cmd(frame, frame_stats, FRAME_CMD_GET_RX_SETUPDATA);
         break;
     case LINK_TASK_TX_GET_RX_SETUPDATA_WRELOAD:
-        pack_txcmdframe_cmd(frame, frame_stats, rc, FRAME_CMD_GET_RX_SETUPDATA_WRELOAD);
+        pack_txcmdframe_cmd(frame, frame_stats, FRAME_CMD_GET_RX_SETUPDATA_WRELOAD);
         break;
     case LINK_TASK_TX_GET_RX_SETUPDATA_STARTUP:
-        pack_txcmdframe_cmd(frame, frame_stats, rc, FRAME_CMD_GET_RX_SETUPDATA_STARTUP);
+        pack_txcmdframe_cmd(frame, frame_stats, FRAME_CMD_GET_RX_SETUPDATA_STARTUP);
         break;
     case LINK_TASK_TX_SET_RX_PARAMS:
-        pack_txcmdframe_setrxparams(frame, frame_stats, rc);
+        pack_txcmdframe_setrxparams(frame, frame_stats);
         break;
     case LINK_TASK_TX_STORE_RX_PARAMS:
-        pack_txcmdframe_cmd(frame, frame_stats, rc, FRAME_CMD_STORE_RX_PARAMS);
+        pack_txcmdframe_cmd(frame, frame_stats, FRAME_CMD_STORE_RX_PARAMS);
         transmit_frame_type = TRANSMIT_FRAME_TYPE_NORMAL;
         break;
     }
@@ -524,9 +522,9 @@ if (!Config.IsDualBand && (fhss1_curr_i != fhss2_curr_i)) while(1){} // must not
     frame_stats.rx_silent = (Setup.Tx[Config.ConfigId].Downlink == TX_DOWNLINK_OFF) ? 1 : 0;
 
     if (transmit_frame_type == TRANSMIT_FRAME_TYPE_NORMAL) {
-        pack_txframe(&txFrame, &frame_stats, &rcData, tx_payload, tx_payload_len);
+        pack_txframe(&txFrame, &frame_stats, tx_payload, tx_payload_len);
     } else {
-        pack_txcmdframe(&txFrame, &frame_stats, &rcData);
+        pack_txcmdframe(&txFrame, &frame_stats);
     }
 }
 
@@ -538,7 +536,7 @@ void process_received_frame(bool do_payload, tRxFrame* const frame)
     stats.received_antenna = frame->status.antenna;
     stats.received_transmit_antenna = frame->status.transmit_antenna;
     stats.received_rssi = rssi_i8_from_u7(frame->status.rssi_u7);
-    stats.received_LQ_rc = frame->status.LQ_rc;
+    stats.received_LQ_link = frame->status.LQ_link;
     stats.received_power_code = (frame->status.power_hi << 2) | frame->status.power_lo;
     stats.received_LQ_serial = frame->status.LQ_serial;
 
@@ -798,7 +796,6 @@ RESTARTCONTROLLER
         Setup.Common[Config.ConfigId].Privacy);
     crypto.SetSessionKey(Config.SessionRandom);
 
-    rcData.Init();
     mavlink.Init(); // serial ports selected by SerialPort, SerialPort2
     msp.Init(); // serial port selected by SerialPort
     sx_serial.Init(); // serial port selected by SerialPort
@@ -847,7 +844,7 @@ INITCONTROLLER_END
 
             if (!tick_1hz) {
                 if (Setup.Tx[Config.ConfigId].Buzzer == BUZZER_RX_LQ && connect_occured_once) {
-                    buzzer.BeepLQ(stats.GetReceivedLQ_rc());
+                    buzzer.BeepLQ(stats.GetReceivedLQ_link());
                 }
             }
 
@@ -865,7 +862,7 @@ INITCONTROLLER_END
                 dbg.puts(u8toBCD_s(stats.frames_received.GetLQ())); dbg.putc(',');
                 dbg.puts(u8toBCD_s(stats.valid_frames_received.GetLQ()));
                 dbg.puts("),");
-                dbg.puts(u8toBCD_s(stats.received_LQ_rc)); dbg.puts(", ");
+                dbg.puts(u8toBCD_s(stats.received_LQ_link)); dbg.puts(", ");
 
                 dbg.puts(s8toBCD_s(stats.last_rssi1)); dbg.putc(',');
                 dbg.puts(s8toBCD_s(stats.received_rssi)); dbg.puts(", ");
@@ -1115,9 +1112,9 @@ IF_SX2(
             }
         }
 
-        // the configured power, or less with Dyn Power; binding keeps its lowest power, an RC power switch its own Set()
+        // the configured power, or less with Dyn Power; binding keeps its lowest power
         if (!bind.IsInBind()) {
-            if (Setup.Tx[Config.ConfigId].PowerSwitchChannel == POWER_SWITCH_CHANNEL_OFF) rfpower.Set(Setup.Tx[Config.ConfigId].Power);
+            rfpower.Set(Setup.Tx[Config.ConfigId].Power);
             rfpower.Dynamic(Setup.Common[Config.ConfigId].DynPower, connected(), stats.received_rssi, stats.received_LQ_serial,
                             sx.ReceiverSensitivity_dbm());
         }

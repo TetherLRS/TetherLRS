@@ -109,7 +109,6 @@ const char* volatile tlrs_marker_ref = tlrs_marker; // read at startup: the link
 //#include "../common/time_stats.h" // un-comment if you want to use
 //#include "../common/test.h" // un-comment if you want to compile for board test
 
-#include "out_interface.h" // this includes uart.h, out.h, declares tOut out
 
 
 tRxClock rxclock;
@@ -167,7 +166,6 @@ void init_hw(void)
     leds_init();
     button_init();
 
-    out.Init();
 
     fan.Init();
     dbg.Init();
@@ -359,7 +357,7 @@ uint8_t payload_len = 0;
     frame_stats.antenna = stats.last_antenna;
     frame_stats.transmit_antenna = antenna;
     frame_stats.rssi = stats.GetLastRssi();
-    frame_stats.LQ_rc = stats.GetLQ_rc();
+    frame_stats.LQ_link = stats.GetLQ_link();
     frame_stats.LQ_serial = stats.GetLQ_serial();
     frame_stats.power_code = rfpower.Code();
 
@@ -388,7 +386,7 @@ uint8_t payload_len = 0;
 }
 
 
-void process_received_frame(bool do_payload, tTxFrame* const frame)
+void process_received_frame(tTxFrame* const frame)
 {
     stats.received_antenna = frame->status.antenna;
     stats.received_transmit_antenna = frame->status.transmit_antenna;
@@ -399,15 +397,6 @@ void process_received_frame(bool do_payload, tTxFrame* const frame)
 
     stats.received_LQ_serial = frame->status.LQ_serial;
     rx_silent = frame->status.rx_silent;
-
-    // copy rc1 data
-    if (!do_payload) {
-        // copy only channels of rc1 section and jump out
-        rcdata_rc1_from_txframe(&rcData, frame);
-        return;
-    }
-
-    rcdata_from_txframe(&rcData, frame);
 
     // handle cmd frame
     if (frame->status.frame_type == FRAME_TYPE_CMD || frame->status.frame_type == FRAME_TYPE_CMD_ENCRYPTED) {
@@ -466,24 +455,22 @@ dbg.puts("fail a");dbg.putc(antenna+'0');dbg.puts(" ");dbg.puts(u8toHEX_s(res));
     // it can happen though, I've observed it on R9, maybe if in the ca 1 ms after receive the sx starts receiving something?
     if (res == CHECK_ERROR_SYNCWORD) { FAIL_WMSG("do_receive() CHECK_ERROR_SYNCWORD"); return RX_STATUS_INVALID; }
 
-    // can be CHECK_ERROR_HEADER, CHECK_ERROR_CRC1, CHECK_ERROR_CRC, CHECK_OK
+    // can be CHECK_ERROR_HEADER, CHECK_ERROR_CRC, CHECK_OK
 
-    if (res == CHECK_OK || res == CHECK_ERROR_CRC) { // at least crc1 must be valid
-
+    if (res == CHECK_OK) {
         if (do_clock_reset) rxclock.Reset();
-
-        rx_status = (res == CHECK_OK) ? RX_STATUS_VALID : RX_STATUS_CRC1_VALID;
+        rx_status = RX_STATUS_VALID;
     }
 
     // we want to have the rssi,snr stats even if it's a bad packet
     sxGetPacketStatus(antenna, &stats);
 
-    return rx_status; // INVALID, CRC1_VALID, VALID
+    return rx_status; // INVALID, VALID
 }
 
 
 // called in doPostReceive loop
-bool handle_receive(uint8_t antenna) // called if INVALID, CRC1_VALID, VALID
+bool handle_receive(uint8_t antenna) // called if INVALID, VALID
 {
 uint8_t rx_status;
 tTxFrame* frame;
@@ -501,7 +488,7 @@ tTxFrame* frame;
         return true;
     }
 
-    // can be INVALID, CRC1_VALID, VALID (NONE is handled elsewhere)
+    // can be INVALID, VALID (NONE is handled elsewhere)
 
     if (rx_status < RX_STATUS_INVALID) { // = RX_STATUS_NONE, must not happen
         FAIL_WSTATE(BLINK_4, "rx_status failure", 0,0, link_rx1_status, link_rx2_status);
@@ -514,7 +501,7 @@ tTxFrame* frame;
     }
 
     // handle transmit ARQ
-    if (rx_status > RX_STATUS_INVALID) { // = RX_STATUS_CRC1_VALID, RX_STATUS_VALID: we have valid information on ack
+    if (rx_status > RX_STATUS_INVALID) { // = RX_STATUS_VALID: we have valid information on ack
         if (decrypt_ok) {
             tarq.AckReceived(frame->status.ack);
         } else {
@@ -524,14 +511,11 @@ tTxFrame* frame;
         tarq.FrameMissed();
     }
 
-    if (rx_status > RX_STATUS_INVALID && decrypt_ok) { // = RX_STATUS_CRC1_VALID, RX_STATUS_VALID
+    if (rx_status > RX_STATUS_INVALID && decrypt_ok) { // = RX_STATUS_VALID
 
-        bool do_payload = (rx_status == RX_STATUS_VALID);
+        process_received_frame(frame);
 
-        process_received_frame(do_payload, frame);
-
-        stats.doValidCrc1FrameReceived();
-        if (rx_status == RX_STATUS_VALID) stats.doValidFrameReceived(); // counts both rx and cmd frames, but cmd frames are rare, so no worry
+        stats.doValidFrameReceived(); // counts both rx and cmd frames, but cmd frames are rare, so no worry
 
     } else { // RX_STATUS_INVALID or !decrypt_ok
     }
@@ -572,7 +556,6 @@ bool connect_occured_once;
 
 uint8_t doPostReceive2_cnt;
 bool doPostReceive2;
-bool frame_missed;
 
 
 bool connected(void)
@@ -613,7 +596,6 @@ RESTARTCONTROLLER
 
     doPostReceive2_cnt = 0;
     doPostReceive2 = false;
-    frame_missed = false;
     link_state = LINK_STATE_RECEIVE;
     connect_state = CONNECT_STATE_LISTEN;
     connect_tmo_cnt = 0;
@@ -636,8 +618,6 @@ RESTARTCONTROLLER
         Setup.Common[0].BindPhrase, Setup.peer_uid[0], Config.Uid, Setup.tx_random[0],
         Setup.Common[0].Privacy);
 
-    rcData.Init();
-    out.Configure(Setup.Rx.OutMode);
     mavlink.Init();
     rxcli.Init();
     msp.Init();
@@ -671,11 +651,10 @@ INITCONTROLLER_END
         if (!tick_1hz) {
             dbg.puts(".");
 /*            dbg.puts("\nRX: ");
-            dbg.puts(u8toBCD_s(stats.GetLQ_rc())); dbg.putc(',');
+            dbg.puts(u8toBCD_s(stats.GetLQ_link())); dbg.putc(',');
             dbg.puts(u8toBCD_s(stats.GetLQ_serial()));
             dbg.puts(" (");
             dbg.puts(u8toBCD_s(stats.frames_received.GetLQ())); dbg.putc(',');
-            dbg.puts(u8toBCD_s(stats.valid_crc1_received.GetLQ())); dbg.putc(',');
             dbg.puts(u8toBCD_s(stats.valid_frames_received.GetLQ()));
             dbg.puts("),");
             dbg.puts(u8toBCD_s(stats.received_LQ_serial)); dbg.puts(", ");
@@ -814,8 +793,8 @@ IF_SX2(
             valid_frame_received = (link_rx2_status > RX_STATUS_INVALID);
             invalid_frame_received = (link_rx2_status == RX_STATUS_INVALID);
         } else { // use antenna1
-            frame_received = (link_rx1_status > RX_STATUS_NONE);             // INVALID, CRC1_VALID, VALID
-            valid_frame_received = (link_rx1_status > RX_STATUS_INVALID);    // CRC1_VALID, VALID
+            frame_received = (link_rx1_status > RX_STATUS_NONE);             // INVALID, VALID
+            valid_frame_received = (link_rx1_status > RX_STATUS_INVALID);    // VALID
             invalid_frame_received = (link_rx1_status == RX_STATUS_INVALID); // INVALID, = frame_received && !valid_frame_received
         }
 
@@ -958,9 +937,6 @@ dbg.puts(s8toBCD_s(stats.last_rssi2));*/
             link_task_set(LINK_TASK_RX_SEND_RX_SETUPDATA);
         }
 
-        // report to out/rc
-        frame_missed = (connect_state >= CONNECT_STATE_SYNC && !valid_frame_received);
-
         if (!connected()) tarq.Disconnected();
 
         DECc(tick_1hz_commensurate, Config.frame_rate_hz);
@@ -1005,33 +981,12 @@ dbg.puts(s8toBCD_s(stats.last_rssi2));*/
     if (doPostReceive2) {
         doPostReceive2 = false;
 
-        out.SetChannelOrder(Setup.Rx.ChannelOrder);
-        if (connected()) {
-            bool failsafe = (millis32()- rcData.tlast_update_ms > CONNECT_TMO_MS + 5);
-            out.SendRcData(&rcData, frame_missed, failsafe, stats.GetLastRssi(), stats.GetLQ_rc());
-            out.SendLinkStatistics();
-            mavlink.SendRcData(out.GetRcDataPtr(), frame_missed, failsafe);
-            msp.SendRcData(out.GetRcDataPtr(), frame_missed, failsafe);
-            dronecan.SendRcData(out.GetRcDataPtr(), failsafe);
-            rfpower.Set(&rcData, Setup.Rx.PowerSwitchChannel, Setup.Rx.Power);
-        } else {
-            if (connect_occured_once) {
-                // generally output a signal only if we had a connection at least once
-                out.SendRcData(&rcData, true, true, RSSI_MIN, 0);
-                out.SendLinkStatisticsDisconnected();
-                mavlink.SendRcData(out.GetRcDataPtr(), true, true);
-                msp.SendRcData(out.GetRcDataPtr(), true, true);
-                dronecan.SendRcData(out.GetRcDataPtr(), true);
-            }
-            rfpower.Set(Setup.Rx.Power); // force to Setup Power
-        }
+        rfpower.Set(Setup.Rx.Power); // the dynamic power below works from it
         if (!bind.IsInBind()) {
             rfpower.Dynamic(Setup.Common[0].DynPower, connected(), stats.received_rssi, stats.received_LQ_serial,
                             sx.ReceiverSensitivity_dbm());
         }
     }//end of if(doPostReceive2)
-
-    out.Do();
 
     //-- Do MAVLink & MSP & DroneCAN, or the settings session, which has the serial to itself
 

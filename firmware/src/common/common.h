@@ -316,8 +316,6 @@ void tSerialPorts::Init(uint8_t serial_port, uint32_t baud)
 tSerialPorts Serials;
 tDebugPort dbg;
 
-tRcData rcData;
-
 #ifdef DEVICE_IS_RECEIVER
 tTxFrame txFrame, txFrame2;
 tRxFrame rxFrame;
@@ -479,13 +477,13 @@ STATIC_ASSERT(sizeof(tRxFrame) == FRAME_TX_RX_LEN, "tRxFrame len missmatch")
 STATIC_ASSERT(sizeof(tTxBindFrame) == FRAME_TX_RX_LEN, "tTxBindFrame len missmatch")
 STATIC_ASSERT(sizeof(tRxBindFrame) == FRAME_TX_RX_LEN, "tRxBindFrame len missmatch")
 
-STATIC_ASSERT(sizeof(tTxCmdFrameRxParams) == FRAME_TX_PAYLOAD_LEN, "tTxCmdFrameRxParams len missmatch")
-STATIC_ASSERT(sizeof(tRxCmdFrameRxSetupData) == FRAME_RX_PAYLOAD_LEN, "tRxCmdFrameRxSetupData len missmatch")
+STATIC_ASSERT(sizeof(tTxCmdFrameRxParams) == FRAME_CMD_PAYLOAD_LEN, "tTxCmdFrameRxParams len missmatch")
+STATIC_ASSERT(sizeof(tRxCmdFrameRxSetupData) == FRAME_CMD_PAYLOAD_LEN, "tRxCmdFrameRxSetupData len missmatch")
 
-STATIC_ASSERT(sizeof(tRxSetup) == 36, "tRxSetup len missmatch")
-STATIC_ASSERT(sizeof(tTxSetup) == 20, "tTxSetup len missmatch")
-STATIC_ASSERT(sizeof(tCommonSetup) == 16, "tCommonSetup len missmatch")
-STATIC_ASSERT(sizeof(tSetup) == 22+16+36+(20+16+12+8)*SETUP_CONFIG_NUM+8+6, "tSetup len missmatch")
+STATIC_ASSERT(sizeof(tRxSetup) == 16, "tRxSetup len missmatch")
+STATIC_ASSERT(sizeof(tTxSetup) == 16, "tTxSetup len missmatch")
+STATIC_ASSERT(sizeof(tCommonSetup) == 28, "tCommonSetup len missmatch")
+STATIC_ASSERT(sizeof(tSetup) == 22+18+16+(16+28+12+8)*SETUP_CONFIG_NUM+32+8, "tSetup len missmatch")
 STATIC_ASSERT(sizeof(((tSetup*)0)->peer_uid[0]) == 12, "hardware_uid = 12 len missmatch")
 STATIC_ASSERT(sizeof(((tSetup*)0)->peer_uid[0]) == sizeof(((tTxBindFrame*)0)->tx_uid), "tx_uid len missmatch")
 STATIC_ASSERT(sizeof(((tSetup*)0)->peer_uid[0]) == sizeof(((tRxBindFrame*)0)->rx_uid), "rx_uid len missmatch")

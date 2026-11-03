@@ -19,7 +19,6 @@
 #include "../common/dronecan/out/include/uavcan.protocol.NodeStatus.h"
 #include "../common/dronecan/out/include/uavcan.protocol.GetNodeInfo.h"
 #include "../common/dronecan/out/include/uavcan.protocol.dynamic_node_id.Allocation.h"
-#include "../common/dronecan/out/include/dronecan.sensors.rc.RCInput.h"
 #include "../common/dronecan/out/include/uavcan.tunnel.Targetted.h"
 #include "../common/dronecan/out/include/dronecan.protocol.FlexDebug.h"
 
@@ -38,8 +37,6 @@ class tRxDroneCan
     void Start(void); // do this as closely as possible before the loop
     void Tick_ms(void);
     void Do(void);
-    void SendRcData(tRcData* const rc_out, bool failsafe);
-
     void send_node_status(void);
     void handle_get_node_info_request(CanardInstance* const ins, CanardRxTransfer* const transfer);
     void handle_dynamic_node_id_allocation_broadcast(CanardInstance* const ins, CanardRxTransfer* const transfer);
@@ -63,11 +60,6 @@ class tRxDroneCan
     uint16_t tick_1Hz;
 
     uint8_t node_status_transfer_id; // is this per message ? it seems so ...
-
-    struct {
-        uint8_t transfer_id;
-        uint32_t tlast_ms;
-    } rc_input;
 
     struct {
         uint8_t transfer_id;
@@ -102,7 +94,6 @@ class tRxDroneCan
     union {
         struct uavcan_protocol_NodeStatus node_status;
         struct uavcan_protocol_GetNodeInfoResponse node_info_resp;
-        struct dronecan_sensors_rc_RCInput rc_input;
         struct uavcan_tunnel_Targetted tunnel_targetted;
         struct dronecan_protocol_FlexDebug flex_debug;
     } _p;
@@ -122,7 +113,6 @@ class tRxDroneCan
     void Start(void) {}
     void Tick_ms(void) {}
     void Do(void) {}
-    void SendRcData(tRcData* const rc_out, bool failsafe) {}
 };
 
 

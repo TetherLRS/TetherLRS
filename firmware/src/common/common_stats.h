@@ -37,9 +37,6 @@ class tStats
     void JustConnected(void);         // called upon first connection
 
     void doFrameReceived(void);       // counts received frames, practically not very relevant
-#ifdef DEVICE_IS_RECEIVER
-    void doValidCrc1FrameReceived(void);  // counts received frames, which passed crc1 check, but not main crc
-#endif
     void doValidFrameReceived(void);  // counts received frames, which also passed main crc check
 
     uint8_t GetTransmitBandwidthUsage(void);
@@ -48,11 +45,11 @@ class tStats
     int8_t GetLastSnr(void);
 
 #ifdef DEVICE_IS_RECEIVER
-    uint8_t GetLQ_rc(void);           // this is the "main" LQ, in case of Rx reflects the crc1-rcdata LQ
+    uint8_t GetLQ_link(void);         // the Rx's link LQ, reported to the Tx and to the autopilot
 #endif
     uint8_t GetLQ_serial(void);
 #ifdef DEVICE_IS_TRANSMITTER
-    uint8_t GetReceivedLQ_rc(void);   // this is the "main" LQ of the receiver side
+    uint8_t GetReceivedLQ_link(void); // the Rx's link LQ, as it reported it
 #endif
 
     void doMavlinkCnt(bool valid);
@@ -61,9 +58,6 @@ class tStats
     // statistics for our device
 
     tStatsLQ frames_received;         // number of frames received, practically not very relevant
-#ifdef DEVICE_IS_RECEIVER
-    tStatsLQ valid_crc1_received;     // received frames which passed crc1 check, but not crc
-#endif
     tStatsLQ valid_frames_received;   // received frames which also passed crc check
 
     tStatsLQ serial_data_transmitted; // frames with serial data transmitted, retransmissions are not counted
@@ -87,7 +81,7 @@ class tStats
 
     int8_t received_rssi;
 #ifdef DEVICE_IS_TRANSMITTER
-    uint8_t received_LQ_rc;
+    uint8_t received_LQ_link;
     uint8_t received_power_code; // the Rx's power index + 1, 0 = not known
 #endif
 #ifdef DEVICE_IS_RECEIVER
@@ -112,7 +106,6 @@ class tStats
     // moving average fields
 
 //    tLqCounterBase LQma_received;
-//    tLqCounterBase LQma_valid_crc1;
 //    tLqCounterBase LQma_valid;
 
     // to avoid fractional LQ upon first connection, report 100% for 2 secs

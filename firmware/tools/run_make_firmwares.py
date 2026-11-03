@@ -431,7 +431,6 @@ MLRS_SOURCES_COMMON = [
     os.path.join('common','thirdparty','thirdparty.cpp'),
     os.path.join('common','libs','filters.cpp'),
     os.path.join('common','libs','utils.cpp'),
-    os.path.join('common','channel_order.cpp'),
     os.path.join('common','common_stats.cpp'),
     os.path.join('common','common_types.cpp'),
     os.path.join('common','setup_types.cpp'),
@@ -454,7 +453,6 @@ if os.path.isdir(os.path.join(MLRS_DIR, _dronecan_src_dir)):
 
 MLRS_SOURCES_RX = [
     os.path.join('rx','rx_main.cpp'),
-    os.path.join('rx','out.cpp'),
     ]
 
 MLRS_SOURCES_TX = [

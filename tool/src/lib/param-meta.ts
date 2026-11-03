@@ -55,16 +55,13 @@ const META: Record<string, ParamMeta> = {
   },
 };
 
-// RC and failsafe: the firmware leaves them out (TLRS_NO_RC), firmware built without it still lists them
-const RC = /^(Tx Ch |Tx In Mode|Tx Power Sw Ch|Rx Ch Order|Rx Out |Rx FailSafe|Rx FS Ch|Rx Power Sw Ch|Rx Snd RcChannel)/;
-
 export function paramMeta(name: string): ParamMeta {
   return META[name] ?? { label: name.replace(/^(Tx|Rx) /, '') };
 }
 
 // also those the hardware allows one value for: nothing to choose
 export function paramHidden(p: Param): boolean {
-  return p.unavailable || p.unchangeable || RC.test(p.name);
+  return p.unavailable || p.unchangeable;
 }
 
 export function paramSection(name: string): SectionId {

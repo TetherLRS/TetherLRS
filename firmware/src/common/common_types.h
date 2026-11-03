@@ -126,43 +126,6 @@ uint8_t rssi_u7_from_i8(int8_t rssi_i8);
 int8_t rssi_i8_from_u7(uint8_t rssi_u7);
 uint8_t rssi_i8_to_ap(int8_t rssi_i8);
 uint8_t rssi_i8_to_mavradio(int8_t rssi_i8, bool connected);
-uint16_t rssi_i8_to_rc(int8_t rssi_i8);
-
-uint16_t lq_to_rc(uint8_t lq);
-
-
-//-- rc data
-
-#define RC_DATA_LEN     32
-
-#define RC_DATA_MIN     1
-#define RC_DATA_CENTER  1024
-#define RC_DATA_MAX     2047
-
-typedef struct
-{
-    uint16_t ch[RC_DATA_LEN]; // 1 .. 1024 .. 2047 = -120% .. 120%, 11 bits
-    uint32_t tlast_update_ms;
-    bool do_32channels;
-    void Init(void) {
-        for (uint8_t n = 0; n < RC_DATA_LEN; n++) { ch[n] = 1024; }
-        tlast_update_ms = 0;
-        do_32channels = false;
-    }
-} tRcData;
-
-// clip a value for rcData to range
-uint16_t clip_rc(int32_t x);
-
-uint16_t rc_from_sbus(uint16_t sbus_ch);
-uint16_t rc_from_crsf(uint16_t crsf_ch);
-uint16_t rc_from_crsf_0x17_11bit(uint16_t crsf_ch);
-uint16_t rc_to_sbus(uint16_t rc_ch);
-uint16_t rc_to_crsf(uint16_t rc_ch);
-uint16_t rc_to_crsf_0x17_11bit(uint16_t rc_ch);
-uint16_t rc_to_mavlink(uint16_t rc_ch);
-int16_t rc_to_mavlink_13bcentered(uint16_t rc_ch);
-
 
 //-- CRSF
 
@@ -180,7 +143,6 @@ uint8_t crsf_crc8_update(uint8_t crc, const void* buf, uint16_t len);
 
 //-- DroneCAN
 
-uint8_t dronecan_cvt_power(int8_t power_dbm);
 uint16_t cvt_power(int8_t power_dbm);
 
 

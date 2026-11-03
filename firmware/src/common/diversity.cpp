@@ -21,20 +21,12 @@
 theory of operation
 work out which antenna we choose
 
-Tx:
             |   NONE   |  INVALID  | VALID
 --------------------------------------------------------
  NONE       |          |     1     |  1
  INVALID    |    2     |   1 or 2  |  1
  VALID      |    2     |     2     |  1 or 2
 
-Rx:
-            |   NONE   |  INVALID  | CRC1_VALID | VALID
---------------------------------------------------------
- NONE       |          |     1     |     1      |  1
- INVALID    |    2     |   1 or 2  |     1      |  1
- CRC1_VALID |    2     |     2     |   1 or 2   |  1
- VALID      |    2     |     2     |     2      |  1 or 2
 */
 
 
@@ -51,14 +43,6 @@ uint8_t antenna;
     } else
     if (link_rx2_status == RX_STATUS_VALID) {
         antenna = ANTENNA_2;
-#ifdef DEVICE_IS_RECEIVER
-    } else
-    if (link_rx1_status == RX_STATUS_CRC1_VALID) {
-        antenna = ANTENNA_1;
-    } else
-    if (link_rx2_status == RX_STATUS_CRC1_VALID) {
-        antenna = ANTENNA_2;
-#endif
     } else
     if (link_rx1_status == RX_STATUS_INVALID) {
         antenna = ANTENNA_1;
@@ -80,7 +64,6 @@ uint8_t antenna;
 /*
 theory of operation
 
-Tx:
  1   \   2  |    NONE     |   INVALID     |  VALID
 --------------------------------------------------------
             | alternate   | go quickly    | go quickly
@@ -96,25 +79,6 @@ Tx:
             | +75         | +75           |
 --------------------------------------------------------
 
-Rx:
- 1   \   2  |    NONE     |   INVALID     |  CRC1 VALID   |  VALID
-------------------------------------------------------------------------
-            | alternate   | go quickly    | go quickly    | go quickly
- NONE       | between     | to 2          | to 2          | to 2
-            | 1 & 2       | -75           | -75           | -75
-------------------------------------------------------------------------
-            | go quickly  | choose which  | go quickly    | go quickly
- INVALID    | to 1 or 2   | is less often | to 2          | to 2
-            | +75         | invalid       | -75           | -75
-------------------------------------------------------------------------
-            | go quickly  | go quickly    |               | go quickly
- CRC1 VALID | to 1        | to 1          | go by rssi    | to 2
-            | +75         | +75           |               | -75
-------------------------------------------------------------------------
-            | go quickly  | go quickly    | go quickly    |
- VALID      | to 1        | to 1          | to 1          | go by rssi
-            | +75         | +75           | +75           |
-------------------------------------------------------------------------
 */
 
 #define TDIVERSITY_TIME_CONSTANT  250 // determines the "time constant" to switch
@@ -156,12 +120,7 @@ int16_t estimator_step;
     }
 
     // now run the estimator
-#ifdef DEVICE_IS_RECEIVER
-    if ((link_rx1_status == RX_STATUS_VALID && link_rx2_status == RX_STATUS_VALID) ||
-        (link_rx1_status == RX_STATUS_CRC1_VALID && link_rx2_status == RX_STATUS_CRC1_VALID)) {
-#else
     if (link_rx1_status == RX_STATUS_VALID && link_rx2_status == RX_STATUS_VALID) {
-#endif
 
         // go into direction of the better antenna
         // choosing frame_rate_ms as step makes it that 2*STEP_RANGE is the time to
