@@ -20,12 +20,13 @@ receiver, which can be the aircraft radio or the ground radio.
   and 433 MHz, on SX1280, SX127x and LR1121 radios. Every frame carries 82 bytes each way, and **Link Split** moves
   bytes to the direction that needs them (64 down and 100 up, or the reverse).
 - **Two radios, two lanes**: boards with two radios on both ends (true diversity receivers, Gemini modules) run two
-  lanes for twice the data, and fall back to the same frame on both while a channel is poor; dual band boards pick
-  the band that gets through.
+  lanes for twice the data, and fall back to the same frame on both while a channel is poor; dual band boards send
+  every frame on both bands.
 - **Several receivers**: one ground radio serves up to four aircraft radios, each in its own reply slot with its own
   ARQ, selected and bound from the tool.
 - **Automatic mode**: the ground radio steps the air rate up while the link has margin to spare and down when it
-  gets poor, both ends meeting again at 19 Hz if a change goes wrong.
+  gets poor, both ends meeting again at the start if a change goes wrong; LR1121 and LR2021 boards can take a second
+  band into it.
 - **A frequency plan of your own**: a custom region with a centre, a span, listen before talk and a power cap, with
   narrow modes for small slices of a band (869.4 to 869.65 MHz at 500 mW, for example).
 - **MAVLink that fits the link**: mavlinkX compression, flow control through RADIO_STATUS, and optionally the

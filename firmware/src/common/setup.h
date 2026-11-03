@@ -1071,9 +1071,6 @@ void setup_configure_config(uint8_t config_id)
         Config.FrameSyncWord += 0x3C3C;
     }
 
-    // nor radios with a different RF Band 2: one would move to a band the other does not follow
-    Config.FrameSyncWord += 0x0707 * Setup.Common[config_id].Band2;
-
     //-- Diversity
     // Config.Diversity is not actually used for anything besides reporting to disp, cli, etc.
 

@@ -101,6 +101,8 @@
       : '',
   );
   const modeText = $derived(`${app.param('Mode')?.text ?? '–'}${inUse}`);
+  const band2 = $derived(app.param('RF Band 2')?.text);
+  const bandsText = $derived(`${app.param('RF Band')?.text ?? '–'}${band2 && band2 !== 'off' ? ` and ${band2}` : ''}`);
 
   // the link at a glance, live while this page is open; a measure opens large on the Link page
   const live = $derived(app.connected && app.state === 'connected' && !app.version?.onlyRx); // a receiver alone has no link
@@ -187,7 +189,7 @@
   <div class="card radio">
     <span class="caption">Link</span>
     {#if app.connected}
-      <span class="name">{modeText} · {app.param('RF Band')?.text ?? '–'}</span>
+      <span class="name">{modeText} · {bandsText}</span>
       <span class="caption">Region {region ?? '–'}{region === 'EU' ? ': European rules apply' : ''}{runs ? ` · ${runs}` : ''}</span>
     {:else}
       <span class="name muted">–</span>

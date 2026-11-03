@@ -52,6 +52,17 @@ describe('a session with the demo Tx', () => {
     await link.close();
   }, 10000);
 
+  it('after pstore the Tx restarts into data mode, and +++ brings the CLI back', async () => {
+    const { link, tx } = await session();
+    await tx.enterCommandMode();
+    await tx.setParam('Link Split', 2);
+    expect(await tx.store()).toMatch(/parameters stored/);
+    await new Promise((r) => setTimeout(r, 1500));
+    expect(await tx.enterCommandMode()).toBe(true);
+    expect((await tx.params()).find((p) => p.name === 'Link Split')?.text).toBe('uplink');
+    await link.close();
+  }, 15000);
+
   it('streams stats until stopped', async () => {
     const { link, tx } = await session();
     await tx.enterCommandMode();

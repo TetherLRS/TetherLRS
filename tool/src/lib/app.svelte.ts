@@ -70,6 +70,7 @@ class App {
   private link?: DeviceLink;
   private tx?: TxSession;
   private queue: Promise<unknown> = Promise.resolve();
+  private saving = false; // a save waits in the queue: the option prefetch queued before it steps aside
   private keepAlive?: ReturnType<typeof setInterval>;
 
   // one CLI conversation at a time: option prefetch and user edits share the port
@@ -335,7 +336,7 @@ class App {
 
   async loadOptions(name: string): Promise<ParamOptions | undefined> {
     return this.exclusive(async () => {
-      if (!this.tx || !this.connected || this.streaming) return undefined;
+      if (!this.tx || !this.connected || this.streaming || this.saving) return undefined;
       if (!this.options[name]) this.options[name] = await this.tx.options(name);
       return this.options[name];
     });
@@ -368,26 +369,34 @@ class App {
   }
 
   // common parameters restart Tx and receiver; the Tx is then back in data mode, so the tool goes in again
+  // in the queue like every CLI conversation: a prefetch writing during the restart would break the silence +++ needs
   async save(): Promise<void> {
     if (!this.tx || !this.link || !this.entry) return;
+    this.saving = true;
     this.state = 'busy';
     this.status = 'Saving…';
+    let lost = false;
     try {
-      await this.tx.store();
-      this.unsaved = false;
-      await sleep(1500);
-      if (!(await this.tx.enterCommandMode())) {
-        this.error = `Saved, but the ${this.version?.onlyRx ? 'receiver' : 'Tx'} did not answer after its restart. Connect again.`;
-        await this.disconnect();
-        return;
-      }
-      await this.refresh();
-      this.status = 'Saved';
+      await this.exclusive(async () => {
+        if (!this.tx) return;
+        await this.tx.store();
+        this.unsaved = false;
+        await sleep(1500);
+        if (!(await this.tx.enterCommandMode())) {
+          this.error = `Saved, but the ${this.version?.onlyRx ? 'receiver' : 'Tx'} did not answer after its restart. Connect again.`;
+          lost = true;
+          return;
+        }
+        await this.refresh();
+        this.status = 'Saved';
+      });
     } catch (e) {
       this.fail(e);
     } finally {
+      this.saving = false;
       if (this.tx) this.state = 'connected';
     }
+    if (lost) await this.disconnect();
   }
 
   // a CLI command typed by the user; the ones that would end the session go through the pages instead
