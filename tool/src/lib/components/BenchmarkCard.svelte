@@ -1,6 +1,7 @@
 <script lang="ts">
   import { app } from '$lib/app.svelte';
   import { DURATIONS, RATES } from '$lib/device/benchmark';
+  import Hint from './Hint.svelte';
 
   // the loopback test on the Link page: the receiver sends back up what came down, the tool counts
   let seconds = $state(10);
@@ -15,8 +16,7 @@
 
 <section class="card bench">
   <header>
-    <h2>Loopback test</h2>
-    <span class="caption">The receiver's serial port stays quiet while it runs: the data comes back up the link instead.</span>
+    <h2>Loopback test<Hint text="The receiver's serial port stays quiet while it runs: the data comes back up the link instead, and the tool counts what comes back, what is lost and the round trip." /></h2>
   </header>
   <div class="controls">
     <label><span class="caption">For</span>

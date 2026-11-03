@@ -5,6 +5,7 @@
   import AdvancedTools from './AdvancedTools.svelte';
   import InfoBar from './InfoBar.svelte';
   import Icon from './Icon.svelte';
+  import Hint from './Hint.svelte';
 
   const visible = $derived(app.params.filter((p) => !paramHidden(p)));
   const bySection = $derived(Object.fromEntries(SECTIONS.map((s) => [s.id, visible.filter((p) => paramSection(p.name) === s.id)])));
@@ -33,8 +34,7 @@
     {#if bySection[s.id]?.length}
       <section class="card section">
         <div class="head">
-          <h2>{s.title}</h2>
-          {#if 'help' in s}<span class="caption">{s.help}</span>{/if}
+          <h2>{s.title}{#if 'help' in s}<Hint text={s.help} />{/if}</h2>
         </div>
         {#each bySection[s.id] as p (p.name)}
           <ParamRow param={p} />
@@ -67,9 +67,6 @@
     padding: var(--space-1) 0;
   }
   .head {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
     padding: var(--space-3) var(--space-4) var(--space-2);
   }
   .savebar {

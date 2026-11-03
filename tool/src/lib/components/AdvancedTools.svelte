@@ -2,6 +2,7 @@
   import { app } from '$lib/app.svelte';
   import { randomKey, validKey } from '$lib/firmware/bindphrase';
   import { mwText } from '$lib/link-metrics';
+  import Hint from './Hint.svelte';
 
   // the two settings that are not parameters: the link key, which never goes over the air, and the custom plan
   let key = $state('');
@@ -33,11 +34,8 @@
 
 <div class="row">
   <div class="label">
-    <span>Link key</span>
-    <span class="caption">
-      32 bytes both radios hold and never send: with it the encryption does not rest on the bind phrase alone. This radio: {app.linkKeySet === undefined ? '–' : app.linkKeySet ? 'set' : 'not set'}.
-      The other radio takes the same key when flashed from the Firmware page, or from its own settings. Save keeps it.
-    </span>
+    <span>Link key<Hint text="32 bytes both radios hold and never send: with it the encryption does not rest on the bind phrase alone, and radios flashed with the same phrase and key pair up without an air bind. The other radio takes the key when flashed from the Firmware page, or from its own settings. Save keeps it." /></span>
+    <span class="caption">This radio: {app.linkKeySet === undefined ? '–' : app.linkKeySet ? 'set' : 'not set'}.</span>
   </div>
   <div class="control">
     <input class="mono" type="text" maxlength="64" spellcheck="false" autocomplete="off" bind:value={key} placeholder="64 hex digits" aria-label="Link key" aria-invalid={!!key && !keyOk} {disabled} />
@@ -50,12 +48,13 @@
 {#if !app.version?.onlyRx}
   <div class="row plan">
     <div class="label">
-      <span>Custom plan</span>
-      <span class="caption">
-        What Region = custom runs: the channels are the air mode's bandwidth across the span around the centre; listen before talk and a power cap as the local rules ask.
-        {#if app.customPlan?.channels !== undefined}Now {app.customPlan.channels} channel{app.customPlan.channels === 1 ? '' : 's'} of {app.customPlan.bwKHz} kHz.{/if}
-        {#if !customRegion}Region is not custom: the plan waits.{/if}
-      </span>
+      <span>Custom plan<Hint text="What Region = custom runs: the channels are the air mode's bandwidth across the span around the centre; listen before talk and a power cap as the local rules ask." /></span>
+      {#if app.customPlan?.channels !== undefined || !customRegion}
+        <span class="caption">
+          {#if app.customPlan?.channels !== undefined}Now {app.customPlan.channels} channel{app.customPlan.channels === 1 ? '' : 's'} of {app.customPlan.bwKHz} kHz.{/if}
+          {#if !customRegion}Region is not custom: the plan waits.{/if}
+        </span>
+      {/if}
     </div>
     <div class="control fields">
       <label><span class="caption">Centre kHz</span><input type="number" min="100000" max="2500000" bind:value={centre} {disabled} /></label>

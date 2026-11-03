@@ -2,6 +2,7 @@
   import { app } from '$lib/app.svelte';
   import type { Param } from '$lib/device/cli-parse';
   import { paramMeta } from '$lib/param-meta';
+  import Hint from './Hint.svelte';
 
   let { param }: { param: Param } = $props();
 
@@ -27,8 +28,7 @@
 
 <div class="row">
   <div class="label">
-    <span>{meta.label}</span>
-    {#if meta.help}<span class="caption">{meta.help}</span>{/if}
+    <span>{meta.label}{#if meta.help}<Hint text={meta.help} />{/if}</span>
   </div>
   <div class="control">
     {#if param.unchangeable}
