@@ -536,7 +536,13 @@ void process_received_frame(tTxFrame* const frame, uint8_t lane)
         return;
     }
 
-    link_task_reset(); // clear it if non-cmd frame is received
+    // a data frame tells the Tx has its answer, on lane A: lane B carries data beside lane A's commands; and a link
+    // change still waiting was given up, since after a change the Tx sends one more SET_LINK and restarts
+    if (lane == BOND_LANE_A) {
+        link_task_reset();
+        mode_auto_pending = MODE_AUTO;
+        link_restart_after_ack = false;
+    }
 
     // output data on serial, but only if connected; bonded lanes go out in order
     if (!connected() || !accept_payload) return;

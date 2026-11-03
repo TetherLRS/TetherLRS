@@ -650,8 +650,9 @@ tCmdFrameHeader* head = (tCmdFrameHeader*)FRAME_DATA(frame);
         if (link_task == LINK_TASK_TX_SET_LINK && slot == rx_selected) {
             // the receiver restarts with the mode it names; an answer to an older request names none
             if (SetupMetaData.rx_link_pending == (uint8_t)(mode_auto_pending | (band_auto_pending << 4))) {
-                link_restart_cnt = 2; // one more frame, which acks this answer: the receiver restarts on that ack
-                link_task_reset();
+                // one more frame, SET_LINK again, which acks this answer: the receiver restarts on that ack, while a
+                // data frame would tell it the change was given up
+                if (!link_restart_cnt) link_restart_cnt = 2;
             } else if (++mode_auto_mismatch >= MODE_AUTO_ANSWER_MISMATCH_MAX) { // the receiver will not take it
                 mode_auto_pending = MODE_AUTO;
                 link_task_reset();
@@ -760,7 +761,7 @@ void mode_auto_update_1hz(void)
     }
     mode_auto_lost_s = 0;
 
-    if (link_task == LINK_TASK_TX_SET_LINK && ++mode_auto_task_s >= MODE_AUTO_REVERT_S) { // never answered: the data must flow
+    if (link_task == LINK_TASK_TX_SET_LINK && !link_restart_cnt && ++mode_auto_task_s >= MODE_AUTO_REVERT_S) { // never answered: the data must flow
         mode_auto_pending = MODE_AUTO;
         link_task_reset();
     }
