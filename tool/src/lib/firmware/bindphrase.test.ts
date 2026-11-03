@@ -49,10 +49,18 @@ describe('the bind phrase in the image', () => {
     expect(new TextDecoder().decode(img.subarray(32 + 24, 32 + 31))).toBe('k3y.9x\0');
     expect(new DataView(img.buffer).getUint32(32 + 32, true)).toBe(0x12345678);
     expect(img.subarray(32 + 36, 32 + 68)).toEqual(key);
+    expect(img[32 + 31]).toBe(0xff); // no reply slot given: the receiver keeps its own
     let c = 0xef;
     for (const b of img.subarray(32, 32 + 80)) c ^= b;
     expect(img[end - 1]).toBe(c);
     expect(Buffer.from(img.subarray(end))).toEqual(sha(img, end));
+  });
+
+  it('writes the reply slot when given', async () => {
+    const img = esp32Image();
+    await writeBindPhrase(img, 0, true, 'k3y.9x', 0x12345678, undefined, 2);
+    expect(img[32 + 31]).toBe(2);
+    await expect(writeBindPhrase(img, 0, true, 'k3y.9x', 0x12345679, undefined, 4)).rejects.toThrow('0 to 3');
   });
 
   it('refuses an image without the place, or one already spoiled', async () => {

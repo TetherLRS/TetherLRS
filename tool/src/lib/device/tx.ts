@@ -1,6 +1,7 @@
 // What the tool does with a TetherLRS Tx: SiK-style escape into the CLI, parameters, stats, bootloader.
 
 import { DeviceLink, sleep } from './link';
+import { parseRxList, type RxInfo } from './cli-parse';
 import {
   cliName,
   parseParamLine,
@@ -100,6 +101,25 @@ export class TxSession {
     if (err) return { ok: false, message: err[1] };
     const plan = parseCustomPlan(out);
     return { ok: plan !== undefined, plan };
+  }
+
+  // several receivers: what the Tx knows of each slot, which one its parameters and stats are of, binding a slot
+  async rxList(): Promise<RxInfo[]> {
+    return parseRxList(await this.command('rxlist'));
+  }
+
+  async selectRx(slot: number): Promise<SetResult> {
+    const out = await this.command(`setrx = ${slot}`);
+    const err = /err: (.*?)\r?$/m.exec(out);
+    if (err) return { ok: false, message: err[1] };
+    return { ok: /selected/.test(out) };
+  }
+
+  async bind(slot = 0): Promise<SetResult> {
+    const out = await this.command(slot ? `bind = ${slot}` : 'bind');
+    const err = /err: (.*?)\r?$/m.exec(out);
+    if (err) return { ok: false, message: err[1] };
+    return { ok: /bind mode/.test(out) };
   }
 
   async exitCommandMode(): Promise<void> {

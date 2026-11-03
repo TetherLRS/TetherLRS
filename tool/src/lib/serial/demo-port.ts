@@ -16,7 +16,7 @@ interface DemoParam {
   unit?: string;
 }
 
-const MODES = ['50 Hz', '31 Hz', '19 Hz', 'FLRC', 'FSK', '19 Hz 7x', '18 Hz', 'LR', '17 Hz', '8 Hz'];
+const MODES = ['50 Hz', '31 Hz', '19 Hz', 'FLRC', 'FSK', '19 Hz 7x', '18 Hz', 'LR', '17 Hz', '8 Hz', 'auto'];
 const BANDS = ['2.4 GHz', '915 MHz FCC', '868 MHz', '433 MHz', '70 cm HAM', '866 MHz IN', '915 MHz + 2.4 GHz', '868 MHz + 2.4 GHz'];
 
 export class DemoSerialPort {
@@ -45,7 +45,7 @@ export class DemoSerialPort {
       { name: 'Bind Phrase', kind: 'phrase', value: 'mlrs.0' },
       {
         name: 'Mode', kind: 'list', options: MODES, value: 1,
-        allowed: () => (band() === 2 ? (region() === 1 ? [4, 6, 7] : [1, 2, 4, 5, 6, 7, 8, 9]) : [1, 2, 4, 5, 8, 9]),
+        allowed: () => (band() === 2 ? (region() === 1 ? [4, 6, 7, 10] : [1, 2, 4, 5, 6, 7, 8, 9, 10]) : [1, 2, 4, 5, 8, 9, 10]),
       },
       { name: 'RF Band', kind: 'list', options: BANDS, value: 2, allowed: () => (region() === 1 ? [2] : [1, 2]) },
       { name: 'RF Ortho', kind: 'list', options: ['off', '1/3', '2/3', '3/3'], value: 0, allowed: () => (band() === 1 ? [0, 1, 2, 3] : []) },
@@ -53,7 +53,8 @@ export class DemoSerialPort {
       { name: 'Region', kind: 'list', options: ['free', 'EU', 'custom'], value: 0 },
       { name: 'Dyn Power', kind: 'list', options: ['off', 'on'], value: 1 },
       { name: 'Link Split', kind: 'list', options: ['balanced', 'downlink', 'uplink'], value: 0 },
-      { name: 'Radio Scheme', kind: 'list', options: ['auto', 'single', 'dual redund', 'dual bonded', 'dual band'], value: 0, allowed: () => [0, 1, 2] },
+      { name: 'Radio Scheme', kind: 'list', options: ['auto', 'single', 'dual redund', 'dual bonded', 'dual band'], value: 0, allowed: () => [0, 1, 2, 3] },
+      { name: 'Rx Count', kind: 'list', options: ['1', '2', '3', '4'], value: 0 },
       { name: 'Tx Power', kind: 'list', options: ['25 mW', '50 mW', '100 mW', '250 mW', '500 mW'], value: 0 },
       { name: 'Tx Diversity', kind: 'list', options: ['enabled', 'antenna1', 'antenna2', 'r:en. t:ant1', 'r:en. t:ant2'], value: 1, allowed: () => [1] },
       { name: 'Tx Ser Port', kind: 'list', options: ['serial', 'wbridge', 'serial2', 'com', 'usb'], value: 0, allowed: () => [0, 4] },
@@ -76,7 +77,17 @@ export class DemoSerialPort {
       { name: 'Rx Ser Out2', kind: 'list', options: ['off', 'tx on rx pin', 'serial 1'], value: 0, allowed: () => [0, 1] },
       { name: 'Rx Ser Baudrate2', kind: 'list', options: ['57600', '115200', '230400'], value: 1 },
       { name: 'Rx Test', kind: 'list', options: ['off', 'loopback'], value: 0 },
+      { name: 'Rx Slot', kind: 'list', options: ['0', '1', '2', '3'], value: 0 },
     ];
+  }
+
+  // several receivers: the pretend ones beyond the first answer too, up to the count; the selected one is read
+  private selectedRx = 0;
+  private rxCount() { return (this.find('RX_COUNT')!.value as number) + 1; }
+  private rxUp(slot: number) { return slot < Math.min(this.rxCount(), 3); } // the fourth never shows up
+  private rxLine(slot: number) {
+    if (!this.rxUp(slot)) return `${slot === this.selectedRx ? '  *' : '   '}${slot}: not connected`;
+    return `${slot === this.selectedRx ? '  *' : '   '}${slot}: ${slot === 0 ? 'DAKEFPV 900 NANOPRO' : 'GENERIC 900 RX'}, v2.0-dev, LQ ${String(98 - slot).padStart(3, '0')} %, RSSI -0${62 + slot * 4} dBm`;
   }
 
   getInfo(): SerialPortInfo {
@@ -259,6 +270,19 @@ export class DemoSerialPort {
       }
       this.putsn('ConfigId:0');
       this.printParam(p);
+    } else if (line === 'rxlist') {
+      for (let slot = 0; slot < this.rxCount(); slot++) this.putsn(this.rxLine(slot));
+    } else if (/^setrx\s*=/.test(line)) {
+      const n = parseInt(line.slice(line.indexOf('=') + 1).trim(), 10);
+      if (!(n >= 0 && n < this.rxCount())) return this.putsn('err: the slot is 0 up to Rx Count - 1');
+      this.selectedRx = n;
+      this.putsn(`  receiver ${n} selected, its parameters follow once it answers`);
+    } else if (line === 'bind') {
+      this.putsn('  Tx entered bind mode');
+    } else if (/^bind\s*=/.test(line)) {
+      const n = parseInt(line.slice(line.indexOf('=') + 1).trim(), 10);
+      if (!(n >= 0 && n < this.rxCount())) return this.putsn('err: the slot is 0 up to Rx Count - 1');
+      this.putsn(`  Tx entered bind mode, the receiver gets slot ${n}`);
     } else if (line === 'pstore') {
       this.putsn('ConfigId:0');
       this.putsn(this.rxConnected ? '  parameters stored' : 'warn: receiver not connected');
@@ -324,7 +348,20 @@ export class DemoSerialPort {
     let line = `${p3(lq)}(${p3(Math.min(100, lq + r(0, 4)))}),${p3(r(90, 100))}, ${s8(r(-75, -60))}/${s8(-127)},${s8(r(-78, -62))}, ${s8(r(5, 9))}/${s8(0)}; ${p5(r(80, 400))}, ${p5(r(900, 1450))};`;
     if (this.find('REGION')!.value === 1) line += ` cca ${p10(r(0, 3))}, lim ${p10(0)};`;
     line += ` pwr ${s8(this.find('DYN_POWER')!.value === 1 ? r(10, 14) : 14)}; rxp ${this.find('RX_POWER')!.options![this.find('RX_POWER')!.value as number]};`;
-    line += ` sch ${this.find('RADIO_SCHEME')!.value === 2 ? 2 : 1}; split ${this.find('LINK_SPLIT')!.value};`;
+    const scheme = this.find('RADIO_SCHEME')!.value as number;
+    const sch = scheme === 1 ? 1 : scheme === 2 ? 2 : 3; // the demo pretends two radios on both ends: auto is bonded
+    line += ` sch ${sch}; split ${this.find('LINK_SPLIT')!.value};`;
+    if (this.find('MODE')!.value === 10) line += ` mode ${p3(2)};`; // auto: 19 Hz in use
+    if ((this.find('RF_BAND')!.value as number) >= 6) line += ` band ${p3(r(230, 255))}/${p3(r(150, 255))};`;
+    if (sch === 3) line += ` lanes 2;`;
+    if (sch >= 2) line += ` ant ${p3(r(95, 100))}/${p3(r(90, 100))};`;
+    if (this.rxCount() > 1) {
+      line += ' mp';
+      for (let slot = 0; slot < this.rxCount(); slot++) {
+        line += ` ${slot}${slot === this.selectedRx ? '*' : ':'}${this.rxUp(slot) ? `${p3(98 - slot)}/${s8(-62 - slot * 4)}` : '-'}`;
+      }
+      line += ';';
+    }
     this.putsn(line);
   }
 }

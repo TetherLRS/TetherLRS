@@ -3,7 +3,7 @@
 import { DeviceLink, sleep } from './device/link';
 import { TX_BAUDS, TxSession } from './device/tx';
 import { RX_BAUDS, RxSession } from './device/rx';
-import type { CustomPlan, DeviceVersion, Param, ParamOptions } from './device/cli-parse';
+import type { CustomPlan, DeviceVersion, Param, ParamOptions, RxInfo } from './device/cli-parse';
 import { runLoopback, type BenchmarkOptions, type BenchmarkProgress, type BenchmarkResult } from './device/benchmark';
 import { resumeHistory, type History } from './link-metrics';
 import { rememberRx, rememberTx, type PortEntry } from './serial/ports';
@@ -58,6 +58,7 @@ class App {
   terminal = $state<string[]>([]); // the CLI conversation on the Terminal page
   linkKeySet = $state<boolean | undefined>(); // the connected radio holds a link key; undefined before 2.0 firmware answers
   customPlan = $state<CustomPlan | undefined>(); // Tx only
+  rxList = $state<RxInfo[]>([]); // several receivers: what the Tx knows of each slot
   bench = $state<{ running: boolean; progress?: BenchmarkProgress; result?: BenchmarkResult; error?: string }>({ running: false });
   private benchStop = false;
 
@@ -89,6 +90,12 @@ class App {
 
   param(name: string) {
     return this.params.find((p) => p.name === name);
+  }
+
+  // receivers of this ground radio, from Rx Count
+  get rxCount() {
+    const p = this.param('Rx Count');
+    return p?.index !== undefined ? p.index + 1 : 1;
   }
 
   private fail(e: unknown) {
@@ -208,6 +215,48 @@ class App {
     // 2.0 firmware: the key and the plan are commands, not parameters; older firmware answers neither
     this.linkKeySet = await this.tx.linkKey();
     this.customPlan = this.version?.onlyRx ? undefined : await this.tx.customPlan();
+    this.rxList = this.version?.onlyRx || this.rxCount <= 1 ? [] : await this.tx.rxList();
+  }
+
+  // the receiver the parameters and stats are of: the Tx asks it for its setup, which takes a few cycles
+  async selectRx(slot: number): Promise<boolean> {
+    return this.exclusive(async () => {
+      if (!this.tx) return false;
+      this.state = 'busy';
+      try {
+        const r = await this.tx.selectRx(slot);
+        if (!r.ok) {
+          this.error = `Receiver ${slot}: ${r.message ?? 'not selected'}`;
+          return false;
+        }
+        await sleep(1500);
+        await this.refresh();
+        this.error = '';
+        return true;
+      } finally {
+        this.state = 'connected';
+      }
+    });
+  }
+
+  // the Tx into bind mode; with several receivers the one binding now gets that slot
+  async bind(slot = 0): Promise<boolean> {
+    return this.exclusive(async () => {
+      if (!this.tx) return false;
+      this.state = 'busy';
+      try {
+        const r = await this.tx.bind(slot);
+        if (!r.ok) {
+          this.error = `Bind: ${r.message ?? 'not started'}`;
+          return false;
+        }
+        this.status = `Binding${this.rxCount > 1 ? ` a receiver to slot ${slot}` : ''}: power the receiver in bind mode. The Tx restarts when done.`;
+        this.error = '';
+        return true;
+      } finally {
+        this.state = 'connected';
+      }
+    });
   }
 
   async setLinkKey(key: string): Promise<boolean> {
@@ -311,6 +360,7 @@ class App {
       this.unsaved = true;
       // allowed values of other parameters can depend on this one
       this.options = {};
+      if (name === 'Rx Count') this.rxList = this.rxCount > 1 ? await this.tx.rxList() : [];
       return true;
     } finally {
       this.state = 'connected';

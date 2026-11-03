@@ -41,6 +41,9 @@ export function linkMetrics(stats: History): Metric[] {
       readout: [
         { name: 'Ground', text: fmt(last?.lq, '%') },
         { name: 'Aircraft', text: fmt(last?.rxLq, '%') },
+        ...(last?.ant ? [{ name: 'Antenna 1', text: fmt(last.ant[0], '%') }, { name: 'Antenna 2', text: fmt(last.ant[1], '%') }] : []),
+        ...(last?.band ? [{ name: 'Band 1', text: fmt(Math.round((last.band[0] * 100) / 255), '%') }, { name: 'Band 2', text: fmt(Math.round((last.band[1] * 100) / 255), '%') }] : []),
+        ...(last?.mp ?? []).map((m) => ({ name: `Receiver ${m.slot}${m.selected ? ' *' : ''}`, text: m.lq !== undefined ? `${m.lq} % · ${m.rssi} dBm` : 'not connected' })),
       ],
       series: [
         { name: 'Ground', values: stats.map((s) => s?.lq) },

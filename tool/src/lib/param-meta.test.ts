@@ -19,5 +19,7 @@ describe('which parameters the page shows', () => {
     expect(paramSection('Rx Snd RadioStat')).toBe('air');
     expect(paramSection('Link Split')).toBe('advanced');
     expect(paramSection('Rx Test')).toBe('advanced');
+    expect(paramSection('Rx Count')).toBe('advanced');
+    expect(paramSection('Rx Slot')).toBe('advanced');
   });
 });

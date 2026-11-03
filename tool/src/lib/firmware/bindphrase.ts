@@ -76,10 +76,12 @@ function crc8266(data: Uint8Array): number {
 // start: where the application image begins in this file (0x1000 on an ESP8266, behind its boot loader)
 export const KEY_LEN = 32;
 
-// key: 32 bytes, or none for no key (the radio then clears the one it held)
-export async function writeBindPhrase(img: Uint8Array, start: number, esp32: boolean, phrase: string, stamp: number, key?: Uint8Array): Promise<void> {
+// key: 32 bytes, or none for no key (the radio then clears the one it held); slot: a receiver's reply slot, 0 to 3,
+// or none to leave the one it has
+export async function writeBindPhrase(img: Uint8Array, start: number, esp32: boolean, phrase: string, stamp: number, key?: Uint8Array, slot?: number): Promise<void> {
   if (!validPhrase(phrase)) throw new Error('The bind phrase is 6 characters: a to z, 0 to 9, # . _ -');
   if (key && key.length !== KEY_LEN) throw new Error('The link key is 32 bytes');
+  if (slot !== undefined && (slot < 0 || slot > 3)) throw new Error('The reply slot is 0 to 3');
   const v = new DataView(img.buffer, img.byteOffset, img.length);
   // the ESP8266 packer made the checksum with these two words at zero, then wrote the file's length and CRC into them
   const crcAt = start + 0x10;
@@ -97,6 +99,7 @@ export async function writeBindPhrase(img: Uint8Array, start: number, esp32: boo
   const p = at[0] + 8;
   img.set(new TextEncoder().encode(phrase), p);
   img[p + 6] = 0;
+  img[p + 7] = slot === undefined ? 0xff : slot;
   v.setUint32(p + 8, stamp, true);
   img.fill(0, p + 12, p + 12 + KEY_LEN);
   if (key) img.set(key, p + 12);

@@ -14,13 +14,16 @@ export const SECTIONS = [
   { id: 'advanced', title: 'Advanced', help: 'Two receivers on one Tx, custom plans, the link key, tests.' },
 ] as const;
 
-const ADVANCED = new Set(['Link Split', 'Radio Scheme', 'Rx Downlink', 'Rx Ser Out2', 'Rx Ser Baudrate2', 'Rx Test']);
+const ADVANCED = new Set(['Link Split', 'Radio Scheme', 'Rx Count', 'Rx Downlink', 'Rx Ser Out2', 'Rx Ser Baudrate2', 'Rx Test', 'Rx Slot']);
 
 export type SectionId = (typeof SECTIONS)[number]['id'];
 
 const META: Record<string, ParamMeta> = {
   'Bind Phrase': { label: 'Bind phrase', help: 'Six characters, the same on both radios. SiK programs set it as NETID: sik025 is NETID 25.' },
-  Mode: { label: 'Air mode', help: 'Faster modes carry more data, slower ones reach further. 17 Hz and 8 Hz are narrow, for custom plans below 1 GHz.' },
+  Mode: {
+    label: 'Air mode',
+    help: 'Faster modes carry more data, slower ones reach further. 17 Hz and 8 Hz are narrow, for custom plans below 1 GHz. Auto starts at 19 Hz and steps up while the signal has margin to spare, down when the link gets poor; the Device page shows the mode in use.',
+  },
   'RF Band': { label: 'Band' },
   'RF Ortho': { label: 'Orthogonal hopping', help: 'Lets three links share the band without colliding.' },
   Privacy: { label: 'Encryption' },
@@ -58,7 +61,15 @@ const META: Record<string, ParamMeta> = {
   },
   'Radio Scheme': {
     label: 'Radio scheme',
-    help: 'With two radios on both ends, dual redundant sends every frame on two channels at once. Auto picks what the pair can do; single keeps the second radio for receiving only.',
+    help: 'With two radios on both ends: dual bonded runs two lanes for twice the data and falls back to one frame on both radios while a channel is poor; dual redundant always sends every frame on two channels; single keeps the second radio for receiving only. Auto is bonded when the pair can.',
+  },
+  'Rx Count': {
+    label: 'Receivers',
+    help: 'How many aircraft radios this ground radio serves: each answers in its own slot of the cycle, which grows by a slot for every receiver beyond the first. Every receiver gets its slot when it binds, from the marker in its image or from its Rx Slot. The Device page lists them.',
+  },
+  'Rx Slot': {
+    label: 'Reply slot',
+    help: 'Which slot of the cycle this receiver answers in, 0 up to Receivers minus one. Two receivers in one slot collide; one beyond the count stays silent.',
   },
   'Rx Downlink': {
     label: 'Receiver transmits',

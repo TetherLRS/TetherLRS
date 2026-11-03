@@ -45,10 +45,57 @@ export interface LinkStats {
   rxPower?: string; // the receiver's power now, as its Rx Power option names it; missing from an mLRS receiver
   scheme?: number; // RADIO_SCHEME_ENUM the pair runs, from a 2.0 Tx
   split?: number; // LINK_SPLIT_ENUM
+  mode?: number; // Mode = auto: the mode in use, MODE_ENUM
+  band?: [number, number]; // dual band: how much gets through on each band, 0..255
+  lanes?: number; // bonded radios: 2 a lane out of each, 1 one frame on both while a channel is poor
+  ant?: [number, number]; // valid frames on each antenna, %
+  mp?: RxSlotStat[]; // several receivers: each slot's LQ and RSSI as the Tx sees them
+}
+
+export interface RxSlotStat {
+  slot: number;
+  selected: boolean;
+  lq?: number; // missing: not connected
+  rssi?: number;
 }
 
 export const SCHEMES = ['auto', 'single', 'dual redundant', 'dual bonded', 'dual band'];
 export const SPLITS = ['balanced', 'downlink', 'uplink'];
+export const MODES = ['50 Hz', '31 Hz', '19 Hz', 'FLRC', 'FSK', '19 Hz 7x', '18 Hz', 'LR', '17 Hz', '8 Hz', 'auto'];
+
+// one line of rxlist: "  *0: DAKEFPV 900 NANOPRO, v2.0-dev, LQ 098 %, RSSI -061 dBm", "   1: not connected",
+// "  *0: setup pending, LQ ..." for one whose setup data has not come yet; * marks the selected one
+export interface RxInfo {
+  slot: number;
+  selected: boolean;
+  connected: boolean;
+  name?: string;
+  version?: string;
+  lq?: number;
+  rssi?: number;
+}
+
+export function parseRxList(text: string): RxInfo[] {
+  const out: RxInfo[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    const m = /^ {2}([* ])(\d): (.*)$/.exec(line);
+    if (!m) continue;
+    const r: RxInfo = { slot: parseInt(m[2], 10), selected: m[1] === '*', connected: m[3] !== 'not connected' };
+    if (r.connected) {
+      const d = /^(?:(.+?), (v\S+)|setup pending), LQ (\d+) %, RSSI (-?\d+) dBm$/.exec(m[3]);
+      if (d) {
+        if (d[1]) {
+          r.name = d[1];
+          r.version = d[2];
+        }
+        r.lq = parseInt(d[3], 10);
+        r.rssi = parseInt(d[4], 10);
+      }
+    }
+    out.push(r);
+  }
+  return out;
+}
 
 export interface CustomPlan {
   centreKHz: number;
@@ -159,6 +206,27 @@ export function parseStatsLine(line: string): LinkStats | undefined {
   if (m[15] !== undefined) {
     s.scheme = n(15);
     s.split = n(16);
+  }
+  // what a 2.0 Tx adds after the split, each only when it applies
+  const tail = line.slice(m[0].length);
+  const mode = /mode\s*(\d+);/.exec(tail);
+  if (mode) s.mode = parseInt(mode[1], 10);
+  const band = /band\s*(\d+)\/(\d+);/.exec(tail);
+  if (band) s.band = [parseInt(band[1], 10), parseInt(band[2], 10)];
+  const lanes = /lanes\s*(\d);/.exec(tail);
+  if (lanes) s.lanes = parseInt(lanes[1], 10);
+  const ant = /ant\s*(\d+)\/(\d+);/.exec(tail);
+  if (ant) s.ant = [parseInt(ant[1], 10), parseInt(ant[2], 10)];
+  const mp = /mp((?:\s+\d[*:](?:\d+\/-?\d+|-))+);/.exec(tail);
+  if (mp) {
+    s.mp = Array.from(mp[1].matchAll(/(\d)([*:])(?:(\d+)\/(-?\d+)|-)/g), (x) => {
+      const r: RxSlotStat = { slot: parseInt(x[1], 10), selected: x[2] === '*' };
+      if (x[3] !== undefined) {
+        r.lq = parseInt(x[3], 10);
+        r.rssi = parseInt(x[4], 10);
+      }
+      return r;
+    });
   }
   return s;
 }

@@ -59,6 +59,7 @@ class Radios {
   progress = $state(0);
   phrase = $state(''); // the bind phrase for the next flash: kept while the app runs, never stored
   linkKey = $state(''); // 64 hex digits written with the phrase; empty: the radio drops the key it held
+  rxSlot = $state<number | undefined>(); // a receiver's reply slot written with the phrase; undefined: it keeps its own
 
   private session?: RomSession;
 
@@ -358,7 +359,7 @@ class Radios {
       const image = await loadImage(app.firmwareBase, info, !update);
       if (this.phrase) {
         const esp8266 = info.chip === 'esp8266'; // its application sits behind the boot loader in either file
-        await writeBindPhrase(image, esp8266 ? 0x1000 : update ? 0 : info.app_offset, !esp8266, this.phrase, randomStamp(), this.linkKey ? keyBytes(this.linkKey) : undefined);
+        await writeBindPhrase(image, esp8266 ? 0x1000 : update ? 0 : info.app_offset, !esp8266, this.phrase, randomStamp(), this.linkKey ? keyBytes(this.linkKey) : undefined, this.role === 'Rx' ? this.rxSlot : undefined);
         this.cb().log(`bind phrase${this.linkKey ? ' and link key' : ''} written into the image: it takes ${this.linkKey ? 'them' : 'it'} when it starts`);
       } else if (!update) {
         throw new Error('Type the bind phrase first: the same on the ground radio and on the aircraft radio.');

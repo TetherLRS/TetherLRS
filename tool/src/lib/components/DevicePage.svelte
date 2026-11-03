@@ -3,7 +3,8 @@
 </script>
 
 <script lang="ts">
-  import { SCHEMES, SPLITS } from '$lib/device/cli-parse';
+  import { MODES, SCHEMES, SPLITS } from '$lib/device/cli-parse';
+  import RxList from './RxList.svelte';
   import { onDestroy, onMount } from 'svelte';
   import { app, statsPage } from '$lib/app.svelte';
   import { forget, hasWebSerial, isDesktop, listPorts, probeable, rememberRx, rememberTx, requestPort, watchPorts, type PortEntry } from '$lib/serial/ports';
@@ -91,7 +92,10 @@
 
   const region = $derived(app.param('Region')?.text);
   const last = $derived(app.stats.findLast((s) => s !== undefined));
-  const runs = $derived(last?.scheme !== undefined ? `${SCHEMES[last.scheme] ?? '?'}, ${SPLITS[last.split ?? 0] ?? '?'}` : app.param('Radio Scheme')?.text);
+  const lanes = $derived(last?.lanes === 2 ? ', two lanes' : last?.lanes === 1 ? ', one frame on both radios' : '');
+  const runs = $derived(last?.scheme !== undefined ? `${SCHEMES[last.scheme] ?? '?'}${lanes}, ${SPLITS[last.split ?? 0] ?? '?'}` : app.param('Radio Scheme')?.text);
+  // Mode = auto: the mode in use beside it, from the stream
+  const modeText = $derived(`${app.param('Mode')?.text ?? '–'}${app.param('Mode')?.text === 'auto' && last?.mode !== undefined ? ` (${MODES[last.mode] ?? last.mode})` : ''}`);
 
   // the link at a glance, live while this page is open; a measure opens large on the Link page
   const live = $derived(app.connected && app.state === 'connected' && !app.version?.onlyRx); // a receiver alone has no link
@@ -178,7 +182,7 @@
   <div class="card radio">
     <span class="caption">Link</span>
     {#if app.connected}
-      <span class="name">{app.param('Mode')?.text ?? '–'} · {app.param('RF Band')?.text ?? '–'}</span>
+      <span class="name">{modeText} · {app.param('RF Band')?.text ?? '–'}</span>
       <span class="caption">Region {region ?? '–'}{region === 'EU' ? ': European rules apply' : ''}{runs ? ` · ${runs}` : ''}</span>
     {:else}
       <span class="name muted">–</span>
@@ -186,6 +190,9 @@
     {/if}
   </div>
 </section>
+{#if app.connected && !app.version?.onlyRx && app.rxCount > 1}
+  <RxList />
+{/if}
 </div>
 
 {#if live}
@@ -272,6 +279,9 @@
     flex-direction: column;
     gap: 2px;
     padding: var(--space-4);
+  }
+  .device > :global(.rxlist) {
+    grid-column: 1 / -1; /* the receivers' table wants the width */
   }
   .name {
     font-weight: 600;

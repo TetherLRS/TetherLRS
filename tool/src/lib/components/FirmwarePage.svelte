@@ -290,6 +290,20 @@
               Optional, 64 hex digits, the same on both radios: the encryption then rests on it too, not on the phrase alone. Goes with the phrase into this flash only.
             </span>
           </div>
+          {#if radios.role === 'Rx'}
+            <div class="line phrase">
+              <label>
+                <span class="caption">Reply slot</span>
+                <select bind:value={radios.rxSlot} disabled={radios.busy} aria-label="Reply slot">
+                  <option value={undefined}>keep its own</option>
+                  {#each [0, 1, 2, 3] as n (n)}<option value={n}>{n}</option>{/each}
+                </select>
+              </label>
+              <span class="caption hint">
+                With several receivers on one ground radio (Receivers under Advanced): the slot of the cycle this one answers in. Goes with the phrase into this flash only.
+              </span>
+            </div>
+          {/if}
           <div class="line">
             <select bind:value={radios.env} disabled={!envs.length || radios.busy} aria-label="Firmware">
               {#if !envs.length}<option value="">{app.manifest ? 'No build for this role' : 'No firmware list'}</option>{/if}
