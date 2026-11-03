@@ -472,7 +472,7 @@ void pack_txcmdframe(tTxFrame* const frame, tFrameStats* const frame_stats)
 //                               -> decrypt_rxframe(frame)
 //                                  process_received_rxcmdframe(frame)
 
-uint8_t tx_payload[FRAME_TX_PAYLOAD_LEN];
+uint8_t tx_payload[FRAME_PAYLOAD_MAX];
 uint8_t tx_payload_len = 0;
 bool tx_payload_held = false; // the frame with it was not sent (region rules), so it goes in the next one
 
@@ -483,7 +483,7 @@ void prepare_transmit_frame(uint8_t antenna, uint8_t fhss1_curr_i, uint8_t fhss2
         if (connected() || Setup.Tx[Config.ConfigId].Downlink == TX_DOWNLINK_OFF) {
             if (!tx_payload_held) {
                 tx_payload_len = 0;
-                for (uint8_t i = 0; i < FRAME_TX_PAYLOAD_LEN - crypto.NonceLen(); i++) {
+                for (uint8_t i = 0; i < FRAME_PAYLOAD_LEN(Config.FrameLenTx) - crypto.NonceLen(); i++) {
                     if (!sx_serial.available()) break;
                     uint8_t c = sx_serial.getc();
                     tx_payload[tx_payload_len++] = c;
@@ -582,7 +582,7 @@ void do_transmit_send(uint8_t antenna) // we send a TX frame to receiver
        return;
     }
 
-    sxSendFrame(antenna, &txFrame, FRAME_TX_RX_LEN, SEND_FRAME_TMO_MS); // 10 ms tmo
+    sxSendFrame(antenna, &txFrame, Config.FrameLenTx, SEND_FRAME_TMO_MS); // 10 ms tmo
 }
 
 
@@ -598,7 +598,7 @@ uint8_t rx_status = RX_STATUS_INVALID; // this also signals that a frame was rec
 
     // we don't need to read sx.GetRxBufferStatus(), but hey
     // we could save 2 byte's time by not reading sync_word again, but hey
-    sxReadFrame(antenna, &rxFrame, &rxFrame2, FRAME_TX_RX_LEN);
+    sxReadFrame(antenna, &rxFrame, &rxFrame2, Config.FrameLenRx);
     res = (antenna == ANTENNA_1) ? check_rxframe(&rxFrame) : check_rxframe(&rxFrame2);
 
     if (res != CHECK_OK) {
@@ -793,7 +793,7 @@ RESTARTCONTROLLER
     crypto.Init(tCrypto::TX,
         Setup.Common[Config.ConfigId].BindPhrase,
         Config.Uid, Setup.peer_uid[Config.ConfigId], Setup.tx_random[Config.ConfigId],
-        Setup.Common[Config.ConfigId].Privacy);
+        Setup.Common[Config.ConfigId].Privacy, Setup.LinkKey);
     crypto.SetSessionKey(Config.SessionRandom);
 
     mavlink.Init(); // serial ports selected by SerialPort, SerialPort2
@@ -882,6 +882,8 @@ INITCONTROLLER_END
 
     case LINK_STATE_TRANSMIT:
         fhss.HopToNext();
+        sx.SetFrameLength(Config.FrameLenTx); // the Link Split profiles differ per direction
+        sx2.SetFrameLength(Config.FrameLenTx);
         do_transmit_prepare(tdiversity.Antenna(), fhss.GetCurrI(), fhss.GetCurrI2());
         link_state = LINK_STATE_TRANSMIT_SEND;
         DBG_MAIN_SLIM(dbg.puts("\nt");)
@@ -910,6 +912,8 @@ INITCONTROLLER_END
         break; }
 
     case LINK_STATE_RECEIVE:
+        sx.SetFrameLength(Config.FrameLenRx);
+        sx2.SetFrameLength(Config.FrameLenRx);
         IF_ANTENNA1(sx.SetToRx());
         IF_ANTENNA2(sx2.SetToRx());
         link_state = LINK_STATE_RECEIVE_WAIT;

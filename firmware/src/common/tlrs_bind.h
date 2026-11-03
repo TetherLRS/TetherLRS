@@ -3,7 +3,7 @@
 // GPL3
 // https://www.gnu.org/licenses/gpl-3.0.html
 //*******************************************************
-// The bind phrase the tool writes into the image before flashing
+// The bind phrase and the link key the tool writes into the image before flashing
 //*******************************************************
 #ifndef TLRS_BIND_H
 #define TLRS_BIND_H
@@ -16,13 +16,15 @@ typedef struct {
     char magic[8];
     char phrase[6+1];
     uint8_t spare;
-    uint32_t stamp; // 0xFFFFFFFF: the tool wrote nothing, the stored phrase stays
+    uint32_t stamp; // 0xFFFFFFFF: the tool wrote nothing, the stored phrase and key stay
+    uint8_t key[32]; // the link key, all zero = none
 } tTlrsBind;
 
-__attribute__((used)) const volatile tTlrsBind tlrs_bind = { "TLRSBND", BIND_PHRASE, 0, 0xFFFFFFFF };
+__attribute__((used)) const volatile tTlrsBind tlrs_bind = { "TLRSBND", BIND_PHRASE, 0, 0xFFFFFFFF, {} };
 
 
-// a stamp the stored setup has not taken yet: the first start after that flash, every config gets the phrase
+// a stamp the stored setup has not taken yet: the first start after that flash, every config gets the phrase and
+// the radio the key
 bool tlrs_bind_apply(void)
 {
     uint32_t stamp = tlrs_bind.stamp;
@@ -36,6 +38,7 @@ bool tlrs_bind_apply(void)
     for (uint8_t id = 0; id < SETUP_CONFIG_NUM; id++) {
         setup_default_bindphrase(Setup.Common[id].BindPhrase, id, phrase);
     }
+    for (uint8_t i = 0; i < 32; i++) Setup.LinkKey[i] = tlrs_bind.key[i];
     memcpy(Setup.BindStamp, &stamp, 4);
     return true;
 }

@@ -111,6 +111,10 @@ const char* volatile tlrs_marker_ref = tlrs_marker; // read at startup: the link
 
 
 
+#include "../common/libs/fifo.h"
+
+tFifo<uint8_t, 512> loop_fifo; // Rx Test loopback: what came down waits here to go back up
+
 tRxClock rxclock;
 tPowerupCounter powerup;
 tRDiversity rdiversity;
@@ -326,7 +330,7 @@ void pack_rxcmdframe(tRxFrame* const frame, tFrameStats* const frame_stats)
 
 void prepare_transmit_frame(uint8_t antenna)
 {
-uint8_t payload[FRAME_RX_PAYLOAD_LEN];
+uint8_t payload[FRAME_PAYLOAD_MAX];
 uint8_t payload_len = 0;
 
     bool get_fresh_payload = tarq.GetFreshPayload();
@@ -335,10 +339,11 @@ uint8_t payload_len = 0;
         if (transmit_frame_type == TRANSMIT_FRAME_TYPE_NORMAL) {
             // read data from serial
             if (connected()) {
-                for (uint8_t i = 0; i < FRAME_RX_PAYLOAD_LEN - crypto.NonceLen(); i++) {
-                    if (!sx_serial.available()) break;
-                    uint8_t c = sx_serial.getc();
-                    payload[payload_len++] = c;
+                uint8_t len_max = FRAME_PAYLOAD_LEN(Config.FrameLenRx) - crypto.NonceLen();
+                if (Setup.Rx.Test == RX_TEST_LOOPBACK) { // the tool's benchmark: what came down goes back up
+                    while (payload_len < len_max && loop_fifo.Available()) payload[payload_len++] = loop_fifo.Get();
+                } else {
+                    while (payload_len < len_max && sx_serial.available()) payload[payload_len++] = sx_serial.getc();
                 }
 
                 stats.bytes_transmitted.Add(payload_len);
@@ -408,7 +413,11 @@ void process_received_frame(tTxFrame* const frame)
 
     // output data on serial, but only if connected
     if (!connected()) return;
-    sx_serial.putbuf(frame->payload, frame->status.payload_len);
+    if (Setup.Rx.Test == RX_TEST_LOOPBACK) {
+        loop_fifo.PutBuf(frame->payload, frame->status.payload_len);
+    } else {
+        sx_serial.putbuf(frame->payload, frame->status.payload_len);
+    }
 
     stats.bytes_received.Add(frame->status.payload_len);
     stats.serial_data_received.Inc();
@@ -427,7 +436,7 @@ void do_transmit(uint8_t antenna) // we send a frame to transmitter
     prepare_transmit_frame(antenna);
 
     // to test asymmetric connection, fake rxFrame, to no send doesn't work as it blocks the sx
-    sxSendFrame(antenna, &rxFrame, FRAME_TX_RX_LEN, SEND_FRAME_TMO_MS); // 10ms tmo
+    sxSendFrame(antenna, &rxFrame, Config.FrameLenRx, SEND_FRAME_TMO_MS); // 10ms tmo
 }
 
 
@@ -443,7 +452,7 @@ uint8_t rx_status = RX_STATUS_INVALID; // this also signals that a frame was rec
 
     // we don't need to read sx.GetRxBufferStatus(), but hey
     // we could save 2 byte's time by not reading sync_word again, but hey
-    sxReadFrame(antenna, &txFrame, &txFrame2, FRAME_TX_RX_LEN);
+    sxReadFrame(antenna, &txFrame, &txFrame2, Config.FrameLenTx);
     res = (antenna == ANTENNA_1) ? check_txframe(&txFrame) : check_txframe(&txFrame2);
 
     if (res != CHECK_OK) {
@@ -616,8 +625,9 @@ RESTARTCONTROLLER
     tarq.Init();
     crypto.Init(tCrypto::RX,
         Setup.Common[0].BindPhrase, Setup.peer_uid[0], Config.Uid, Setup.tx_random[0],
-        Setup.Common[0].Privacy);
+        Setup.Common[0].Privacy, Setup.LinkKey);
 
+    loop_fifo.Init();
     mavlink.Init();
     rxcli.Init();
     msp.Init();
@@ -677,6 +687,8 @@ INITCONTROLLER_END
         }
         sx.SetRfFrequency(fhss.GetCurrFreq());
         sx2.SetRfFrequency(fhss.GetCurrFreq2());
+        sx.SetFrameLength(Config.FrameLenTx); // the Link Split profiles differ per direction
+        sx2.SetFrameLength(Config.FrameLenTx);
         IF_ANTENNA1(sx.SetToRx());
         IF_ANTENNA2(sx2.SetToRx());
         link_state = LINK_STATE_RECEIVE_WAIT;
@@ -686,11 +698,13 @@ INITCONTROLLER_END
         break;
 
     case LINK_STATE_TRANSMIT:
-        if (rx_silent && !bind.IsInBind()) {
+        if ((rx_silent || Setup.Rx.Downlink == RX_DOWNLINK_OFF) && !bind.IsInBind()) { // Rx Downlink off: beside a receiver that answers
             sx_serial.flush(); // or the autopilot's old data would go out once the downlink is back
             link_state = LINK_STATE_RECEIVE;
             break;
         }
+        sx.SetFrameLength(Config.FrameLenRx);
+        sx2.SetFrameLength(Config.FrameLenRx);
         rfpower.Update();
         if (!regulatory.TxGo(tdiversity.Antenna(), fhss.GetCurrFreq())) { // not this frame, the ARQ resends its data
             link_state = LINK_STATE_RECEIVE;

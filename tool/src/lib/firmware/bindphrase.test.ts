@@ -5,7 +5,7 @@ import { validPhrase, writeBindPhrase } from './bindphrase';
 
 // an ESP32 application image: 24 byte header with the SHA-256 flag, one data segment holding tlrs_bind, checksum, SHA
 function esp32Image(): Uint8Array {
-  const data = new Uint8Array(64);
+  const data = new Uint8Array(80);
   data.set(new TextEncoder().encode('TLRSBND\0mlrs.0\0\0'), 16);
   new DataView(data.buffer).setUint32(32, 0xffffffff, true);
   const p = 24 + 8 + data.length;
@@ -33,14 +33,16 @@ describe('the bind phrase in the image', () => {
     expect(validPhrase('abc 12')).toBe(false);
   });
 
-  it('writes phrase and stamp, then checksum and SHA-256 again', async () => {
+  it('writes phrase, stamp and key, then checksum and SHA-256 again', async () => {
     const img = esp32Image();
     const end = img.length - 32;
-    await writeBindPhrase(img, 0, true, 'k3y.9x', 0x12345678);
+    const key = Uint8Array.from({ length: 32 }, (_, i) => 0x10 + i);
+    await writeBindPhrase(img, 0, true, 'k3y.9x', 0x12345678, key);
     expect(new TextDecoder().decode(img.subarray(32 + 24, 32 + 31))).toBe('k3y.9x\0');
     expect(new DataView(img.buffer).getUint32(32 + 32, true)).toBe(0x12345678);
+    expect(img.subarray(32 + 36, 32 + 68)).toEqual(key);
     let c = 0xef;
-    for (const b of img.subarray(32, 32 + 64)) c ^= b;
+    for (const b of img.subarray(32, 32 + 80)) c ^= b;
     expect(img[end - 1]).toBe(c);
     expect(Buffer.from(img.subarray(end))).toEqual(sha(img, end));
   });

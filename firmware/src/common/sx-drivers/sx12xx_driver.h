@@ -73,7 +73,6 @@ typedef struct
     uint8_t CodingRate;
     uint8_t PreambleLength;
     uint8_t HeaderType;
-    uint8_t PayloadLength;
     uint8_t CrcEnabled;
     uint8_t InvertIQ;
     uint32_t TimeOverAir; // in us
@@ -90,7 +89,6 @@ typedef struct
     uint8_t SyncWordLength;
     uint8_t SyncWordMatch;
     uint8_t PacketType;
-    uint8_t PayloadLength;
     uint8_t CrcLength;
     uint32_t TimeOverAir; // in us
     int16_t ReceiverSensitivity;
@@ -108,7 +106,6 @@ typedef struct
     uint8_t SyncWordLength;
     uint8_t AddrComp;
     uint8_t PacketType;
-    uint8_t PayloadLength;
     uint8_t CRCType;
     uint8_t Whitening;
     uint32_t TimeOverAir; // in us
@@ -129,6 +126,7 @@ class SxDriverDummy
     void ReadFrame(uint8_t* const data, uint8_t len) {}
     void SetToRx(void) {}
     void SetToIdle(void) {}
+    void SetFrameLength(uint8_t len) {}
 
     void ResetToLoraConfiguration(tSxGlobalConfig* const _gconfig) {}
     void SetRfPower_dbm(int8_t power_dbm) {}

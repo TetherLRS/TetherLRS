@@ -36,7 +36,6 @@ const tSxLoraConfiguration Sx127xLoraConfiguration[] = {
       .CodingRate = SX1276_LORA_CR_4_5,
       .PreambleLength = 12,
       .HeaderType = SX1276_LORA_HEADER_DISABLE,
-      .PayloadLength = FRAME_TX_RX_LEN,
       .CrcEnabled = SX1276_LORA_CRC_DISABLE,
       .InvertIQ = SX1276_LORA_IQ_NORMAL,
       .TimeOverAir = 22300,
@@ -98,7 +97,7 @@ class Sx127xDriverCommon : public Sx127xDriverBase
 
         SetPacketParams(config->PreambleLength,
                         config->HeaderType,
-                        config->PayloadLength,
+                        frame_len,
                         config->CrcEnabled,
                         config->InvertIQ);
 
@@ -195,6 +194,15 @@ class Sx127xDriverCommon : public Sx127xDriverBase
 
     //-- these are the API functions used in the loop
 
+    // the frame length of the direction coming up: the Link Split profiles differ per direction
+    void SetFrameLength(uint8_t len)
+    {
+        if (len == frame_len) return;
+        frame_len = len;
+        if (!gconfig) return;
+        if (lora_configuration) SetPacketParams(lora_configuration->PreambleLength, lora_configuration->HeaderType, frame_len, lora_configuration->CrcEnabled, lora_configuration->InvertIQ);
+    }
+
     void ReadFrame(uint8_t* const data, uint8_t len)
     {
 /*        uint8_t rxStartBufferPointer;
@@ -281,7 +289,7 @@ class Sx127xDriverCommon : public Sx127xDriverBase
 
         if (lora_configuration == nullptr) _config_calc(); // ensure it is set
 
-        return lora_configuration->TimeOverAir;
+        return ((lora_configuration->TimeOverAir) * frame_len) / FRAME_TX_RX_LEN; // the tables hold the 91 byte frame, the fixed preamble makes this a few percent off
     }
 
     int16_t ReceiverSensitivity_dbm(void)
@@ -307,6 +315,7 @@ class Sx127xDriverCommon : public Sx127xDriverBase
 
   private:
     const tSxLoraConfiguration* lora_configuration;
+    uint8_t frame_len = FRAME_TX_RX_LEN; // what the packet params hold
     uint8_t low_frequency_mode;
     int8_t sx_power;
     int8_t actual_power_dbm;

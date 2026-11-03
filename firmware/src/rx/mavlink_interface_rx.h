@@ -560,7 +560,7 @@ bool tRxMavlink::handle_txbuf_ardupilot(uint32_t tnow_ms)
 
     // method C, with improvements
     // assumes 1 sec delta time
-    // was uint32_t rate_max = ((uint32_t)1000 * FRAME_RX_PAYLOAD_LEN) / Config.frame_rate_ms; // theoretical rate, bytes per sec
+    // was uint32_t rate_max = ((uint32_t)1000 * FRAME_PAYLOAD_LEN(Config.FrameLenRx)) / Config.frame_rate_ms; // theoretical rate, bytes per sec
     int32_t frame_cnt_filtered = stats.GetFrameCnt();
     static int32_t frame_cnt = 0;
     static int32_t hysteresis = 10;
@@ -571,7 +571,7 @@ bool tRxMavlink::handle_txbuf_ardupilot(uint32_t tnow_ms)
         hysteresis--;
     }
     if (frame_cnt < 500) frame_cnt = 500;
-    uint32_t rate_max = (frame_cnt * FRAME_RX_PAYLOAD_LEN) / Config.frame_rate_ms; // theoretical rate, bytes per sec
+    uint32_t rate_max = (frame_cnt * FRAME_PAYLOAD_LEN(Config.FrameLenRx)) / Config.frame_rate_ms; // theoretical rate, bytes per sec
     uint32_t rate_percentage = (bytes_link_out * 100) / rate_max;
 #if 0 // debug
 dbg.puts("\nMa: ");dbg.puts(u16toBCD_s(frame_cnt_filtered));dbg.puts(" , ");dbg.puts(u16toBCD_s(frame_cnt));
@@ -657,7 +657,7 @@ bool tRxMavlink::handle_txbuf_method_b(uint32_t tnow_ms)
                 radio_status_tlast_ms = tnow_ms;
                 inject_radio_status = true;
             } else
-            if (serial_in_available() < FRAME_RX_PAYLOAD_LEN*2) { // less than 2 radio messages remain, back to normal
+            if (serial_in_available() < FRAME_PAYLOAD_LEN(Config.FrameLenRx)*2) { // less than 2 radio messages remain, back to normal
                 txbuf_state = TXBUF_STATE_PX4_RECOVER;
                 radio_status_tlast_ms = tnow_ms;
                 inject_radio_status = true;
@@ -684,7 +684,7 @@ bool tRxMavlink::handle_txbuf_method_b(uint32_t tnow_ms)
 
     // method C, with improvements
     // assumes 1 sec delta time
-    uint32_t rate_max = ((uint32_t)1000 * FRAME_RX_PAYLOAD_LEN) / Config.frame_rate_ms; // theoretical rate, bytes per sec
+    uint32_t rate_max = ((uint32_t)1000 * FRAME_PAYLOAD_LEN(Config.FrameLenRx)) / Config.frame_rate_ms; // theoretical rate, bytes per sec
     uint32_t rate_percentage = (bytes_link_out * 100) / rate_max;
 
     // https://github.com/ArduPilot/ardupilot/blob/fa6441544639bd5dc84c3e6e3d2f7bfd2aecf96d/libraries/GCS_MAVLink/GCS_Common.cpp#L782-L801

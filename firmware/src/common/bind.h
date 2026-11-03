@@ -130,6 +130,7 @@ void tBindBase::ConfigForBind(void)
         configure_mode(MODE_19HZ, Config.FrequencyBand);
         mode_mask |= (1 << Config.FrequencyBand); // set bit for current frequency band
     }
+    Config.FrameLenTx = Config.FrameLenRx = FRAME_TX_RX_LEN; // the bind frames
 
     // we may need them both, so ensure they are both started up
     sx.StartUp(&Config.Sx);

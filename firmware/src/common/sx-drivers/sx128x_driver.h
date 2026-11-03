@@ -28,7 +28,6 @@ const tSxLoraConfiguration Sx128xLoraConfiguration[] = {
       .CodingRate = SX1280_LORA_CR_LI_4_5,
       .PreambleLength = 12,
       .HeaderType = SX1280_LORA_HEADER_DISABLE,
-      .PayloadLength = FRAME_TX_RX_LEN,
       .CrcEnabled = SX1280_LORA_CRC_DISABLE,
       .InvertIQ = SX1280_LORA_IQ_NORMAL,
       .TimeOverAir = 7892,
@@ -39,7 +38,6 @@ const tSxLoraConfiguration Sx128xLoraConfiguration[] = {
       .CodingRate = SX1280_LORA_CR_LI_4_5,
       .PreambleLength = 12,
       .HeaderType = SX1280_LORA_HEADER_DISABLE,
-      .PayloadLength = FRAME_TX_RX_LEN,
       .CrcEnabled = SX1280_LORA_CRC_DISABLE,
       .InvertIQ = SX1280_LORA_IQ_NORMAL,
       .TimeOverAir = 13418,
@@ -50,7 +48,6 @@ const tSxLoraConfiguration Sx128xLoraConfiguration[] = {
       .CodingRate = SX1280_LORA_CR_LI_4_5,
       .PreambleLength = 12,
       .HeaderType = SX1280_LORA_HEADER_DISABLE,
-      .PayloadLength = FRAME_TX_RX_LEN,
       .CrcEnabled = SX1280_LORA_CRC_DISABLE,
       .InvertIQ = SX1280_LORA_IQ_NORMAL,
       .TimeOverAir = 23527,
@@ -66,7 +63,6 @@ const tSxFlrcConfiguration Sx128xFlrcConfiguration[] = { // 2.4 GHz, 111 Hz FLRC
       .SyncWordLength = SX1280_FLRC_SYNCWORD_LEN_P32S,
       .SyncWordMatch = SX1280_FLRC_SYNCWORD_MATCH_1,
       .PacketType = SX1280_FLRC_PACKET_TYPE_FIXED_LENGTH,
-      .PayloadLength = FRAME_TX_RX_LEN,
       .CrcLength = SX1280_FLRC_CRC_DISABLE,
       .TimeOverAir = 2383,
       .ReceiverSensitivity = -104,
@@ -116,7 +112,7 @@ class Sx128xDriverCommon : public Sx128xDriverBase
 
         SetPacketParams(config->PreambleLength,
                         config->HeaderType,
-                        config->PayloadLength,
+                        frame_len,
                         config->CrcEnabled,
                         config->InvertIQ);
     }
@@ -151,7 +147,7 @@ class Sx128xDriverCommon : public Sx128xDriverBase
                             config->SyncWordLength,
                             config->SyncWordMatch,
                             config->PacketType,
-                            config->PayloadLength,
+                            frame_len,
                             config->CrcLength);
 
         SetSyncWordFLRC(sync_word, config->CodingRate);
@@ -211,6 +207,19 @@ class Sx128xDriverCommon : public Sx128xDriverBase
     }
 
     //-- these are the API functions used in the loop
+
+    // the frame length of the direction coming up: the Link Split profiles differ per direction
+    void SetFrameLength(uint8_t len)
+    {
+        if (len == frame_len) return;
+        frame_len = len;
+        if (!gconfig) return;
+        if (gconfig->modeIsLora()) {
+            if (lora_configuration) SetPacketParams(lora_configuration->PreambleLength, lora_configuration->HeaderType, frame_len, lora_configuration->CrcEnabled, lora_configuration->InvertIQ);
+        } else {
+            if (flrc_configuration) SetPacketParamsFLRC(flrc_configuration->AGCPreambleLength, flrc_configuration->SyncWordLength, flrc_configuration->SyncWordMatch, flrc_configuration->PacketType, frame_len, flrc_configuration->CrcLength);
+        }
+    }
 
     void ReadFrame(uint8_t* const data, uint8_t len)
     {
@@ -304,7 +313,7 @@ class Sx128xDriverCommon : public Sx128xDriverBase
 
         if (lora_configuration == nullptr && flrc_configuration == nullptr) _config_calc(); // ensure it is set
 
-        return (gconfig->modeIsLora()) ? lora_configuration->TimeOverAir : flrc_configuration->TimeOverAir;
+        return (((gconfig->modeIsLora()) ? lora_configuration->TimeOverAir : flrc_configuration->TimeOverAir) * frame_len) / FRAME_TX_RX_LEN; // the tables hold the 91 byte frame, the fixed preamble makes this a few percent off
     }
 
     int16_t ReceiverSensitivity_dbm(void)
@@ -330,6 +339,7 @@ class Sx128xDriverCommon : public Sx128xDriverBase
 
   private:
     const tSxLoraConfiguration* lora_configuration;
+    uint8_t frame_len = FRAME_TX_RX_LEN; // what the packet params hold
     const tSxFlrcConfiguration* flrc_configuration;
     int8_t sx_power;
     int8_t actual_power_dbm;

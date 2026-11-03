@@ -33,7 +33,6 @@ const tSxLoraConfiguration Sx126xLoraConfiguration[] = {
       .CodingRate = SX126X_LORA_CR_4_5,
       .PreambleLength = 12,
       .HeaderType = SX126X_LORA_HEADER_DISABLE,
-      .PayloadLength = FRAME_TX_RX_LEN,
       .CrcEnabled = SX126X_LORA_CRC_DISABLE,
       .InvertIQ = SX126X_LORA_IQ_NORMAL,
       .TimeOverAir = 13200,
@@ -44,7 +43,6 @@ const tSxLoraConfiguration Sx126xLoraConfiguration[] = {
       .CodingRate = SX126X_LORA_CR_4_5,
       .PreambleLength = 12,
       .HeaderType = SX126X_LORA_HEADER_DISABLE,
-      .PayloadLength = FRAME_TX_RX_LEN,
       .CrcEnabled = SX126X_LORA_CRC_DISABLE,
       .InvertIQ = SX126X_LORA_IQ_NORMAL,
       .TimeOverAir = 22560,
@@ -62,7 +60,6 @@ const tSxGfskConfiguration Sx126xGfskConfiguration[] = { // 900 MHz, 50 Hz FSK
       .SyncWordLength = 16,
       .AddrComp = SX126X_GFSK_ADDRESS_FILTERING_DISABLE,
       .PacketType = SX126X_GFSK_PKT_FIX_LEN,
-      .PayloadLength = FRAME_TX_RX_LEN,
       .CRCType = SX126X_GFSK_CRC_OFF,
       .Whitening = SX126X_GFSK_WHITENING_ENABLE,
       .TimeOverAir = 7600,
@@ -127,7 +124,7 @@ class Sx126xDriverCommon : public Sx126xDriverBase
 
         SetPacketParams(config->PreambleLength,
                         config->HeaderType,
-                        config->PayloadLength,
+                        frame_len,
                         config->CrcEnabled,
                         config->InvertIQ);
 
@@ -168,7 +165,7 @@ class Sx126xDriverCommon : public Sx126xDriverBase
                             config->SyncWordLength,
                             config->AddrComp,
                             config->PacketType,
-                            config->PayloadLength,
+                            frame_len,
                             config->CRCType,
                             config->Whitening);
 
@@ -268,6 +265,19 @@ class Sx126xDriverCommon : public Sx126xDriverBase
 
     //-- these are the API functions used in the loop
 
+    // the frame length of the direction coming up: the Link Split profiles differ per direction
+    void SetFrameLength(uint8_t len)
+    {
+        if (len == frame_len) return;
+        frame_len = len;
+        if (!gconfig) return;
+        if (gconfig->modeIsLora()) {
+            if (lora_configuration) SetPacketParams(lora_configuration->PreambleLength, lora_configuration->HeaderType, frame_len, lora_configuration->CrcEnabled, lora_configuration->InvertIQ);
+        } else {
+            if (gfsk_configuration) SetPacketParamsGFSK(gfsk_configuration->PreambleLength, gfsk_configuration->PreambleDetectorLength, gfsk_configuration->SyncWordLength, gfsk_configuration->AddrComp, gfsk_configuration->PacketType, frame_len, gfsk_configuration->CRCType, gfsk_configuration->Whitening);
+        }
+    }
+
     void ReadFrame(uint8_t* const data, uint8_t len)
     {
 /*        uint8_t rxStartBufferPointer;
@@ -358,7 +368,7 @@ class Sx126xDriverCommon : public Sx126xDriverBase
 
         if (lora_configuration == nullptr && gfsk_configuration == nullptr) _config_calc(); // ensure it is set
 
-        return (gconfig->modeIsLora()) ? lora_configuration->TimeOverAir : gfsk_configuration->TimeOverAir;
+        return (((gconfig->modeIsLora()) ? lora_configuration->TimeOverAir : gfsk_configuration->TimeOverAir) * frame_len) / FRAME_TX_RX_LEN; // the tables hold the 91 byte frame, the fixed preamble makes this a few percent off
     }
 
     int16_t ReceiverSensitivity_dbm(void)
@@ -385,6 +395,7 @@ class Sx126xDriverCommon : public Sx126xDriverBase
 
   private:
     const tSxLoraConfiguration* lora_configuration;
+    uint8_t frame_len = FRAME_TX_RX_LEN; // what the packet params hold
     const tSxGfskConfiguration* gfsk_configuration;
     int8_t sx_power;
     int8_t actual_power_dbm;

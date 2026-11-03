@@ -17,6 +17,7 @@
 #pragma once
 
 
+#include "../common/tlrs_key.h"
 #include <ctype.h>
 #include <string.h>
 #include "../common/setup_list.h"
@@ -88,6 +89,7 @@ class tRxCli
     void session(void);
     void send_ack(void);
     void command(void);
+    void linkkey(void);
 
     uint8_t* copy_ptr(uint8_t idx) { return (uint8_t*)&copy + ((uint8_t*)RxCliParam[idx].ptr - (uint8_t*)&Setup); }
     uint16_t allowed_mask(uint8_t idx);
@@ -111,7 +113,7 @@ class tRxCli
 
     tSetup copy;
 
-    char buf[48];
+    char buf[80]; // a link key line is 74 characters
     uint8_t pos;
     int8_t list_idx; // next parameter of a "pl" being printed, -1 when none
 
@@ -269,6 +271,23 @@ void tRxCli::session(void)
 }
 
 
+// linkkey, linkkey = <64 hex digits>, linkkey = none: into the copy, pstore keeps it
+void tRxCli::linkkey(void)
+{
+    const char* s = buf + 7;
+    while (*s == ' ') s++;
+    if (*s == '\0') {
+        putsn(tlrs_key_is_set(copy.LinkKey) ? "  link key: set" : "  link key: not set");
+        return;
+    }
+    if (*s != '=') { putsn("err: invalid command"); return; }
+    s++;
+    while (*s == ' ') s++;
+    if (!tlrs_key_from_text(s, copy.LinkKey)) { putsn("err: 64 hex digits, or none"); return; }
+    putsn(tlrs_key_is_set(copy.LinkKey) ? "  link key: set, pstore keeps it" : "  link key: cleared, pstore keeps it");
+}
+
+
 void tRxCli::command(void)
 {
     if (!strcmp(buf, "v")) {
@@ -289,6 +308,7 @@ void tRxCli::command(void)
         close();
         return;
     }
+    if (!strncmp(buf, "linkkey", 7)) { linkkey(); return; }
 
     // p name = value, p name = ?
     if (buf[0] != 'p' || buf[1] != ' ') { putsn("err: invalid command"); return; }

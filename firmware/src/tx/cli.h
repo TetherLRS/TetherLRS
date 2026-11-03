@@ -18,6 +18,7 @@
 #include "../common/hal/hal.h"
 #include "tasks.h"
 #include "setup_tx.h"
+#include "../common/tlrs_key.h"
 #ifdef USE_SERIAL_ESCAPE
 #include "sik_at.h"
 #endif
@@ -346,6 +347,7 @@ class tTxCli
     bool is_cmd_param_set(char* const name, char* const svalue);
     bool is_cmd_set_value(const char* const cmd, int32_t* const value);
     bool is_cmd_set_str(const char* const cmd, char* const str);
+    bool cmd_linkkey(void);
 
     void putc(char c) { com->putc(c); }
     void puts(const char* s) { com->puts(s); }
@@ -505,6 +507,25 @@ uint8_t n;
 
     strcpy(str, &s[1]); // remove the '='
 
+    return true;
+}
+
+
+// linkkey, linkkey = <64 hex digits>, linkkey = none: the key stays on this radio, pstore keeps it
+bool tTxCli::cmd_linkkey(void)
+{
+    if (strncmp(buf, "linkkey", 7) != 0) return false;
+    const char* s = buf + 7;
+    while (*s == ' ') s++;
+    if (*s == '\0') {
+        putsn(tlrs_key_is_set(Setup.LinkKey) ? "  link key: set" : "  link key: not set");
+        return true;
+    }
+    if (*s != '=') return false;
+    s++;
+    while (*s == ' ') s++;
+    if (!tlrs_key_from_text(s, Setup.LinkKey)) { putsn("err: 64 hex digits, or none"); return true; }
+    putsn(tlrs_key_is_set(Setup.LinkKey) ? "  link key: set, pstore keeps it, the receiver needs the same" : "  link key: cleared, pstore keeps it");
     return true;
 }
 
@@ -833,7 +854,8 @@ void tTxCli::print_help_do(void)
         case 12: putsn("  bind            -> start binding"); break;
         case 13: putsn("  reload          -> reload all parameter settings"); break;
         case 14: putsn("  stats           -> starts streaming statistics"); break;
-        case 15:
+        case 15: putsn("  linkkey [= hex] -> show, set (64 hex digits) or clear (none) the link key"); break;
+        case 16:
             putsn("  listfreqs       -> lists frequencies used in fhss scheme");
 #ifdef USE_SERIAL_ESCAPE
             putsn("  exit, ato       -> back to data on the serial port");
@@ -841,24 +863,24 @@ void tTxCli::print_help_do(void)
 #endif
             break;
 #if !defined ESP32 || defined CONFIG_IDF_TARGET_ESP32C3 || defined CONFIG_IDF_TARGET_ESP32S3 // ESP8266, C3 and S3 can, in software
-        case 16: putsn("  systemboot      -> call system bootloader"); break;
+        case 17: putsn("  systemboot      -> call system bootloader"); break;
 #else
-        case 16: break;
+        case 17: break;
 #endif
 #ifdef USE_ESP_WIFI_BRIDGE
-        case 17: putsn("  esppt           -> enter serial passthrough"); break;
-        case 18: putsn("  espboot         -> reboot ESP and enter serial passthrough"); break;
+        case 18: putsn("  esppt           -> enter serial passthrough"); break;
+        case 19: putsn("  espboot         -> reboot ESP and enter serial passthrough"); break;
   #ifdef USE_ESP_WIFI_BRIDGE_RST_GPIO0
-        case 19: putsn("  espname         -> get current name (TCP/UDP/UDPSTA/BT/BLE)"); break;
-        case 20: putsn("  esp get pswd          -> get current password (TCP/UDP/UDPSTA)"); break;
-        case 21: putsn("  esp set pswd = str    -> set password (24 chars max)"); break;
-        case 22: putsn("  esp get netssid       -> get network SSID (UDPSTA)"); break;
-        case 23: putsn("  esp set netssid = str -> set network SSID (24 chars max)"); break;
+        case 20: putsn("  espname         -> get current name (TCP/UDP/UDPSTA/BT/BLE)"); break;
+        case 21: putsn("  esp get pswd          -> get current password (TCP/UDP/UDPSTA)"); break;
+        case 22: putsn("  esp set pswd = str    -> set password (24 chars max)"); break;
+        case 23: putsn("  esp get netssid       -> get network SSID (UDPSTA)"); break;
+        case 24: putsn("  esp set netssid = str -> set network SSID (24 chars max)"); break;
   #endif
 #elif defined USE_HC04_MODULE // let's assume that not both ESP and HC04 can be true
-        case 17: putsn("  hc04 pt               -> enter serial passthrough"); break;
-        case 18: putsn("  hc04 getpin           -> get pin of HC04"); break;
-        case 19: putsn("  hc04 setpin = value   -> set pin of HC04"); break;
+        case 18: putsn("  hc04 pt               -> enter serial passthrough"); break;
+        case 19: putsn("  hc04 getpin           -> get pin of HC04"); break;
+        case 20: putsn("  hc04 setpin = value   -> set pin of HC04"); break;
 #endif
         default:
             // last chunk, reset
@@ -989,6 +1011,9 @@ bool rx_param_changed;
                 puts("  change ConfigId to ");putc('0'+value);putsn("");
             }
             }
+
+        } else
+        if (cmd_linkkey()) {
 
         } else
         if (is_cmd("stats")) {

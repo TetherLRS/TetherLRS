@@ -1,6 +1,6 @@
-// The bind phrase goes into the image just before flashing (src/common/tlrs_bind.h), so no image on the web carries
-// one anyone could link with. The radio takes it at its first start after that flash. The image's checksum, and the
-// SHA-256 an ESP32 image carries, are made again for the changed bytes.
+// The bind phrase, and the link key when there is one, go into the image just before flashing (src/common/tlrs_bind.h),
+// so no image on the web carries what anyone could link with. The radio takes them at its first start after that
+// flash. The image's checksum, and the SHA-256 an ESP32 image carries, are made again for the changed bytes.
 
 const MAGIC = new TextEncoder().encode('TLRSBND\0');
 
@@ -63,8 +63,12 @@ function crc8266(data: Uint8Array): number {
 }
 
 // start: where the application image begins in this file (0x1000 on an ESP8266, behind its boot loader)
-export async function writeBindPhrase(img: Uint8Array, start: number, esp32: boolean, phrase: string, stamp: number): Promise<void> {
+export const KEY_LEN = 32;
+
+// key: 32 bytes, or none for no key (the radio then clears the one it held)
+export async function writeBindPhrase(img: Uint8Array, start: number, esp32: boolean, phrase: string, stamp: number, key?: Uint8Array): Promise<void> {
   if (!validPhrase(phrase)) throw new Error('The bind phrase is 6 characters: a to z, 0 to 9, # . _ -');
+  if (key && key.length !== KEY_LEN) throw new Error('The link key is 32 bytes');
   const v = new DataView(img.buffer, img.byteOffset, img.length);
   // the ESP8266 packer made the checksum with these two words at zero, then wrote the file's length and CRC into them
   const crcAt = start + 0x10;
@@ -76,13 +80,15 @@ export async function writeBindPhrase(img: Uint8Array, start: number, esp32: boo
   if (checksum(work, l) !== work[l.checksumAt] || (arduino && crc8266(work) !== crcWas)) {
     throw new Error('the image does not check out before the bind phrase goes in');
   }
-  const at = find(img, start, l.checksumAt).filter((i) => l.segments.some((s) => i >= s.at && i + 20 <= s.at + s.size));
+  const at = find(img, start, l.checksumAt).filter((i) => l.segments.some((s) => i >= s.at && i + 12 + KEY_LEN <= s.at + s.size));
   if (at.length !== 1) throw new Error('This build has no place for the bind phrase: it is older than the tool. Pick a newer one.');
   if (arduino) img.fill(0, crcAt, crcAt + 8);
   const p = at[0] + 8;
   img.set(new TextEncoder().encode(phrase), p);
   img[p + 6] = 0;
   v.setUint32(p + 8, stamp, true);
+  img.fill(0, p + 12, p + 12 + KEY_LEN);
+  if (key) img.set(key, p + 12);
   img[l.checksumAt] = checksum(img, l);
   if (arduino) {
     const crc = crc8266(img);

@@ -53,6 +53,22 @@ typedef enum {
 #define FRAME_TYPE_IS_ENCRYPTABLE(ft)  (ft == FRAME_TYPE_TX || ft == FRAME_TYPE_CMD_ENCRYPTED)
 
 
+// the CRC closes the frame: the last two bytes of the length its direction runs with
+void frame_set_crc(void* const frame, uint8_t frame_len)
+{
+    uint16_t crc = fmav_crc_calculate((uint8_t*)frame, frame_len - 2);
+    memcpy((uint8_t*)frame + frame_len - 2, &crc, 2);
+}
+
+bool frame_crc_ok(void* const frame, uint8_t frame_len)
+{
+    uint16_t crc = fmav_crc_calculate((uint8_t*)frame, frame_len - 2);
+    uint16_t crc_in;
+    memcpy(&crc_in, (uint8_t*)frame + frame_len - 2, 2);
+    return (crc == crc_in);
+}
+
+
 //-------------------------------------------------------
 // Tx Frames (send from Tx to Rx)
 //-------------------------------------------------------
@@ -71,9 +87,9 @@ void _pack_txframe_w_type(
     uint8_t* const payload,
     uint8_t payload_len)
 {
-uint16_t crc;
+uint8_t data_len = FRAME_PAYLOAD_LEN(Config.FrameLenTx);
 
-    if (payload_len > FRAME_TX_PAYLOAD_LEN) payload_len = FRAME_TX_PAYLOAD_LEN; // should never occur, but play it safe
+    if (payload_len > data_len) payload_len = data_len; // should never occur, but play it safe
 
     memset((uint8_t*)frame, 0, sizeof(tTxFrame));
 
@@ -98,17 +114,14 @@ uint16_t crc;
 
     // encrypt only normal TX frames and encryptable CMD frames
     if (crypto.PrivacyLevel() && FRAME_TYPE_IS_ENCRYPTABLE(frame->status.frame_type)) {
-        CHECK_PAYLOAD_MAX_LEN(frame->status.payload_len,FRAME_TX_PAYLOAD_LEN);
+        CHECK_PAYLOAD_MAX_LEN(frame->status.payload_len,data_len);
         // encrypt data, move data to payload + N, copy nonce & mac into payload, correct len
         uint8_t payload_len = frame->status.payload_len;
         frame->status.payload_len += crypto.NonceLen(); // adjust to new payload len
         crypto.Encrypt(&(frame->status), 5, frame->payload, payload_len);
     }
 
-    // finalize, crc
-    fmav_crc_init(&crc);
-    fmav_crc_accumulate_buf(&crc, (uint8_t*)frame, FRAME_TX_RX_LEN - 2);
-    frame->crc = crc;
+    frame_set_crc(frame, Config.FrameLenTx);
 }
 
 
@@ -129,8 +142,6 @@ void pack_txframe(
 // returns 0 if OK !!
 uint8_t check_txframe(tTxFrame* const frame)
 {
-uint16_t crc;
-
     if (frame->sync_word != Config.FrameSyncWord) return CHECK_ERROR_SYNCWORD;
 
     if ((frame->status.frame_type != FRAME_TYPE_TX) &&
@@ -139,14 +150,12 @@ uint16_t crc;
         return CHECK_ERROR_HEADER;
     }
 
-    if (frame->status.payload_len > FRAME_TX_PAYLOAD_LEN) return CHECK_ERROR_HEADER;
+    if (frame->status.payload_len > FRAME_PAYLOAD_LEN(Config.FrameLenTx)) return CHECK_ERROR_HEADER;
     if (FRAME_TYPE_IS_ENCRYPTABLE(frame->status.frame_type) && frame->status.payload_len < crypto.NonceLen()) {
         return CHECK_ERROR_HEADER;
     }
 
-    fmav_crc_init(&crc);
-    fmav_crc_accumulate_buf(&crc, (uint8_t*)frame, FRAME_TX_RX_LEN - 2);
-    if (crc != frame->crc) return CHECK_ERROR_CRC;
+    if (!frame_crc_ok(frame, Config.FrameLenTx)) return CHECK_ERROR_CRC;
 
     // we don't do the encryption here
     // might be logically cleaner, but performance-wise it's better to do in pre loop
@@ -187,8 +196,6 @@ bool decrypt_txframe(tTxFrame* const frame)
 // update header info of a tRxFrame, keep payload
 void update_rxframe_stats(tRxFrame* const frame, tFrameStats* const frame_stats)
 {
-uint16_t crc;
-
     frame->sync_word = Config.FrameSyncWord;
     // keep !! frame->status.seq_no = frame_stats->seq_no;
     frame->status.ack = frame_stats->ack;
@@ -208,9 +215,7 @@ uint16_t crc;
         crypto.RecalculateMac(&(frame->status), 5, frame->payload, frame->status.payload_len);
     }
 
-    fmav_crc_init(&crc);
-    fmav_crc_accumulate_buf(&crc, (uint8_t*)frame, FRAME_TX_RX_LEN - 2);
-    frame->crc = crc;
+    frame_set_crc(frame, Config.FrameLenRx);
 }
 
 
@@ -225,9 +230,9 @@ void _pack_rxframe_w_type(
     uint8_t* const payload,
     uint8_t payload_len)
 {
-uint16_t crc;
+uint8_t data_len = FRAME_PAYLOAD_LEN(Config.FrameLenRx);
 
-    if (payload_len > FRAME_RX_PAYLOAD_LEN) payload_len = FRAME_RX_PAYLOAD_LEN; // should never occur, but play it safe
+    if (payload_len > data_len) payload_len = data_len; // should never occur, but play it safe
 
     memset((uint8_t*)frame, 0, sizeof(tRxFrame));
 
@@ -250,23 +255,16 @@ uint16_t crc;
         frame->payload[i] = payload[i];
     }
 
-    // encrypt only normal RX frames
-    // Note: FRAME_TYPE_CMD-FRAME_CMD_RX_SETUPDATA sends tRxCmdFrameRxSetupData,
-    // which is 82 bytes of size, i.e., payload_len = 82. It thus cannot be encrypted,
-    // since Encrypt() would then write beyond the payload area.
-    // It doesn't carry any secret data, so shouldn't be too bad.
+    // encrypt only normal RX frames; the setup data command carries no secret and goes as it is
     if (crypto.PrivacyLevel() && frame->status.frame_type == FRAME_TYPE_RX) {
-        CHECK_PAYLOAD_MAX_LEN(frame->status.payload_len,FRAME_RX_PAYLOAD_LEN);
+        CHECK_PAYLOAD_MAX_LEN(frame->status.payload_len,data_len);
         // encrypt data, move data to payload + N, copy nonce & mac into payload, correct len
         uint8_t payload_len = frame->status.payload_len;
         frame->status.payload_len += crypto.NonceLen(); // adjust to new payload len
         crypto.Encrypt(&(frame->status), 5, frame->payload, payload_len);
     }
 
-    // finalize, crc
-    fmav_crc_init(&crc);
-    fmav_crc_accumulate_buf(&crc, (uint8_t*)frame, FRAME_TX_RX_LEN - 2);
-    frame->crc = crc;
+    frame_set_crc(frame, Config.FrameLenRx);
 }
 
 
@@ -287,22 +285,18 @@ void pack_rxframe(
 // returns 0 if OK !!
 uint8_t check_rxframe(tRxFrame* const frame)
 {
-uint16_t crc;
-
     if (frame->sync_word != Config.FrameSyncWord) return CHECK_ERROR_SYNCWORD;
 
     if ((frame->status.frame_type != FRAME_TYPE_RX) && (frame->status.frame_type != FRAME_TYPE_CMD)) {
         return CHECK_ERROR_HEADER;
     }
 
-    if (frame->status.payload_len > FRAME_RX_PAYLOAD_LEN) return CHECK_ERROR_HEADER;
+    if (frame->status.payload_len > FRAME_PAYLOAD_LEN(Config.FrameLenRx)) return CHECK_ERROR_HEADER;
     if (frame->status.frame_type == FRAME_TYPE_RX && frame->status.payload_len < crypto.NonceLen()) {
         return CHECK_ERROR_HEADER;
     }
 
-    fmav_crc_init(&crc);
-    fmav_crc_accumulate_buf(&crc, (uint8_t*)frame, FRAME_TX_RX_LEN - 2);
-    if (crc != frame->crc) return CHECK_ERROR_CRC;
+    if (!frame_crc_ok(frame, Config.FrameLenRx)) return CHECK_ERROR_CRC;
 
     return CHECK_OK;
 }

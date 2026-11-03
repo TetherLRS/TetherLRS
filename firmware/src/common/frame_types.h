@@ -54,9 +54,9 @@ typedef struct
 
 
 #define FRAME_TX_RX_HEADER_LEN  7
-// TetherLRS carries no RC channels: both frames are header, data and CRC
-#define FRAME_TX_PAYLOAD_LEN    82
-#define FRAME_RX_PAYLOAD_LEN    82
+// no RC channels: a frame is header, data and CRC, its length that of its direction's Link Split profile
+#define FRAME_PAYLOAD_LEN(frame_len)  ((frame_len) - FRAME_TX_RX_HEADER_LEN - 2) // the data a frame of that length carries
+#define FRAME_PAYLOAD_MAX       FRAME_PAYLOAD_LEN(FRAME_LEN_MAX) // 100
 #define FRAME_CMD_PAYLOAD_LEN   64 // command frames fit the shortest frame of every Link Split
 
 
@@ -103,9 +103,8 @@ typedef struct
 {
     uint16_t sync_word; // 2 bytes
     tTxFrameStatus status; // 5 bytes
-    uint8_t payload[82]; // = FRAME_TX_PAYLOAD_LEN
-    uint16_t crc;
-}) tTxFrame; // 91 bytes
+    uint8_t payload[FRAME_PAYLOAD_MAX + 2]; // the data, the CRC at frame length - 2
+}) tTxFrame; // FRAME_LEN_MAX bytes
 
 
 //-- Rx Frame ----------
@@ -115,9 +114,8 @@ typedef struct
 {
     uint16_t sync_word; // 2 bytes
     tRxFrameStatus status; // 5 bytes
-    uint8_t payload[82]; // = FRAME_RX_PAYLOAD_LEN
-    uint16_t crc;
-}) tRxFrame; // 91 bytes
+    uint8_t payload[FRAME_PAYLOAD_MAX + 2]; // the data, the CRC at frame length - 2
+}) tRxFrame; // FRAME_LEN_MAX bytes
 
 
 //-------------------------------------------------------

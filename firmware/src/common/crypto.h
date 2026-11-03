@@ -51,7 +51,7 @@ class tCrypto
     void Init(
         uint8_t role,
         char* const bind_phrase, uint8_t tx_uid[12], uint8_t rx_uid[12], uint64_t tx_random,
-        uint8_t privacy_level);
+        uint8_t privacy_level, const uint8_t* const link_key);
 
     void SetSessionKey(uint64_t session_random); // Tx only
     void EncryptSessionRandom(uint8_t* const buf28, uint64_t startup_random, uint64_t bind_random); // Tx only
@@ -79,7 +79,7 @@ class tCrypto
     uint8_t _mac_len;
 
     uint64_t _static_random;
-    uint8_t _static_source[64];
+    uint8_t _static_source[80]; // 78 used
     uint8_t _static_key[32];
 
     uint32_t _startup_nonce_u32;

@@ -942,6 +942,14 @@ void setup_configure_config(uint8_t config_id)
     // sets Mode and related, also sets Sx/Sx2.LoraConfigIndex, Sx/Sx2.is_lora, Sx/Sx2.FrequencyBand
     configure_mode(Setup.Common[config_id].Mode, Config.FrequencyBand);
 
+    //-- Link Split: the frame length of each direction, their sum stays the same so a cycle's air time does too
+
+    Config.FrameLenTx = Config.FrameLenRx = FRAME_TX_RX_LEN;
+    switch (Setup.Common[config_id].LinkSplit) {
+    case LINK_SPLIT_DOWNLINK: Config.FrameLenTx = FRAME_LEN_MIN; Config.FrameLenRx = FRAME_LEN_MAX; break;
+    case LINK_SPLIT_UPLINK: Config.FrameLenTx = FRAME_LEN_MAX; Config.FrameLenRx = FRAME_LEN_MIN; break;
+    }
+
     //-- Sx12xx
     //     LoraConfigIndex; <- set by configure_mode()
     //     FskSyncWord

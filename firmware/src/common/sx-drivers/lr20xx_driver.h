@@ -29,7 +29,6 @@ const tSxLoraConfiguration Lr20xxLoraConfiguration[] = {
       .CodingRate = LR20XX_LORA_CR_4_5,
       .PreambleLength = 12,
       .HeaderType = LR20XX_LORA_HEADER_DISABLE,
-      .PayloadLength = FRAME_TX_RX_LEN,
       .CrcEnabled = LR20XX_LORA_CRC_DISABLE,
       .InvertIQ = LR20XX_LORA_IQ_NORMAL,
       .TimeOverAir = 13200,
@@ -40,7 +39,6 @@ const tSxLoraConfiguration Lr20xxLoraConfiguration[] = {
       .CodingRate = LR20XX_LORA_CR_4_5,
       .PreambleLength = 12,
       .HeaderType = LR20XX_LORA_HEADER_DISABLE,
-      .PayloadLength = FRAME_TX_RX_LEN,
       .CrcEnabled = LR20XX_LORA_CRC_DISABLE,
       .InvertIQ = LR20XX_LORA_IQ_NORMAL,
       .TimeOverAir = 22560,
@@ -51,7 +49,6 @@ const tSxLoraConfiguration Lr20xxLoraConfiguration[] = {
       .CodingRate = LR20XX_LORA_CR_LI_4_5,
       .PreambleLength = 12,
       .HeaderType = LR20XX_LORA_HEADER_DISABLE,
-      .PayloadLength = FRAME_TX_RX_LEN,
       .CrcEnabled = LR20XX_LORA_CRC_DISABLE,
       .InvertIQ = LR20XX_LORA_IQ_NORMAL,
       .TimeOverAir = 7892,
@@ -62,7 +59,6 @@ const tSxLoraConfiguration Lr20xxLoraConfiguration[] = {
       .CodingRate = LR20XX_LORA_CR_LI_4_5,
       .PreambleLength = 12,
       .HeaderType = LR20XX_LORA_HEADER_DISABLE,
-      .PayloadLength = FRAME_TX_RX_LEN,
       .CrcEnabled = LR20XX_LORA_CRC_DISABLE,
       .InvertIQ = LR20XX_LORA_IQ_NORMAL,
       .TimeOverAir = 13418,
@@ -73,7 +69,6 @@ const tSxLoraConfiguration Lr20xxLoraConfiguration[] = {
       .CodingRate = LR20XX_LORA_CR_LI_4_5,
       .PreambleLength = 12,
       .HeaderType = LR20XX_LORA_HEADER_DISABLE,
-      .PayloadLength = FRAME_TX_RX_LEN,
       .CrcEnabled = LR20XX_LORA_CRC_DISABLE,
       .InvertIQ = LR20XX_LORA_IQ_NORMAL,
       .TimeOverAir = 23527,
@@ -91,7 +86,6 @@ const tSxGfskConfiguration Lr20xxGfskConfiguration[] = { // 900 MHz, FSK 50 Hz
       .SyncWordLength = 16,
       .AddrComp = LR20XX_FSK_ADDR_COMP_DISABLE,
       .PacketType = LR20XX_FSK_PKT_FORMAT_FIX_LEN,
-      .PayloadLength = FRAME_TX_RX_LEN,
       .CRCType = LR20XX_FSK_CRC_OFF,
       .Whitening = LR20XX_FSK_WHITENING_ENABLE,
       .TimeOverAir = 7600,
@@ -107,7 +101,6 @@ const tSxFlrcConfiguration Lr20xxFlrcConfiguration[] = { // 2.4 GHz, FLRC 111 Hz
       .SyncWordLength = LR20XX_FLRC_SYNCWORD_LEN_32_BITS,
       .SyncWordMatch = LR20XX_FLRC_SYNC_MATCH_1,
       .PacketType = LR20XX_FLRC_PKT_FORMAT_FIX_LEN,
-      .PayloadLength = FRAME_TX_RX_LEN,
       .CrcLength = LR20XX_FLRC_CRC_OFF,
       .TimeOverAir = 2383,
       .ReceiverSensitivity = -104, // ??
@@ -173,7 +166,7 @@ class Lr20xxDriverCommon : public Lr20xxDriverBase
 
         SetLoraPacketParams(config->PreambleLength,
                             config->HeaderType,
-                            config->PayloadLength,
+                            frame_len,
                             config->CrcEnabled,
                             config->InvertIQ);
     }
@@ -211,7 +204,7 @@ class Lr20xxDriverCommon : public Lr20xxDriverBase
                            LR20XX_FSK_PREAMBLE_LEN_UNIT_BYTES,
                            config->AddrComp,
                            config->PacketType,
-                           config->PayloadLength,
+                           frame_len,
                            config->CRCType,
                            config->Whitening);
 
@@ -239,7 +232,7 @@ class Lr20xxDriverCommon : public Lr20xxDriverBase
                             LR20XX_FLRC_SYNC_MATCH_1, // config->SyncWordMatch,
                             config->PacketType,
                             config->CrcLength,
-                            config->PayloadLength);
+                            frame_len);
 
         SetSyncWordFLRC(LR20XX_FLRC_SYNCWORD_1, sync_word);
     }
@@ -393,6 +386,24 @@ class Lr20xxDriverCommon : public Lr20xxDriverBase
         rx_buf_pos = len;
     }
 
+    // the frame length of the direction coming up: the Link Split profiles differ per direction
+    void SetFrameLength(uint8_t len)
+    {
+        if (len == frame_len) return;
+        frame_len = len;
+        if (!gconfig) return;
+        switch (mode()) {
+        case IS_LORA:
+            if (lora_configuration) SetLoraPacketParams(lora_configuration->PreambleLength, lora_configuration->HeaderType, frame_len, lora_configuration->CrcEnabled, lora_configuration->InvertIQ);
+            break;
+        case IS_GFSK:
+            if (gfsk_configuration) SetPacketParamsFSK(gfsk_configuration->PreambleLength, gfsk_configuration->PreambleDetectorLength, LR20XX_FSK_LONG_PREAMBLE_MODE_OFF, LR20XX_FSK_PREAMBLE_LEN_UNIT_BYTES, gfsk_configuration->AddrComp, gfsk_configuration->PacketType, frame_len, gfsk_configuration->CRCType, gfsk_configuration->Whitening);
+            break;
+        default: // IS_FLRC
+            if (flrc_configuration) SetPacketParamsFLRC(flrc_configuration->AGCPreambleLength, flrc_configuration->SyncWordLength, LR20XX_FLRC_SYNC_TX_1, LR20XX_FLRC_SYNC_MATCH_1, flrc_configuration->PacketType, flrc_configuration->CrcLength, frame_len);
+        }
+    }
+
     void ReadFrame(uint8_t* const data, uint8_t len)
     {
         if (rx_buf_pos == 0) while(1){} // must not happen!
@@ -492,9 +503,9 @@ class Lr20xxDriverCommon : public Lr20xxDriverBase
         }
 
         switch (mode()) {
-        case IS_LORA: return lora_configuration->TimeOverAir;
-        case IS_GFSK: return gfsk_configuration->TimeOverAir;
-        default: return flrc_configuration->TimeOverAir;
+        case IS_LORA: return ((lora_configuration->TimeOverAir) * frame_len) / FRAME_TX_RX_LEN; // 91 byte table, see the note at sx128x
+        case IS_GFSK: return ((gfsk_configuration->TimeOverAir) * frame_len) / FRAME_TX_RX_LEN; // 91 byte table, see the note at sx128x
+        default: return ((flrc_configuration->TimeOverAir) * frame_len) / FRAME_TX_RX_LEN; // 91 byte table, see the note at sx128x
         }
     }
 
@@ -540,6 +551,7 @@ class Lr20xxDriverCommon : public Lr20xxDriverBase
 
   private:
     const tSxLoraConfiguration* lora_configuration;
+    uint8_t frame_len = FRAME_TX_RX_LEN; // what the packet params hold
     const tSxGfskConfiguration* gfsk_configuration;
     const tSxFlrcConfiguration* flrc_configuration;
     int8_t sx_power;

@@ -471,8 +471,8 @@ void FAIL_WSTATE(
 
 STATIC_ASSERT(sizeof(tTxFrameStatus) == FRAME_TX_RX_HEADER_LEN - 2, "tTxFrameStatus len missmatch")
 STATIC_ASSERT(sizeof(tRxFrameStatus) == FRAME_TX_RX_HEADER_LEN - 2, "tRxFrameStatus len missmatch")
-STATIC_ASSERT(sizeof(tTxFrame) == FRAME_TX_RX_LEN, "tTxFrame len missmatch")
-STATIC_ASSERT(sizeof(tRxFrame) == FRAME_TX_RX_LEN, "tRxFrame len missmatch")
+STATIC_ASSERT(sizeof(tTxFrame) == FRAME_LEN_MAX, "tTxFrame len missmatch")
+STATIC_ASSERT(sizeof(tRxFrame) == FRAME_LEN_MAX, "tRxFrame len missmatch")
 
 STATIC_ASSERT(sizeof(tTxBindFrame) == FRAME_TX_RX_LEN, "tTxBindFrame len missmatch")
 STATIC_ASSERT(sizeof(tRxBindFrame) == FRAME_TX_RX_LEN, "tRxBindFrame len missmatch")

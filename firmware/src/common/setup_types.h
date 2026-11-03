@@ -523,6 +523,8 @@ typedef struct
     tSxGlobalConfig Sx;
     tSxGlobalConfig Sx2;
     uint8_t send_frame_tmo_ms;
+    uint8_t FrameLenTx; // the Tx->Rx frame, from Link Split
+    uint8_t FrameLenRx; // the Rx->Tx frame
 
     uint16_t FrameSyncWord;
 

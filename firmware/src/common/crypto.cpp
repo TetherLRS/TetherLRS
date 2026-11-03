@@ -49,7 +49,7 @@ const crypto_level_t crypto_list[] = {
 void tCrypto::Init(
     uint8_t role,
     char* const bind_phrase, uint8_t tx_uid[12], uint8_t rx_uid[12], uint64_t tx_random,
-    uint8_t privacy_level)
+    uint8_t privacy_level, const uint8_t* const link_key)
 {
     _role = role;
 
@@ -64,13 +64,14 @@ void tCrypto::Init(
     _static_random = tx_random;
 
     memset(_static_source, 0, sizeof(_static_source));
-    memcpy(_static_source,                   "mLRS key",    8); //  8 bytes
+    memcpy(_static_source,                   "TLRS key",    8); //  8 bytes
     memcpy(_static_source + 8,               bind_phrase,   6); //  6 bytes
     memcpy(_static_source + 8 + 6,           tx_uid,       12); // 12 bytes
     memcpy(_static_source + 8 + 6 + 12,      rx_uid,       12); // 12 bytes
     memcpy(_static_source + 8 + 6 + 12 +12,  &tx_random,    8); //  8 bytes // sum 46 bytes
+    memcpy(_static_source + 46,              link_key,     32); // 32 bytes // sum 78 bytes, all zero when no key was set
 
-    crypto_blake2b(_static_key, 32, _static_source, 46); // construct static key
+    crypto_blake2b(_static_key, 32, _static_source, 78); // construct static key
 
     _startup_nonce_u32 = 0;
 
@@ -106,14 +107,14 @@ bool tCrypto::ValidKeys(void) // to tell Tx or Rx if they can connect
 // Rx: called by SetSessionKeyFromEncryptedRandom() when a FRAME_CMD_GET_RX_SETUPDATA_STARTUP frame is received
 void tCrypto::SetSessionKey(uint64_t session_random)
 {
-uint8_t key_source[64]; // 46 + 8 = 54
+uint8_t key_source[96]; // 78 + 8 = 86
 
     _session_random = session_random;
 
-    memcpy(key_source,      _static_source,   46); // 46 bytes
-    memcpy(key_source + 46, &_session_random,  8); //  8 bytes // sum = 54 bytes
+    memcpy(key_source,      _static_source,   78); // 78 bytes
+    memcpy(key_source + 78, &_session_random,  8); //  8 bytes // sum = 86 bytes
 
-    crypto_blake2b(_session_key, 32, key_source, 54);
+    crypto_blake2b(_session_key, 32, key_source, 86);
 
     _session_key_has_been_set = true;
 }
