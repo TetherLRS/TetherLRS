@@ -183,8 +183,8 @@ void tRxMavlink::Init(void)
     status_serial_out = {};
 
     fmavX_init();
-    fmavX_config_compression((Config.Mode == MODE_19HZ || Config.Mode == MODE_19HZ_7X ||
-                              Config.Mode == MODE_18HZ || Config.Mode == MODE_LR) ? 1 : 0); // use compression only in the slow modes
+    fmavX_config_compression((Config.Mode == MODE_19HZ || Config.Mode == MODE_19HZ_7X || Config.Mode == MODE_18HZ ||
+                              Config.Mode == MODE_LR || Config.Mode == MODE_17HZ || Config.Mode == MODE_8HZ) ? 1 : 0); // use compression only in the slow modes
 
     status_serial_in = {};
     fifo_link_out.Init();
@@ -376,7 +376,9 @@ fmav_result_t result;
             case MODE_31HZ: force_param_list = (Config.SerialBaudrate > 57600); break; // 57600 bps and lower is ok for mftp
             case MODE_19HZ:
             case MODE_19HZ_7X:
-            case MODE_18HZ: force_param_list = (Config.SerialBaudrate > 38400); break; // 38400 bps and lower is ok for mftp
+            case MODE_18HZ:
+            case MODE_17HZ: force_param_list = (Config.SerialBaudrate > 38400); break; // 38400 bps and lower is ok for mftp
+            case MODE_8HZ: force_param_list = (Config.SerialBaudrate > 19200); break;
             }
             if (autopilot.HasMFtpFlowControl()) force_param_list = false; // mftp is flow controlled, so always ok
             if (force_param_list) {
@@ -916,35 +918,9 @@ uint16_t tx_ser_data_rate, rx_ser_data_rate;
     mlrs_radio_link_information_tlast_ms = tnow_ms;
     mlrs_radio_link_information_power_dbm_last = power_dbm;
 
-    switch (Config.Mode) {
-    case MODE_50HZ: case MODE_FSK_50HZ:
-        tx_ser_data_rate = 3200;
-        rx_ser_data_rate = 4100;
-        break;
-    case MODE_31HZ:
-        tx_ser_data_rate = 2000;
-        rx_ser_data_rate = 2562;
-        break;
-    case MODE_19HZ: case MODE_19HZ_7X:
-        tx_ser_data_rate = 1207;
-        rx_ser_data_rate = 1547;
-        break;
-    case MODE_FLRC_111HZ:
-        tx_ser_data_rate = 7111;
-        rx_ser_data_rate = 9111;
-        break;
-    case MODE_18HZ:
-        tx_ser_data_rate = 1163;
-        rx_ser_data_rate = 1490;
-        break;
-    case MODE_LR:
-        tx_ser_data_rate = 114;
-        rx_ser_data_rate = 146;
-        break;
-    default:
-        tx_ser_data_rate = 0; // ignore/unknown
-        rx_ser_data_rate = 0; // ignore/unknown
-    }
+    // what each direction carries at most, the Link Split profile's data in every frame
+    tx_ser_data_rate = FRAME_PAYLOAD_LEN(Config.FrameLenTx) * Config.frame_rate_hz;
+    rx_ser_data_rate = FRAME_PAYLOAD_LEN(Config.FrameLenRx) * Config.frame_rate_hz;
 
     fmav_mlrs_radio_link_information_t payload;
     payload.target_system = autopilot.sysid; // targets, we send to our autopilot sysid only, if not known it is zero // 0, 0,

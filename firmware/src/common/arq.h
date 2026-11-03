@@ -209,6 +209,8 @@ void tTransmitArq::SetRetryCntAuto(int32_t _frame_cnt, uint8_t mode)
     case MODE_19HZ_7X:
     case MODE_18HZ:
     case MODE_LR:
+    case MODE_17HZ:
+    case MODE_8HZ:
         SetRetryCnt((_frame_cnt >= 800) ? 2 : 1);
         return;
     }

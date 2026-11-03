@@ -308,7 +308,6 @@ void tBindBase::do_transmit(uint8_t antenna)
     txBindFrame.RadioScheme = Setup.Common[Config.ConfigId].RadioScheme;
     txBindFrame.CustomFreqKHz = Setup.Common[Config.ConfigId].CustomFreqKHz;
     txBindFrame.CustomSpanKHz = Setup.Common[Config.ConfigId].CustomSpanKHz;
-    txBindFrame.CustomBw = Setup.Common[Config.ConfigId].CustomBw;
     txBindFrame.CustomLbt = Setup.Common[Config.ConfigId].CustomLbt;
     txBindFrame.CustomPowerMaxDbm = Setup.Common[Config.ConfigId].CustomPowerMaxDbm;
     memcpy(txBindFrame.tx_uid, Config.Uid, 12); // send own uid to receiver // must both be 12 bytes

@@ -39,6 +39,9 @@ typedef enum {
 } REGULATORY_RULE_ENUM;
 
 
+uint16_t mode_bandwidth_khz(uint8_t mode, bool is_2p4); // setup.h
+
+
 class tRegulatory
 {
   public:
@@ -53,7 +56,7 @@ class tRegulatory
     {
         uint8_t r = rule(freq_reg);
         if (r == REGULATORY_RULE_PSA) return true;
-        if (r == REGULATORY_RULE_LBT) return (power_dbm(antenna) > 10); // up to 10 dBm EN 300 328 needs no adaptivity
+        if (r == REGULATORY_RULE_LBT) return (Config.Region == REGION_CUSTOM) || (power_dbm(antenna) > 10); // a custom plan always, EN 300 328 above 10 dBm
         return false;
     }
 
@@ -92,6 +95,7 @@ class tRegulatory
   private:
     uint8_t rule(uint32_t freq_reg)
     {
+        if (Config.Region == REGION_CUSTOM) return (Config.CustomLbt) ? REGULATORY_RULE_LBT : REGULATORY_RULE_NONE;
         if (Config.Region != REGION_EU) return REGULATORY_RULE_NONE;
         if (Config.Sx.FrequencyBand == SX_FHSS_FREQUENCY_BAND_2P4_GHZ) return REGULATORY_RULE_LBT;
 #ifdef SX12XX_FREQ_MHZ_TO_REG
@@ -109,7 +113,7 @@ class tRegulatory
     int8_t cca_threshold_dbm(uint8_t r, int8_t pwr_dbm)
     {
         int16_t thr;
-        if (r == REGULATORY_RULE_LBT) { // ExpressLRS EU_CE_2400 for 25/50/100 mW
+        if (r == REGULATORY_RULE_LBT && Config.Sx.FrequencyBand == SX_FHSS_FREQUENCY_BAND_2P4_GHZ) { // ExpressLRS EU_CE_2400 for 25/50/100 mW
             bool lora = Config.Sx.is_lora;
             if (pwr_dbm <= 14) {
                 thr = (lora) ? -65 : -67;
@@ -119,7 +123,9 @@ class tRegulatory
                 thr = (lora) ? -71 : -73;
             }
         } else { // EN 300 220-2 tables 11 and 17: 10 log(OCW in kHz) - 117 dBm, +15 dB below 100 mW e.r.p., +11 dB up to 500 mW
-            thr = ((Config.Sx.is_lora) ? 27 : 24) - 117 + ((pwr_dbm < 20) ? 15 : 11); // OCW 500 kHz LoRa, 250 kHz FSK
+            uint16_t ocw_khz = mode_bandwidth_khz(Config.Mode, false); // 500 kHz LoRa, 250 kHz FSK, the narrow modes less
+            int8_t ocw_db = (ocw_khz >= 500) ? 27 : (ocw_khz >= 250) ? 24 : 21;
+            thr = ocw_db - 117 + ((pwr_dbm < 20) ? 15 : 11);
         }
         return thr + SX_LNA_GAIN_DB;
     }

@@ -56,6 +56,7 @@ typedef enum : uint8_t {
     FHSS_PLAN_868_EU_LORA,
     FHSS_PLAN_868_EU_FSK,
     FHSS_PLAN_869_LR,
+    FHSS_PLAN_CUSTOM, // the user's own, fhss_custom_plan_set() fills it
     FHSS_PLAN_NUM,
 } FHSS_PLAN_ENUM;
 
@@ -76,6 +77,8 @@ typedef enum {
     MODE_19HZ_7X,
     MODE_18HZ, // 31 Hz radio settings at 55 ms, fits the EU 868 MHz on-time limits
     MODE_LR, // one 125 kHz channel at 869.525 MHz, slow, 500 mW allowed in the EU
+    MODE_17HZ, // sub-GHz LoRa BW250 SF5 at 60 ms: narrow plans
+    MODE_8HZ, // sub-GHz LoRa BW125 SF5 at 120 ms: the narrowest
     MODE_NUM,
 } MODE_ENUM;
 
@@ -311,6 +314,8 @@ typedef enum {
 typedef enum {
     SX126x_LORA_CONFIG_BW500_SF5_CR4_5 = 0,
     SX126x_LORA_CONFIG_BW500_SF6_CR4_5,
+    SX126x_LORA_CONFIG_BW250_SF5_CR4_5, // 17 Hz
+    SX126x_LORA_CONFIG_BW125_SF5_CR4_5, // 8 Hz
     SX126x_LORA_CONFIG_NUM,
 } SX126x_LORA_CONFIG_ENUM;
 
@@ -321,7 +326,8 @@ typedef enum {
     LR11xx_LORA_CONFIG_BW800_SF5_CR4_5, // 2.4 GHz
     LR11xx_LORA_CONFIG_BW800_SF6_CR4_5,
     LR11xx_LORA_CONFIG_BW800_SF7_CR4_5,
-    LR11xx_LORA_CONFIG_BW125_SF5_CR4_5, // 900 MHz LR
+    LR11xx_LORA_CONFIG_BW125_SF5_CR4_5, // 900 MHz LR, 8 Hz
+    LR11xx_LORA_CONFIG_BW250_SF5_CR4_5, // 900 MHz 17 Hz
     LR11xx_LORA_CONFIG_NUM,
 } LR11xx_LORA_CONFIG_ENUM;
 
@@ -332,6 +338,8 @@ typedef enum {
     LR20xx_LORA_CONFIG_BW800_SF5_CR4_5, // 2.4 GHz
     LR20xx_LORA_CONFIG_BW800_SF6_CR4_5,
     LR20xx_LORA_CONFIG_BW800_SF7_CR4_5,
+    LR20xx_LORA_CONFIG_BW250_SF5_CR4_5, // 900 MHz 17 Hz
+    LR20xx_LORA_CONFIG_BW125_SF5_CR4_5, // 900 MHz 8 Hz
     LR20xx_LORA_CONFIG_NUM,
 } LR20xx_LORA_CONFIG_ENUM;
 
@@ -352,13 +360,12 @@ typedef struct
     uint8_t DynPower;
     uint8_t LinkSplit;
     uint8_t RadioScheme;
-    uint8_t CustomBw; // index among the chip's LoRa bandwidths
+    uint8_t CustomLbt; // Region = custom: listen before every transmission
     uint32_t CustomFreqKHz; // centre of the custom plan
-    uint16_t CustomSpanKHz; // its width, the channels come from span / bandwidth
-    uint8_t CustomLbt;
+    uint16_t CustomSpanKHz; // its width, the channels come from span / the mode's bandwidth
     uint8_t CustomPowerMaxDbm;
 
-    uint8_t spare[4];
+    uint8_t spare[5];
 } tCommonSetup; // 28 bytes
 
 
@@ -519,6 +526,7 @@ typedef struct
     uint8_t Mode;
     uint8_t Region;
     uint8_t PowerIdxMax; // highest rfpower_list index the region allows
+    uint8_t CustomLbt; // Region = custom: listen before every transmission
 
     tSxGlobalConfig Sx;
     tSxGlobalConfig Sx2;

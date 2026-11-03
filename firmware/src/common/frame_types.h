@@ -146,11 +146,10 @@ typedef struct
     uint8_t RadioScheme;
     uint32_t CustomFreqKHz;
     uint16_t CustomSpanKHz;
-    uint8_t CustomBw;
     uint8_t CustomLbt;
     uint8_t CustomPowerMaxDbm;
 
-    uint8_t spare3[38];
+    uint8_t spare3[39];
 
     uint8_t tx_uid[12]; // 12 bytes = 96 bits
     uint64_t tx_random; //  8 bytes = 64 bits
@@ -282,12 +281,11 @@ typedef struct
     tCmdFrameRxParameters RxParams; // 8 bytes
     uint32_t CustomFreqKHz;
     uint16_t CustomSpanKHz;
-    uint8_t CustomBw;
     uint8_t CustomLbt;
     uint8_t CustomPowerMaxDbm;
     uint16_t tx_firmware_version_u16; // 16.64.64
     uint16_t tx_setup_layout_u16; // 16.64.64
-    uint8_t spare3[17];
+    uint8_t spare3[18];
     //--
     uint8_t reserved_for_crypto[12]; // do not use
 }) tTxCmdFrameRxParams; // 64 bytes

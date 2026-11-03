@@ -76,7 +76,7 @@ const tSxLoraConfiguration Lr11xxLoraConfiguration[] = {
       .TimeOverAir = 23527,
       .ReceiverSensitivity = -112,
     },
-    { .SpreadingFactor = LR11XX_LORA_SF5, // 900 MHz, LR (869.525 MHz, inside the 250 kHz of band O)
+    { .SpreadingFactor = LR11XX_LORA_SF5, // 900 MHz, LR (869.525 MHz, inside the 250 kHz of band O) and 8 Hz
       .Bandwidth = LR11XX_LORA_BW_125,
       .CodingRate = LR11XX_LORA_CR_4_5,
       .PreambleLength = 12,
@@ -85,6 +85,16 @@ const tSxLoraConfiguration Lr11xxLoraConfiguration[] = {
       .InvertIQ = LR11XX_LORA_IQ_NORMAL,
       .TimeOverAir = 52800, // the 900 MHz 31 Hz frame at a quarter of the bandwidth
       .ReceiverSensitivity = -117,
+    },
+    { .SpreadingFactor = LR11XX_LORA_SF5, // 900 MHz, 17 Hz
+      .Bandwidth = LR11XX_LORA_BW_250,
+      .CodingRate = LR11XX_LORA_CR_4_5,
+      .PreambleLength = 12,
+      .HeaderType = LR11XX_LORA_HEADER_DISABLE,
+      .CrcEnabled = LR11XX_LORA_CRC_DISABLE,
+      .InvertIQ = LR11XX_LORA_IQ_NORMAL,
+      .TimeOverAir = 26400, // the 31 Hz frame at half the bandwidth
+      .ReceiverSensitivity = -114,
     }
 };
 

@@ -187,8 +187,8 @@ void tTxMavlink::Init(void)
     fifo_link_in.Init();
 
     fmavX_init();
-    fmavX_config_compression((Config.Mode == MODE_19HZ || Config.Mode == MODE_19HZ_7X ||
-                              Config.Mode == MODE_18HZ || Config.Mode == MODE_LR) ? 1 : 0); // use compression only in the slow modes
+    fmavX_config_compression((Config.Mode == MODE_19HZ || Config.Mode == MODE_19HZ_7X || Config.Mode == MODE_18HZ ||
+                              Config.Mode == MODE_LR || Config.Mode == MODE_17HZ || Config.Mode == MODE_8HZ) ? 1 : 0); // use compression only in the slow modes
 
     status_ser_in = {};
     status_ser2_in = {};

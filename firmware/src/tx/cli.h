@@ -348,6 +348,8 @@ class tTxCli
     bool is_cmd_set_value(const char* const cmd, int32_t* const value);
     bool is_cmd_set_str(const char* const cmd, char* const str);
     bool cmd_linkkey(void);
+    bool cmd_customplan(void);
+    void print_customplan(tCommonSetup* const c);
 
     void putc(char c) { com->putc(c); }
     void puts(const char* s) { com->puts(s); }
@@ -526,6 +528,76 @@ bool tTxCli::cmd_linkkey(void)
     while (*s == ' ') s++;
     if (!tlrs_key_from_text(s, Setup.LinkKey)) { putsn("err: 64 hex digits, or none"); return true; }
     putsn(tlrs_key_is_set(Setup.LinkKey) ? "  link key: set, pstore keeps it, the receiver needs the same" : "  link key: cleared, pstore keeps it");
+    return true;
+}
+
+
+// the edges of a band, for a custom plan to stay inside
+void band_range_khz(uint8_t setup_band, uint32_t* const fmin, uint32_t* const fmax)
+{
+    switch (setup_band) {
+    case SETUP_FREQUENCY_BAND_2P4_GHZ: *fmin = 2400000; *fmax = 2483500; break;
+    case SETUP_FREQUENCY_BAND_915_MHZ_FCC: *fmin = 902000; *fmax = 928000; break;
+    case SETUP_FREQUENCY_BAND_868_MHZ: *fmin = 863000; *fmax = 870000; break;
+    case SETUP_FREQUENCY_BAND_866_MHZ_IN: *fmin = 865000; *fmax = 867000; break;
+    case SETUP_FREQUENCY_BAND_433_MHZ: *fmin = 433050; *fmax = 434790; break;
+    case SETUP_FREQUENCY_BAND_70_CM_HAM: *fmin = 430000; *fmax = 440000; break;
+    default: *fmin = 0; *fmax = 0; // a dual band pair has no custom plan
+    }
+}
+
+
+void tTxCli::print_customplan(tCommonSetup* const c)
+{
+    puts("  custom plan: "); puts(utoBCD_s(c->CustomFreqKHz)); puts(" kHz centre, "); puts(utoBCD_s(c->CustomSpanKHz)); puts(" kHz span, ");
+    puts((c->CustomLbt) ? "LBT on, " : "no LBT, "); puts(utoBCD_s(c->CustomPowerMaxDbm)); putsn(" dBm max");
+    uint16_t bw = mode_bandwidth_khz(c->Mode, c->FrequencyBand == SETUP_FREQUENCY_BAND_2P4_GHZ);
+    uint16_t n = c->CustomSpanKHz / bw;
+    if (n < 1) n = 1;
+    if (n > FHSS_MAX_NUM) n = FHSS_MAX_NUM;
+    puts("  "); puts(utoBCD_s(n)); puts(" channel(s) of "); puts(utoBCD_s(bw)); putsn(" kHz in the current mode");
+#ifndef USE_REGION_EU
+    if (c->CustomLbt) putsn("  warn: this radio cannot listen before talk, it sends anyway");
+#endif
+}
+
+
+// customplan, customplan = <centre kHz>,<span kHz>,<lbt 0 or 1>,<max dBm>: the plan Region = custom runs, pstore keeps it
+bool tTxCli::cmd_customplan(void)
+{
+    if (strncmp(buf, "customplan", 10) != 0) return false;
+    tCommonSetup* c = &Setup.Common[Config.ConfigId];
+    const char* s = buf + 10;
+    while (*s == ' ') s++;
+    if (*s == '\0') { print_customplan(c); return true; }
+    if (*s != '=') return false;
+    s++;
+    uint32_t v[4];
+    uint8_t n = 0;
+    while (n < 4) {
+        while (*s == ' ') s++;
+        if (!isdigit((uint8_t)*s)) break;
+        v[n] = 0;
+        while (isdigit((uint8_t)*s) && v[n] < 10000000) { v[n] = v[n] * 10 + (*s - '0'); s++; }
+        n++;
+        while (*s == ' ') s++;
+        if (*s != ',') break;
+        s++;
+    }
+    if (n != 4 || *s != '\0') { putsn("err: customplan = <centre kHz>,<span kHz>,<lbt 0 or 1>,<max dBm>"); return true; }
+    uint32_t fmin, fmax;
+    band_range_khz(c->FrequencyBand, &fmin, &fmax);
+    if (fmax == 0) { putsn("err: a dual band pair has no custom plan"); return true; }
+    if (v[0] < fmin || v[0] > fmax) { puts("err: the centre is outside the band, "); puts(utoBCD_s(fmin)); puts(" to "); puts(utoBCD_s(fmax)); putsn(" kHz"); return true; }
+    if (v[1] < 25 || v[1] > fmax - fmin) { putsn("err: the span is 25 kHz up to the band's width"); return true; }
+    if (v[2] > 1) { putsn("err: lbt is 0 or 1"); return true; }
+    if (v[3] > 33) { putsn("err: the power cap is 0 to 33 dBm"); return true; }
+    c->CustomFreqKHz = v[0];
+    c->CustomSpanKHz = v[1];
+    c->CustomLbt = v[2];
+    c->CustomPowerMaxDbm = v[3];
+    print_customplan(c);
+    putsn("  pstore keeps it, Region = custom runs it");
     return true;
 }
 
@@ -854,7 +926,10 @@ void tTxCli::print_help_do(void)
         case 12: putsn("  bind            -> start binding"); break;
         case 13: putsn("  reload          -> reload all parameter settings"); break;
         case 14: putsn("  stats           -> starts streaming statistics"); break;
-        case 15: putsn("  linkkey [= hex] -> show, set (64 hex digits) or clear (none) the link key"); break;
+        case 15:
+            putsn("  linkkey [= hex] -> show, set (64 hex digits) or clear (none) the link key");
+            putsn("  customplan [= kHz,span,lbt,dBm] -> show or set the plan of Region = custom");
+            break;
         case 16:
             putsn("  listfreqs       -> lists frequencies used in fhss scheme");
 #ifdef USE_SERIAL_ESCAPE
@@ -1016,6 +1091,9 @@ bool rx_param_changed;
         if (cmd_linkkey()) {
 
         } else
+        if (cmd_customplan()) {
+
+        } else
         if (is_cmd("stats")) {
             state = CLI_STATE_STATS;
             putsn("  starts streaming stats");
@@ -1124,7 +1202,7 @@ bool rx_param_changed;
 // SiK AT commands, see sik_at.h
 //-------------------------------------------------------
 
-const uint16_t sik_mode_rates[] = { 4100, 2562, 1547, 9111, 4100, 1547, 1490, 146 }; // downlink bytes/s, by MODE_ENUM
+const uint16_t sik_mode_rates[] = { 4100, 2562, 1547, 9111, 4100, 1547, 1490, 146, 1367, 683 }; // downlink bytes/s, by MODE_ENUM
 static_assert(sizeof(sik_mode_rates)/sizeof(sik_mode_rates[0]) == MODE_NUM, "sik_mode_rates");
 
 
@@ -1176,7 +1254,7 @@ bool tTxCli::sik_get(uint8_t n, bool remote, uint32_t* const v)
     case SIK_S_MAX_FREQ: { uint32_t fmin; sik_freq_range_khz(&fmin, v); } break;
     case SIK_S_NUM_CHANNELS: *v = fhss.Cnt(); break;
     case SIK_S_DUTY_CYCLE: *v = (Config.Region == REGION_EU && Config.Mode == MODE_LR) ? 10 : 100; break;
-    case SIK_S_LBT_RSSI: *v = (Config.Region == REGION_EU) ? 1 : 0; break;
+    case SIK_S_LBT_RSSI: *v = (Config.Region == REGION_EU || (Config.Region == REGION_CUSTOM && Config.CustomLbt)) ? 1 : 0; break;
     case SIK_S_MAX_WINDOW: *v = Config.frame_rate_ms; break;
     default: *v = 0; // ECC, OPPRESEND, MANCHESTER, RTSCTS
     }

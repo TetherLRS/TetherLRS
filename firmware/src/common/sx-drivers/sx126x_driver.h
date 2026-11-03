@@ -47,6 +47,26 @@ const tSxLoraConfiguration Sx126xLoraConfiguration[] = {
       .InvertIQ = SX126X_LORA_IQ_NORMAL,
       .TimeOverAir = 22560,
       .ReceiverSensitivity = -112, // Q: SF5 with CR4/8 would be -111 dBm, 20.1 ms, better option??
+    },
+    { .SpreadingFactor = SX126X_LORA_SF5, // 900 MHz, 17 Hz
+      .Bandwidth = SX126X_LORA_BW_250,
+      .CodingRate = SX126X_LORA_CR_4_5,
+      .PreambleLength = 12,
+      .HeaderType = SX126X_LORA_HEADER_DISABLE,
+      .CrcEnabled = SX126X_LORA_CRC_DISABLE,
+      .InvertIQ = SX126X_LORA_IQ_NORMAL,
+      .TimeOverAir = 26400, // the 31 Hz frame at half the bandwidth
+      .ReceiverSensitivity = -114,
+    },
+    { .SpreadingFactor = SX126X_LORA_SF5, // 900 MHz, 8 Hz
+      .Bandwidth = SX126X_LORA_BW_125,
+      .CodingRate = SX126X_LORA_CR_4_5,
+      .PreambleLength = 12,
+      .HeaderType = SX126X_LORA_HEADER_DISABLE,
+      .CrcEnabled = SX126X_LORA_CRC_DISABLE,
+      .InvertIQ = SX126X_LORA_IQ_NORMAL,
+      .TimeOverAir = 52800, // the 31 Hz frame at a quarter of the bandwidth
+      .ReceiverSensitivity = -117,
     }
 };
 

@@ -226,3 +226,30 @@ void tFhssBase::generate_ortho_except(uint32_t seed, uint8_t ortho, uint8_t exce
     }
 }
 
+
+//-- the custom plan (Region = custom): channels of the mode's bandwidth across the span, around the centre
+
+uint32_t fhss_custom_list[FHSS_MAX_NUM];
+uint8_t fhss_custom_len = 0;
+
+uint8_t fhss_custom_plan_set(uint32_t centre_khz, uint16_t span_khz, uint16_t bw_khz, bool is_2p4)
+{
+    uint8_t n = (bw_khz) ? span_khz / bw_khz : 1;
+    if (n < 1) n = 1;
+    if (n > FHSS_MAX_NUM) n = FHSS_MAX_NUM;
+    uint32_t first_khz = centre_khz - ((uint32_t)(n - 1) * bw_khz) / 2;
+    for (uint8_t i = 0; i < n; i++) {
+        uint32_t f_khz = first_khz + (uint32_t)i * bw_khz;
+        uint32_t reg = 0;
+#ifdef SX12XX_FREQ_GHZ_TO_REG
+        if (is_2p4) reg = SX12XX_FREQ_GHZ_TO_REG((double)f_khz / 1.0E6);
+#endif
+#ifdef SX12XX_FREQ_MHZ_TO_REG
+        if (!is_2p4) reg = SX12XX_FREQ_MHZ_TO_REG((double)f_khz / 1.0E3);
+#endif
+        fhss_custom_list[i] = reg;
+    }
+    (void)is_2p4;
+    fhss_custom_len = n;
+    return n;
+}

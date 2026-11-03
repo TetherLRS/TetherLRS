@@ -479,7 +479,6 @@ tTxCmdFrameRxParams rx_params = {};
     rx_params.RadioScheme = Setup.Common[Config.ConfigId].RadioScheme;
     rx_params.CustomFreqKHz = Setup.Common[Config.ConfigId].CustomFreqKHz;
     rx_params.CustomSpanKHz = Setup.Common[Config.ConfigId].CustomSpanKHz;
-    rx_params.CustomBw = Setup.Common[Config.ConfigId].CustomBw;
     rx_params.CustomLbt = Setup.Common[Config.ConfigId].CustomLbt;
     rx_params.CustomPowerMaxDbm = Setup.Common[Config.ConfigId].CustomPowerMaxDbm;
 
@@ -545,7 +544,6 @@ tTxCmdFrameRxParams* rx_params = (tTxCmdFrameRxParams*)frame->payload;
     Setup.Common[0].RadioScheme = rx_params->RadioScheme;
     Setup.Common[0].CustomFreqKHz = rx_params->CustomFreqKHz;
     Setup.Common[0].CustomSpanKHz = rx_params->CustomSpanKHz;
-    Setup.Common[0].CustomBw = rx_params->CustomBw;
     Setup.Common[0].CustomLbt = rx_params->CustomLbt;
     Setup.Common[0].CustomPowerMaxDbm = rx_params->CustomPowerMaxDbm;
 

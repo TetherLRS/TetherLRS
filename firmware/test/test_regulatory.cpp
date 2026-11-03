@@ -19,7 +19,9 @@ static uint32_t now_us = 0;
 uint32_t millis32(void) { return now_us / 1000; }
 uint16_t micros16(void) { now_us += 5; return (uint16_t)now_us; } // each call takes 5 us
 
-struct { uint8_t Region; struct { uint8_t FrequencyBand; bool is_lora; } Sx; } Config;
+struct { uint8_t Region; uint8_t Mode; uint8_t CustomLbt; struct { uint8_t FrequencyBand; bool is_lora; } Sx; } Config;
+// as setup.h: 500 kHz LoRa, 250 kHz FSK below 1 GHz, 800 kHz at 2.4 GHz
+uint16_t mode_bandwidth_khz(uint8_t mode, bool is_2p4) { (void)mode; return (is_2p4) ? 800 : (Config.Sx.is_lora) ? 500 : 250; }
 
 struct tSxStub {
     uint32_t toa_us = 13200;

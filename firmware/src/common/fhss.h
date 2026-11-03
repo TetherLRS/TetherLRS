@@ -459,7 +459,16 @@ const tFhssPlan fhss_plan[] = {
     { .freq_list = nullptr, .freq_list_len = 0 },
     { .freq_list = nullptr, .freq_list_len = 0 },
 #endif
+    { .freq_list = nullptr, .freq_list_len = 0 }, // FHSS_PLAN_CUSTOM, fhss_custom_list at runtime
 };
+
+
+//-- the custom plan (Region = custom): channels of the mode's bandwidth across the span, around the centre
+
+extern uint32_t fhss_custom_list[FHSS_MAX_NUM];
+extern uint8_t fhss_custom_len;
+
+uint8_t fhss_custom_plan_set(uint32_t centre_khz, uint16_t span_khz, uint16_t bw_khz, bool is_2p4); // fhss.cpp
 
 
 class tFhssBase
@@ -484,6 +493,15 @@ class tFhssBase
         is_in_binding = false;
 
         if (bind_scan_mask == 0) while(1){} // should not happen, but play it safe
+
+        if (plan == FHSS_PLAN_CUSTOM) { // the user's own list, bind stays on the band's bind channel
+            if (fhss_custom_len == 0) while(1){} // should not happen, setup fills it
+            fhss_freq_list = fhss_custom_list;
+            FREQ_LIST_LEN = fhss_custom_len;
+            cnt = FREQ_LIST_LEN;
+            generate_plan(seed);
+            return;
+        }
 
         if (plan != FHSS_PLAN_DEFAULT) { // bind stays on the band's bind channel
             if (sizeof(fhss_plan)/sizeof(tFhssPlan) != FHSS_PLAN_NUM) while(1){} // should not happen, but play it safe
