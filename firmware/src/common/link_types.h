@@ -34,7 +34,6 @@ typedef enum {
     LINK_STATE_TRANSMIT_WAIT,
     LINK_STATE_RECEIVE,
     LINK_STATE_RECEIVE_WAIT,
-    LINK_STATE_RECEIVE_REARM, // a receiver's frame was read, the next slot's is coming
 } LINK_STATE_ENUM;
 #endif
 #ifdef DEVICE_IS_RECEIVER

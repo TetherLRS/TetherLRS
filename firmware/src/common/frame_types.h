@@ -66,6 +66,7 @@ typedef struct
 #define LINK_HDR_TX_SLOT_SHIFT  4    // Tx: the slot a command is for, and whose stats the header carries
 #define LINK_HDR_SLOT_MASK      0x03
 #define LINK_HDR_RX_SLOT_MASK   0x03 // Rx: the slot it answers in
+#define LINK_HDR_TX_ALL         0x40 // Tx: a command for every receiver; the slot field names the one whose own settings it carries
 #define LINK_HDR_BOND_SINGLE    0x80 // bonded radios: this frame went out of both, read it as one lane
 
 
@@ -161,8 +162,9 @@ typedef struct
     uint8_t radio_bands; // bit per SX_FHSS_FREQUENCY_BAND_ENUM it can run
     uint8_t RxCount;
     uint8_t bind_slot; // the slot the receiver binding now gets
+    uint8_t Band2;
 
-    uint8_t spare3[35];
+    uint8_t spare3[34];
 
     uint8_t tx_uid[12]; // 12 bytes = 96 bits
     uint64_t tx_random; //  8 bytes = 64 bits
@@ -220,7 +222,7 @@ typedef enum {
     FRAME_CMD_STORE_RX_PARAMS,          // tx -> rx, store parameters, reboots (no extra data)
     FRAME_CMD_GET_RX_SETUPDATA_WRELOAD, // tx -> rx, reload parameters
     FRAME_CMD_GET_RX_SETUPDATA_STARTUP, // tx -> rx, ask for param & metadata, send session random
-    FRAME_CMD_SET_LINK,                 // tx -> rx, Mode = auto: restart with this mode (1 byte), answered with RX_SETUPDATA naming it
+    FRAME_CMD_SET_LINK,                 // tx -> rx, Mode = auto: restart with this mode and band (2 bytes), answered with RX_SETUPDATA naming them
 } FRAME_CMD_ENUM;
 
 
@@ -253,7 +255,7 @@ PACKED(
 typedef struct
 {
     uint8_t cmd;
-    uint8_t link_mode_pending; // Mode = auto: the mode the receiver restarts with once this answer is through, MODE_AUTO = none
+    uint8_t link_pending; // Mode = auto: the band (bits 4-7) and mode (bits 0-3) the receiver restarts with once this answer is through, MODE_AUTO = none
     // rx setup meta data 1
     uint16_t firmware_version_u16; // 16.64.64
     uint16_t setup_layout_u16; // 16.64.64
@@ -265,15 +267,14 @@ typedef struct
     tCmdFrameRxParameters RxParams; // 8 bytes
     // rx setup meta data 2, parameter metadata
     uint16_t FrequencyBand_allowed_mask;
-    uint8_t Mode_allowed_mask;
-    uint8_t spare2;
+    uint16_t Mode_allowed_mask; // MODE_ENUM goes past 8
     int16_t Power_list[8];
     uint8_t Diversity_allowed_mask;
     uint8_t SerialPort_allowed_mask;
     uint8_t SerialOut2_allowed_mask;
     uint8_t radio_count; // radios the receiver has, 1 or 2
     uint8_t radio_bands; // bit per SX_FHSS_FREQUENCY_BAND_ENUM it can run
-    uint8_t spare3[2];
+    uint16_t Mode_allowed_mask_band2; // the modes it can run on RF Band 2
 }) tRxCmdFrameRxSetupData; // 63 bytes
 
 
@@ -302,7 +303,8 @@ typedef struct
     uint16_t tx_firmware_version_u16; // 16.64.64
     uint16_t tx_setup_layout_u16; // 16.64.64
     uint8_t RxCount;
-    uint8_t spare3[16];
+    uint8_t Band2;
+    uint8_t spare3[15];
     //--
     uint8_t reserved_for_crypto[12]; // do not use
 }) tTxCmdFrameRxParams; // 63 bytes

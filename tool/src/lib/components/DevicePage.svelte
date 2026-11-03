@@ -3,7 +3,7 @@
 </script>
 
 <script lang="ts">
-  import { MODES, SCHEMES, SPLITS } from '$lib/device/cli-parse';
+  import { BANDS, MODES, SCHEMES, SPLITS } from '$lib/device/cli-parse';
   import RxList from './RxList.svelte';
   import { onDestroy, onMount } from 'svelte';
   import { app, statsPage } from '$lib/app.svelte';
@@ -94,8 +94,13 @@
   const last = $derived(app.stats.findLast((s) => s !== undefined));
   const lanes = $derived(last?.lanes === 2 ? ', two lanes' : last?.lanes === 1 ? ', one frame on both radios' : '');
   const runs = $derived(last?.scheme !== undefined ? `${SCHEMES[last.scheme] ?? '?'}${lanes}, ${SPLITS[last.split ?? 0] ?? '?'}` : app.param('Radio Scheme')?.text);
-  // Mode = auto: the mode in use beside it, from the stream
-  const modeText = $derived(`${app.param('Mode')?.text ?? '–'}${app.param('Mode')?.text === 'auto' && last?.mode !== undefined ? ` (${MODES[last.mode] ?? last.mode})` : ''}`);
+  // Mode = auto: the mode in use beside it, from the stream, and with RF Band 2 the band in use
+  const inUse = $derived(
+    app.param('Mode')?.text === 'auto' && last?.mode !== undefined
+      ? ` (${MODES[last.mode] ?? last.mode}${last.band !== undefined ? `, ${BANDS[last.band] ?? last.band}` : ''})`
+      : '',
+  );
+  const modeText = $derived(`${app.param('Mode')?.text ?? '–'}${inUse}`);
 
   // the link at a glance, live while this page is open; a measure opens large on the Link page
   const live = $derived(app.connected && app.state === 'connected' && !app.version?.onlyRx); // a receiver alone has no link

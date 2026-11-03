@@ -14,7 +14,7 @@ export const SECTIONS = [
   { id: 'advanced', title: 'Advanced', help: 'Two receivers on one Tx, custom plans, the link key, tests.' },
 ] as const;
 
-const ADVANCED = new Set(['Link Split', 'Radio Scheme', 'Rx Count', 'Rx Downlink', 'Rx Ser Out2', 'Rx Ser Baudrate2', 'Rx Test', 'Rx Slot']);
+const ADVANCED = new Set(['Link Split', 'Radio Scheme', 'Rx Count', 'RF Band 2', 'Rx Downlink', 'Rx Ser Out2', 'Rx Ser Baudrate2', 'Rx Test', 'Rx Slot']);
 
 export type SectionId = (typeof SECTIONS)[number]['id'];
 
@@ -66,6 +66,10 @@ const META: Record<string, ParamMeta> = {
   'Rx Count': {
     label: 'Receivers',
     help: 'How many aircraft radios this ground radio serves: each answers in its own slot of the cycle, which grows by a slot for every receiver beyond the first. Every receiver gets its slot when it binds, from the marker in its image or from its Rx Slot. The Device page lists them.',
+  },
+  'RF Band 2': {
+    label: 'Second band',
+    help: 'With Air mode = auto, on radios that run both bands (LR1121, LR2021): the link may move to this band when it is faster for the margin there, and back. It starts on the lower of the two bands, which reaches further, and both radios go back there after 5 s without a link. One receiver only; not with a custom plan or orthogonal hopping.',
   },
   'Rx Slot': {
     label: 'Reply slot',

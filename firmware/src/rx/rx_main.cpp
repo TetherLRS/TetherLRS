@@ -258,6 +258,7 @@ uint8_t link_rx1_status;
 uint8_t link_rx2_status;
 bool rx_silent; // the Tx's last frame said Downlink off; frames keep saying it, so nothing is stored
 bool bond_single_rx; // bonded radios: the Tx's last frame said one frame goes out on both; mirrored in the replies
+bool rxFrameB_valid; // lane B's frame holds a payload it may send again
 tBondReorder bond; // the Tx's lanes, put out in order
 
 
@@ -315,17 +316,21 @@ void process_received_txcmdframe(tTxFrame* const frame)
 {
 tCmdFrameHeader* head = (tCmdFrameHeader*)FRAME_DATA(frame);
 
-    // with several receivers a command is for one of them
-    if (Config.LinkHeader && ((FRAME_LINK_HDR(frame) >> LINK_HDR_TX_SLOT_SHIFT) & LINK_HDR_SLOT_MASK) != Config.RxSlot) return;
+    // with several receivers a command is for one of them, or for all with the settings of the one it names
+    uint8_t hdr = FRAME_LINK_HDR(frame);
+    bool for_me = !Config.LinkHeader || ((hdr >> LINK_HDR_TX_SLOT_SHIFT) & LINK_HDR_SLOT_MASK) == Config.RxSlot;
+    bool for_all = Config.LinkHeader && (hdr & LINK_HDR_TX_ALL);
+    if (!for_me && !for_all) return;
 
     switch (head->cmd) {
     case FRAME_CMD_GET_RX_SETUPDATA:
+        if (!for_me) break;
         // request to send setup data, trigger sending RX_SETUPDATA in next transmission
         link_task_set(LINK_TASK_RX_SEND_RX_SETUPDATA);
         break;
     case FRAME_CMD_SET_RX_PARAMS:
-        // received rx params, trigger sending RX_SETUPDATA in next transmission
-        unpack_txcmdframe_setrxparams(frame);
+        // received rx params, trigger sending RX_SETUPDATA in next transmission; the others take the common ones
+        unpack_txcmdframe_setrxparams(frame, for_me);
         link_task_set(LINK_TASK_RX_SEND_RX_SETUPDATA);
         break;
     case FRAME_CMD_STORE_RX_PARAMS:
@@ -333,20 +338,31 @@ tCmdFrameHeader* head = (tCmdFrameHeader*)FRAME_DATA(frame);
         doParamsStore = true;
         break;
     case FRAME_CMD_GET_RX_SETUPDATA_WRELOAD:
+        if (!for_me) break;
         // request to send setup data, trigger sending RX_SETUPDATA in next transmission
         setup_reload();
         link_task_set(LINK_TASK_RX_SEND_RX_SETUPDATA);
         break;
     case FRAME_CMD_GET_RX_SETUPDATA_STARTUP:
+        if (!for_me) break; // the randoms in it are this slot's
         // request to send setup data, trigger sending RX_SETUPDATA in next transmission
         crypto.SetSessionKeysFromEncryptedBuf(FRAME_DATA(frame) + 1);
         Config.SessionRandom = crypto.SessionRandom(); // only for reporting
         link_task_set(LINK_TASK_RX_SEND_RX_SETUPDATA);
         break;
     case FRAME_CMD_SET_LINK: {
-        // Mode = auto: the mode to restart with; the answer names it, the restart waits for the Tx to have the answer
+        if (!for_me) break;
+        // Mode = auto: the mode and band to restart with; the answer names them, the restart waits for the Tx to have
+        // the answer; a band or mode this receiver cannot run is not taken, and the answer says none
         uint8_t mode = FRAME_DATA(frame)[1];
-        if (Config.ModeAuto && mode < MODE_AUTO && (SetupMetaData.Mode_allowed_mask & (1 << mode))) mode_auto_pending = mode;
+        uint8_t band = FRAME_DATA(frame)[2];
+        bool band_ok = (band == Config.Band1) || (band == Config.Band2);
+        if (Config.ModeAuto && band_ok && mode < MODE_AUTO && (mode_mask_for_band(band, Config.Region) & (1 << mode))) {
+            mode_auto_pending = mode;
+            band_auto_pending = band;
+        } else {
+            mode_auto_pending = MODE_AUTO;
+        }
         link_task_set(LINK_TASK_RX_SEND_RX_SETUPDATA);
         break; }
     }
@@ -419,8 +435,9 @@ uint8_t payload_b_len = 0;
 
     if (get_fresh_payload) {
         if (transmit_frame_type == TRANSMIT_FRAME_TYPE_NORMAL) {
-            // read data from serial
-            if (connected()) {
+            // read data from serial; not into the last frame before a link restart, it would be lost
+            if (doLinkRestart) {
+            } else if (connected()) {
                 uint8_t len_max = FRAME_PAYLOAD_LEN(Config.FrameLenRx) - FRAME_HDR_LEN - crypto.NonceLen();
                 payload_len = rx_read_payload(payload, len_max);
                 if (lanes) payload_b_len = rx_read_payload(payload_b, len_max);
@@ -468,7 +485,6 @@ uint8_t payload_b_len = 0;
     }
 
     if (lanes) { // lane B: the same stats, its own seq no and ack; empty beside a command frame
-        static bool rxFrameB_valid = false;
         tFrameStats frame_stats_b = frame_stats;
         frame_stats_b.seq_no = tarq[1].SeqNo();
         frame_stats_b.ack = rarq[1].AckSeqNo();
@@ -507,6 +523,8 @@ void process_received_frame(tTxFrame* const frame, uint8_t lane)
             bond_single_rx = single;
             tarq[1].Disconnected();
             rarq[1].Disconnected();
+            tarq[1].payload_seq_no = tarq[0].payload_seq_no; // the lanes' payloads pair by seq no
+            rxFrameB_valid = false; // and lane B has no old payload to send again
         }
     }
 
@@ -756,6 +774,7 @@ RESTARTCONTROLLER
     rarq[0].Init();
     rarq[1].Init();
     bond_single_rx = false;
+    rxFrameB_valid = false;
     bond.Init(rx_output, FRAME_PAYLOAD_MAX);
     crypto.Init(tCrypto::RX,
         Setup.Common[0].BindPhrase, Setup.peer_uid[0], Setup.tx_random[0],
@@ -868,9 +887,12 @@ IF_SX(
         if (link_state == LINK_STATE_RECEIVE_WAIT) {
             if (irq_status & SX_IRQ_RX_DONE) {
                 irq_status = 0;
-                bool do_clock_reset = (link_rx2_status == RX_STATUS_NONE);
-                link_rx1_status = do_receive(ANTENNA_1, do_clock_reset);
-                if (link_rx1_status == RX_STATUS_VALID) sx.HandleAFC();
+                if (link_rx1_status != RX_STATUS_VALID) { // the cycle's frame stays; what follows are other receivers' replies
+                    bool do_clock_reset = (link_rx2_status == RX_STATUS_NONE);
+                    link_rx1_status = do_receive(ANTENNA_1, do_clock_reset);
+                    if (link_rx1_status == RX_STATUS_VALID) sx.HandleAFC();
+                    if (link_rx1_status == RX_STATUS_VALID && Config.RxCount > 1) sx.SetToIdle(); // nothing more for us this cycle
+                }
                 DBG_MAIN_SLIM(dbg.puts("1!");)
             }
         }
@@ -905,9 +927,12 @@ IF_SX2(
         if (link_state == LINK_STATE_RECEIVE_WAIT) {
             if (irq2_status & SX2_IRQ_RX_DONE) {
                 irq2_status = 0;
-                bool do_clock_reset = (link_rx1_status == RX_STATUS_NONE);
-                link_rx2_status = do_receive(ANTENNA_2, do_clock_reset);
-                if (link_rx2_status == RX_STATUS_VALID) sx2.HandleAFC();
+                if (link_rx2_status != RX_STATUS_VALID) {
+                    bool do_clock_reset = (link_rx1_status == RX_STATUS_NONE);
+                    link_rx2_status = do_receive(ANTENNA_2, do_clock_reset);
+                    if (link_rx2_status == RX_STATUS_VALID) sx2.HandleAFC();
+                    if (link_rx2_status == RX_STATUS_VALID && Config.RxCount > 1) sx2.SetToIdle();
+                }
                 DBG_MAIN_SLIM(dbg.puts("2!");)
             }
         }
@@ -1106,13 +1131,13 @@ dbg.puts(s8toBCD_s(stats.last_rssi2));*/
         DECc(tick_1hz_commensurate, Config.frame_rate_hz);
         if (!tick_1hz_commensurate) {
             stats.Update1Hz();
-            // Mode = auto: without a link both ends meet again at the base mode
+            // Mode = auto: without a link both ends meet again at the base mode of the lower band
             if (Config.ModeAuto && !bind.IsInBind()) {
                 if (connected()) {
                     mode_auto_lost_s = 0;
-                } else if (Config.Mode != mode_auto_base() && ++mode_auto_lost_s >= MODE_AUTO_REVERT_S) {
+                } else if (!mode_auto_at_meeting() && ++mode_auto_lost_s >= MODE_AUTO_REVERT_S) {
                     mode_auto_pending = MODE_AUTO;
-                    mode_auto_current = mode_auto_base();
+                    mode_auto_to_meeting();
                     doLinkRestart = true;
                 }
             }
@@ -1126,6 +1151,8 @@ dbg.puts(s8toBCD_s(stats.last_rssi2));*/
         bind.Do();
         switch (bind.Task()) {
         case BIND_TASK_CHANGED_TO_BIND:
+            mode_auto_current = MODE_AUTO; // after the bind both ends start at the meeting point
+            band_auto_current = SETUP_FREQUENCY_BAND_NUM;
             bind.ConfigForBind(); // may change Config
             rxclock.SetPeriod(Config.frame_rate_ms);
             rxclock.SetShift(rxclock_shift_us()); // 1 ms: the bind runs with one receiver
@@ -1191,7 +1218,10 @@ dbg.puts(s8toBCD_s(stats.last_rssi2));*/
     if (doLinkRestart) {
         sx.SetToIdle();
         sx2.SetToIdle();
-        if (mode_auto_pending != MODE_AUTO) mode_auto_current = mode_auto_pending;
+        if (mode_auto_pending != MODE_AUTO) {
+            mode_auto_current = mode_auto_pending;
+            band_auto_current = band_auto_pending;
+        }
         GOTO_RESTARTCONTROLLER;
     }
 

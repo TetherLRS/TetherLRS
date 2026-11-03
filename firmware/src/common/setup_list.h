@@ -32,6 +32,7 @@
 #define SETUP_MSK_PRIVACY             &SetupMetaData.Privacy_allowed_mask // inferred from the hal
 #define SETUP_MSK_REGION              &SetupMetaData.Region_allowed_mask // inferred from the hal
 #define SETUP_MSK_RADIO_SCHEME        &SetupMetaData.RadioScheme_allowed_mask // inferred from the hal
+#define SETUP_MSK_BAND2               &SetupMetaData.Band2_allowed_mask // inferred from the hal and the other settings
 
 // for Tx,Rx, options limited depending on hardware, implementation
 #define SETUP_MSK_TX_DIVERSITY        &SetupMetaData.Tx_Diversity_allowed_mask // generated from the hal
@@ -99,7 +100,8 @@
   X( Setup.Common[0].DynPower,      LIST, "Dyn Power",        "DYN_POWER",        0,0,0,"", "off,on", MSK_ALL )\
   X( Setup.Common[0].LinkSplit,     LIST, "Link Split",       "LINK_SPLIT",       0,0,0,"", "balanced,downlink,uplink", MSK_ALL )\
   X( Setup.Common[0].RadioScheme,   LIST, "Radio Scheme",     "RADIO_SCHEME",     0,0,0,"", "auto,single,dual redund,dual bonded,dual band", SETUP_MSK_RADIO_SCHEME )\
-  X( Setup.Common[0].RxCount,       LIST, "Rx Count",         "RX_COUNT",         0,0,0,"", "1,2,3,4", MSK_ALL )
+  X( Setup.Common[0].RxCount,       LIST, "Rx Count",         "RX_COUNT",         0,0,0,"", "1,2,3,4", MSK_ALL )\
+  X( Setup.Common[0].Band2,         LIST, "RF Band 2",        "RF_BAND_2",        0,0,0,"", "off,2.4,915 FCC,868,433,70,866 IN", SETUP_MSK_BAND2 )
 
 #define SETUP_PARAMETER_LIST_TX_MAIN \
   X( Setup.Tx[0].Power,             LIST, "Tx Power",         "TX_POWER",         0,0,0,"", SETUP_OPT_TX_POWER, MSK_ALL )\

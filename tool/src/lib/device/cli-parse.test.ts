@@ -72,9 +72,9 @@ describe('options, versions, stats', () => {
     expect(parseStatsLine('  starts streaming stats')).toBeUndefined();
     // a 2.0 Tx ends with the scheme the pair runs and the Link Split
     expect(parseStatsLine('098(100),096, -029/ 127,-071,  009/ 127; 00000, 00000; pwr -018; rxp 100 mW; sch 2; split 1;')).toMatchObject({ scheme: 2, split: 1 });
-    // and, each when it applies: the mode in use with Mode = auto, the band scores, the bonded lanes, the antennas, the receivers
-    const s = parseStatsLine('098(100),096, -029/ 127,-071,  009/ 127; 00000, 00000; pwr -018; rxp 100 mW; sch 3; split 0; mode 002; band 255/200; lanes 2; ant 098/095; mp 0*098/-061 1:095/-070 2:-;');
-    expect(s).toMatchObject({ scheme: 3, mode: 2, band: [255, 200], lanes: 2, ant: [98, 95] });
+    // and, each when it applies: the mode and band in use with Mode = auto, the bonded lanes, the antennas, the receivers
+    const s = parseStatsLine('098(100),096, -029/ 127,-071,  009/ 127; 00000, 00000; pwr -018; rxp 100 mW; sch 3; split 0; mode 002; band 0; lanes 2; ant 098/095; mp 0*098/-061 1:095/-070 2:-;');
+    expect(s).toMatchObject({ scheme: 3, mode: 2, band: 0, lanes: 2, ant: [98, 95] });
     expect(s?.mp).toEqual([{ slot: 0, selected: true, lq: 98, rssi: -61 }, { slot: 1, selected: false, lq: 95, rssi: -70 }, { slot: 2, selected: false }]);
     expect(parseStatsLine('098(100),096, -029/ 127,-071,  009/ 127; 00000, 00000; pwr -018; rxp 100 mW; sch 1; split 0;')?.mp).toBeUndefined();
   });

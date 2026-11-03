@@ -442,8 +442,8 @@ uint8_t device_radio_bands(void)
 
 #ifdef DEVICE_IS_TRANSMITTER
 
-// Tx: send CMD to Rx; slot: the receiver it is for, STARTUP carries that receiver's session random; arg: SET_LINK's mode
-void pack_txcmdframe_cmd(tTxFrame* const frame, tFrameStats* const frame_stats, uint8_t cmd, uint8_t slot, uint8_t arg = 0)
+// Tx: send CMD to Rx; slot: the receiver it is for, STARTUP carries that receiver's session random; SET_LINK: mode, band
+void pack_txcmdframe_cmd(tTxFrame* const frame, tFrameStats* const frame_stats, uint8_t cmd, uint8_t slot, uint8_t arg = 0, uint8_t arg2 = 0)
 {
 uint8_t payload[40]; // 1 + CRYPTO_STARTUP_RANDOM_BUF_LEN (=36) = 37
 uint8_t len;
@@ -455,7 +455,8 @@ uint8_t frame_type;
 
     if (cmd == FRAME_CMD_SET_LINK) {
         payload[1] = arg;
-        len = 2;
+        payload[2] = arg2;
+        len = 3;
     }
 
     // CMD_GET_RX_SETUPDATA_STARTUP adds the session randoms, under the static key
@@ -490,13 +491,15 @@ tRxCmdFrameRxSetupData* rx_setupdata = (tRxCmdFrameRxSetupData*)FRAME_DATA(frame
 
     int16_t power_list[8];
     for (uint8_t i = 0; i < 8; i++) power_list[i] = rx_setupdata->Power_list[i]; // to avoid unaligned warning
+    for (uint8_t i = 0; i < 8; i++) SetupMetaData.rx_power_mw[i] = power_list[i];
     power_optstr_from_power_list(SetupMetaData.Rx_Power_optstr, power_list, 8, 67);
     SetupMetaData.Rx_Diversity_allowed_mask = rx_setupdata->Diversity_allowed_mask;
     SetupMetaData.Rx_SerialPort_allowed_mask = rx_setupdata->SerialPort_allowed_mask;
     SetupMetaData.Rx_SerialOut2_allowed_mask = rx_setupdata->SerialOut2_allowed_mask;
     SetupMetaData.rx_radio_count = rx_setupdata->radio_count;
     SetupMetaData.rx_radio_bands = rx_setupdata->radio_bands;
-    SetupMetaData.rx_link_mode_pending = rx_setupdata->link_mode_pending;
+    SetupMetaData.rx_link_pending = rx_setupdata->link_pending;
+    SetupMetaData.rx_Mode_allowed_mask_band2 = rx_setupdata->Mode_allowed_mask_band2;
 
     // ensure that Tx has receiver settings which are compatible with its layout, to avoid index issues
     if (SetupMetaData.rx_setup_layout != (uint32_t)SETUPLAYOUT) {
@@ -541,6 +544,7 @@ tTxCmdFrameRxParams rx_params = {};
     rx_params.CustomLbt = Setup.Common[Config.ConfigId].CustomLbt;
     rx_params.CustomPowerMaxDbm = Setup.Common[Config.ConfigId].CustomPowerMaxDbm;
     rx_params.RxCount = Setup.Common[Config.ConfigId].RxCount;
+    rx_params.Band2 = Setup.Common[Config.ConfigId].Band2;
 
     _copy_rxsetup_to_cmdframerxparameters(&(rx_params.RxParams));
 
@@ -560,7 +564,8 @@ void pack_rxcmdframe_rxsetupdata(tRxFrame* const frame, tFrameStats* const frame
 tRxCmdFrameRxSetupData rx_setupdata = {};
 
     rx_setupdata.cmd = FRAME_CMD_RX_SETUPDATA;
-    rx_setupdata.link_mode_pending = mode_auto_pending;
+    rx_setupdata.link_pending = (mode_auto_pending < MODE_AUTO) ? (mode_auto_pending | (band_auto_pending << 4)) : MODE_AUTO;
+    rx_setupdata.Mode_allowed_mask_band2 = (Config.Band2 < SETUP_FREQUENCY_BAND_NUM) ? (mode_mask_for_band(Config.Band2, Config.Region) & ~(1 << MODE_AUTO)) : 0;
 
     rx_setupdata.firmware_version_u16 = version_to_u16(VERSION);
     rx_setupdata.setup_layout_u16 = version_to_u16(SETUPLAYOUT);
@@ -590,7 +595,8 @@ tRxCmdFrameRxSetupData rx_setupdata = {};
 // Rx: handle FRAME_CMD_SET_RX_PARAMS
 // new parameter values are stored in Rx' Setup.Rx fields
 // Note: This frame has 64 bytes, but can be shortened by 12 bytes, so can be encrypted.
-void unpack_txcmdframe_setrxparams(tTxFrame* const frame)
+// own: the receiver the frame names; the others of a multipoint Tx take only the common parameters
+void unpack_txcmdframe_setrxparams(tTxFrame* const frame, bool own = true)
 {
 tTxCmdFrameRxParams* rx_params = (tTxCmdFrameRxParams*)FRAME_DATA(frame);
 
@@ -608,9 +614,10 @@ tTxCmdFrameRxParams* rx_params = (tTxCmdFrameRxParams*)FRAME_DATA(frame);
     Setup.Common[0].CustomLbt = rx_params->CustomLbt;
     Setup.Common[0].CustomPowerMaxDbm = rx_params->CustomPowerMaxDbm;
     Setup.Common[0].RxCount = rx_params->RxCount;
+    Setup.Common[0].Band2 = rx_params->Band2;
 
     // don't take over Rx parameters if there is a layout version mismatch
-    if (version_from_u16(rx_params->tx_setup_layout_u16) != (uint32_t)SETUPLAYOUT) return;
+    if (!own || version_from_u16(rx_params->tx_setup_layout_u16) != (uint32_t)SETUPLAYOUT) return;
 
     _copy_cmdframerxparameters_to_rxsetup(&(rx_params->RxParams));
     // setup_sanitize_rx_config(); // should not ever be needed !

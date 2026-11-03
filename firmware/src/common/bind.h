@@ -315,6 +315,7 @@ void tBindBase::do_transmit(uint8_t antenna)
     txBindFrame.LinkSplit = Setup.Common[Config.ConfigId].LinkSplit;
     txBindFrame.RadioScheme = Setup.Common[Config.ConfigId].RadioScheme;
     txBindFrame.RxCount = Setup.Common[Config.ConfigId].RxCount;
+    txBindFrame.Band2 = Setup.Common[Config.ConfigId].Band2;
     txBindFrame.bind_slot = bind_slot;
     txBindFrame.CustomFreqKHz = Setup.Common[Config.ConfigId].CustomFreqKHz;
     txBindFrame.CustomSpanKHz = Setup.Common[Config.ConfigId].CustomSpanKHz;
@@ -323,8 +324,11 @@ void tBindBase::do_transmit(uint8_t antenna)
     txBindFrame.radio_count = device_radio_count();
     txBindFrame.radio_bands = device_radio_bands();
     memcpy(txBindFrame.tx_uid, Config.Uid, 12); // send own uid to receiver // must both be 12 bytes
-    txBindFrame.tx_random = Config.BindRandom;  // send own random to receiver
-    Setup.tx_random[Config.ConfigId] = Config.BindRandom; // store the used random
+    // several receivers share the static key: the random of the first bind stays for the others
+    uint64_t tx_random = Config.BindRandom;
+    if (Setup.Common[Config.ConfigId].RxCount > 0 && Setup.tx_random[Config.ConfigId] != UINT64_MAX) tx_random = Setup.tx_random[Config.ConfigId];
+    txBindFrame.tx_random = tx_random;  // send own random to receiver
+    Setup.tx_random[Config.ConfigId] = tx_random; // store the used random
 
     txBindFrame.crc = fmav_crc_calculate((uint8_t*)&txBindFrame, FRAME_TX_RX_LEN - 2);
 }
@@ -364,6 +368,7 @@ void tBindBase::handle_receive(uint8_t antenna, uint8_t rx_status)
     Setup.Common[0].LinkSplit = txBindFrame.LinkSplit;
     Setup.Common[0].RadioScheme = txBindFrame.RadioScheme;
     Setup.Common[0].RxCount = txBindFrame.RxCount;
+    Setup.Common[0].Band2 = txBindFrame.Band2;
     if (txBindFrame.bind_slot < RX_SLOT_NUM) Setup.Rx.Slot = txBindFrame.bind_slot;
     Setup.Common[0].CustomFreqKHz = txBindFrame.CustomFreqKHz;
     Setup.Common[0].CustomSpanKHz = txBindFrame.CustomSpanKHz;

@@ -161,8 +161,6 @@
 #define MODE_AUTO_HOLD_S                20 // between two changes
 #define MODE_AUTO_REVERT_S              5 // without a link both ends go back to the base mode after this
 #define MODE_AUTO_ANSWER_MISMATCH_MAX   3 // setup data answers that do not confirm the mode before the change is dropped
-#define BAND_AUTO_GOOD                  200 // dual band: a band's score (0..255, an average over about 8 frames) above this is good
-#define BAND_AUTO_POOR                  128 // below this with the other good: the good one 7 frames in 8, this one probes the 8th
 
 #define CONNECT_TMO_MS                  1250 // time to disconnect, was 500, then 750 to better handle 19 Hz mode, now 1250
 

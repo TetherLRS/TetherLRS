@@ -368,8 +368,9 @@ typedef struct
     uint8_t PeerRadioCount; // what the other end said at bind: its radios, 1 or 2
     uint8_t PeerRadioBands; // bit per SX_FHSS_FREQUENCY_BAND_ENUM it can run
     uint8_t RxCount; // receivers of this Tx minus one: the cycle has a reply slot for each
+    uint8_t Band2; // Mode = auto may run the link on this band too: SETUP_FREQUENCY_BAND_ENUM + 1, 0 = off
 
-    uint8_t spare[2];
+    uint8_t spare[1];
 } tCommonSetup; // 28 bytes
 
 
@@ -469,6 +470,7 @@ typedef struct
     uint16_t Privacy_allowed_mask;
     uint16_t Region_allowed_mask;
     uint16_t RadioScheme_allowed_mask;
+    uint16_t Band2_allowed_mask; // RF Band 2: bit 0 off, bit b+1 band b
 
     char Tx_Power_optstr[67+1];
     uint16_t Tx_Diversity_allowed_mask;
@@ -494,7 +496,9 @@ typedef struct
     uint16_t rx_Mode_allowed_mask;
     uint8_t rx_radio_count; // radios the connected receiver has
     uint8_t rx_radio_bands; // bit per SX_FHSS_FREQUENCY_BAND_ENUM it can run
-    uint8_t rx_link_mode_pending; // the mode the receiver is about to restart with, MODE_AUTO = none
+    uint8_t rx_link_pending; // the band (bits 4-7) and mode (bits 0-3) the receiver is about to restart with, MODE_AUTO = none
+    uint16_t rx_Mode_allowed_mask_band2; // the modes the receiver can run on RF Band 2
+    int16_t rx_power_mw[8]; // the receiver's power levels, its Rx Power options
 } tSetupMetaData;
 
 
@@ -539,6 +543,8 @@ typedef struct
     bool TransmitBoth; // the same frame goes out of both radios, dual band or dual redundant
     bool Bonded; // two radios, two lanes with a frame each: twice the data, one frame on both when a lane is poor
     bool ModeAuto; // Mode is auto: the mode in use is mode_auto_current, 19 Hz at start and when the link is lost
+    uint8_t Band1; // RF Band as set; FrequencyBand is the band in use
+    uint8_t Band2; // RF Band 2 as SETUP_FREQUENCY_BAND_ENUM, SETUP_FREQUENCY_BAND_NUM = off
     uint8_t RxCount; // receivers in the cycle, 1 .. RX_SLOT_NUM
     uint8_t RxSlot; // Rx: the slot it answers in; a slot beyond RxCount never answers
     uint16_t SlotPeriod_ms; // a receiver's reply slot: its frame's air time and a guard

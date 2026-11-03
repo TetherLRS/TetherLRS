@@ -46,7 +46,7 @@ export interface LinkStats {
   scheme?: number; // RADIO_SCHEME_ENUM the pair runs, from a 2.0 Tx
   split?: number; // LINK_SPLIT_ENUM
   mode?: number; // Mode = auto: the mode in use, MODE_ENUM
-  band?: [number, number]; // dual band: how much gets through on each band, 0..255
+  band?: number; // Mode = auto with RF Band 2: the band in use, SETUP_FREQUENCY_BAND_ENUM
   lanes?: number; // bonded radios: 2 a lane out of each, 1 one frame on both while a channel is poor
   ant?: [number, number]; // valid frames on each antenna, %
   mp?: RxSlotStat[]; // several receivers: each slot's LQ and RSSI as the Tx sees them
@@ -60,6 +60,7 @@ export interface RxSlotStat {
 }
 
 export const SCHEMES = ['auto', 'single', 'dual redundant', 'dual bonded', 'dual band'];
+export const BANDS = ['2.4 GHz', '915 MHz FCC', '868 MHz', '433 MHz', '70 cm', '866 MHz IN', '915 MHz + 2.4 GHz', '868 MHz + 2.4 GHz'];
 export const SPLITS = ['balanced', 'downlink', 'uplink'];
 export const MODES = ['50 Hz', '31 Hz', '19 Hz', 'FLRC', 'FSK', '19 Hz 7x', '18 Hz', 'LR', '17 Hz', '8 Hz', 'auto'];
 
@@ -211,8 +212,8 @@ export function parseStatsLine(line: string): LinkStats | undefined {
   const tail = line.slice(m[0].length);
   const mode = /mode\s*(\d+);/.exec(tail);
   if (mode) s.mode = parseInt(mode[1], 10);
-  const band = /band\s*(\d+)\/(\d+);/.exec(tail);
-  if (band) s.band = [parseInt(band[1], 10), parseInt(band[2], 10)];
+  const band = /band\s*(\d+);/.exec(tail);
+  if (band) s.band = parseInt(band[1], 10);
   const lanes = /lanes\s*(\d);/.exec(tail);
   if (lanes) s.lanes = parseInt(lanes[1], 10);
   const ant = /ant\s*(\d+)\/(\d+);/.exec(tail);

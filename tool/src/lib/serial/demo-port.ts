@@ -55,6 +55,7 @@ export class DemoSerialPort {
       { name: 'Link Split', kind: 'list', options: ['balanced', 'downlink', 'uplink'], value: 0 },
       { name: 'Radio Scheme', kind: 'list', options: ['auto', 'single', 'dual redund', 'dual bonded', 'dual band'], value: 0, allowed: () => [0, 1, 2, 3] },
       { name: 'Rx Count', kind: 'list', options: ['1', '2', '3', '4'], value: 0 },
+      { name: 'RF Band 2', kind: 'list', options: ['off', '2.4', '915 FCC', '868', '433', '70', '866 IN'], value: 0, allowed: () => (p('Mode').value === 10 ? [0, 1] : [0]) },
       { name: 'Tx Power', kind: 'list', options: ['25 mW', '50 mW', '100 mW', '250 mW', '500 mW'], value: 0 },
       { name: 'Tx Diversity', kind: 'list', options: ['enabled', 'antenna1', 'antenna2', 'r:en. t:ant1', 'r:en. t:ant2'], value: 1, allowed: () => [1] },
       { name: 'Tx Ser Port', kind: 'list', options: ['serial', 'wbridge', 'serial2', 'com', 'usb'], value: 0, allowed: () => [0, 4] },
@@ -351,8 +352,10 @@ export class DemoSerialPort {
     const scheme = this.find('RADIO_SCHEME')!.value as number;
     const sch = scheme === 1 ? 1 : scheme === 2 ? 2 : 3; // the demo pretends two radios on both ends: auto is bonded
     line += ` sch ${sch}; split ${this.find('LINK_SPLIT')!.value};`;
-    if (this.find('MODE')!.value === 10) line += ` mode ${p3(2)};`; // auto: 19 Hz in use
-    if ((this.find('RF_BAND')!.value as number) >= 6) line += ` band ${p3(r(230, 255))}/${p3(r(150, 255))};`;
+    if (this.find('MODE')!.value === 10) { // auto: 19 Hz in use, on the band set
+      line += ` mode ${p3(2)};`;
+      if (this.find('RF_BAND_2')!.value !== 0) line += ` band ${this.find('RF_BAND')!.value};`;
+    }
     if (sch === 3) line += ` lanes 2;`;
     if (sch >= 2) line += ` ant ${p3(r(95, 100))}/${p3(r(90, 100))};`;
     if (this.rxCount() > 1) {

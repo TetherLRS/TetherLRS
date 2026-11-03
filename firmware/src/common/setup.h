@@ -14,11 +14,13 @@
 
 #include "setup_types.h"
 #include "hal/hal.h"
+#include "auto_ladder.h"
 
 
 tSetupMetaData SetupMetaData;
 tSetup Setup;
 tGlobalConfig Config;
+uint16_t mode_hw_mask; // the modes the hardware has, before a band filters them
 
 
 // the EU region needs an instantaneous RSSI read for listen before talk, and one band at a time
@@ -137,6 +139,7 @@ void setup_configure_metadata(void)
 #if defined DEVICE_HAS_SX126x || defined DEVICE_HAS_LR11xx || defined DEVICE_HAS_LR20xx || defined DEVICE_HAS_DUAL_SX126x_SX128x
     SetupMetaData.Mode_allowed_mask |= (1 << MODE_17HZ) | (1 << MODE_8HZ); // narrow sub-GHz modes, the band filter keeps them off 2.4 GHz
 #endif
+    mode_hw_mask = SetupMetaData.Mode_allowed_mask;
 
     //-- Ortho: "off,1/3,2/3,3/3"
     // we cannot work out all cases here, as it depends on actual FrequencyBand selection, so we here just do what we can do
@@ -353,6 +356,7 @@ void setup_default(uint8_t config_id)
     Setup.Common[config_id].PeerRadioCount = 1;
     Setup.Common[config_id].PeerRadioBands = 0;
     Setup.Common[config_id].RxCount = 0; // one receiver
+    Setup.Common[config_id].Band2 = 0; // off
 
     Setup.Tx[config_id].Power = SETUP_TX_POWER;
     Setup.Tx[config_id].Diversity = SETUP_TX_DIVERSITY;
@@ -381,6 +385,38 @@ void setup_default(uint8_t config_id)
     Setup.Rx.SerialBaudrate2 = SERIAL_BAUDRATE_115200;
     Setup.Rx.Test = RX_TEST_OFF;
     Setup.Rx.Slot = 0;
+}
+
+
+// the modes the hardware can run on a band, in a region
+uint16_t mode_mask_for_band(uint8_t band, uint8_t region)
+{
+    uint16_t mask = mode_hw_mask;
+
+#if defined DEVICE_HAS_DUAL_SX126x_SX128x
+    switch (band) {
+    case SETUP_FREQUENCY_BAND_2P4_GHZ: mask &= 0b001111; break; // 50 Hz, 31 Hz, 19 Hz, FLRC
+    case SETUP_FREQUENCY_BAND_915_MHZ_FCC:
+    case SETUP_FREQUENCY_BAND_868_MHZ: mask &= 0b1100010110; break; // 31 Hz, 19 Hz, FSK, 17 Hz, 8 Hz
+    case SETUP_FREQUENCY_DUAL_BAND_915_MHZ_2P4_GHZ:
+    case SETUP_FREQUENCY_DUAL_BAND_868_MHZ_2P4_GHZ: mask &= 0b010110; break; // 31 Hz, 19 Hz, FSK
+    }
+#elif defined DEVICE_HAS_LR11xx
+    mask &= (band == SETUP_FREQUENCY_BAND_2P4_GHZ) ? 0b000111 : 0b1100110110; // 50/31/19 Hz; 31/19 Hz, FSK, 19 Hz 7x, 17/8 Hz
+#elif defined DEVICE_HAS_LR20xx
+    mask &= (band == SETUP_FREQUENCY_BAND_2P4_GHZ) ? 0b001111 : 0b1100110110; // 50/31/19 Hz, FLRC; 31/19 Hz, FSK, 19 Hz 7x, 17/8 Hz
+#endif
+
+    // 18 Hz and LR are 868 MHz channel plans; in the EU the 868 MHz on-time limits leave only these and FSK
+    if (band == SETUP_FREQUENCY_BAND_868_MHZ) {
+#if defined DEVICE_HAS_LR11xx
+        mask |= (1 << MODE_18HZ) | (1 << MODE_LR);
+#elif defined DEVICE_HAS_SX126x && !defined DEVICE_HAS_DUAL_SX126x_SX126x
+        mask |= (1 << MODE_18HZ);
+#endif
+        if (region == REGION_EU) mask &= (1 << MODE_FSK_50HZ) | (1 << MODE_18HZ) | (1 << MODE_LR);
+    }
+    return mask;
 }
 
 
@@ -437,75 +473,28 @@ void _setup_sanitize_config(uint8_t config_id, bool only_rx)
     }
     TST_NOTALLOWED_TYPED(FrequencyBand_allowed_mask, Common[config_id].FrequencyBand, FREQUENCY_BAND_DEFAULT, SETUP_FREQUENCY_BAND_ENUM);
 
+    // the modes of the band, and the antennas a dual band board has on it
+    SetupMetaData.Mode_allowed_mask = mode_mask_for_band(Setup.Common[config_id].FrequencyBand, Setup.Common[config_id].Region);
 #if defined DEVICE_HAS_DUAL_SX126x_SX128x
-    // DUALBAND capable hardware, so adjust allowed modes for hardware capabilities
-    // we now know the frequency band, so can adjust the allowed mask for Mode and Ortho (Ortho is done below)
     switch (Setup.Common[config_id].FrequencyBand) {
     case SETUP_FREQUENCY_BAND_2P4_GHZ:
-        SetupMetaData.Mode_allowed_mask &= 0b001111; // filter down to 50 Hz, 31 Hz, 19 Hz, FLRC
         SetupMetaData.Tx_Diversity_allowed_mask = 0b00100; // antenna2
         SetupMetaData.Rx_Diversity_allowed_mask = 0b00100; // antenna2
         break;
     case SETUP_FREQUENCY_BAND_915_MHZ_FCC:
     case SETUP_FREQUENCY_BAND_868_MHZ:
-        SetupMetaData.Mode_allowed_mask &= 0b1100010110; // filter down to 31 Hz, 19 Hz, FSK, 17 Hz, 8 Hz
         SetupMetaData.Tx_Diversity_allowed_mask = 0b00010; // antenna1
         SetupMetaData.Rx_Diversity_allowed_mask = 0b00010; // antenna1
         break;
     case SETUP_FREQUENCY_DUAL_BAND_915_MHZ_2P4_GHZ:
     case SETUP_FREQUENCY_DUAL_BAND_868_MHZ_2P4_GHZ:
-        SetupMetaData.Mode_allowed_mask &= 0b010110; // filter down to 31 Hz, 19 Hz, FSK
         SetupMetaData.Tx_Diversity_allowed_mask = 0b00001; // diversity / both antenna
         SetupMetaData.Rx_Diversity_allowed_mask = 0b00001; // diversity / both antenna
         break;
     default:
         while(1){} // must not happen, should have been resolved in setup_sanitize()
     }
-#elif defined DEVICE_HAS_LR11xx
-    // MULTIBAND capable hardware, so adjust allowed modes for hardware capabilities
-    // we now know the frequency band, so can adjust the allowed mask for Mode and Ortho (Ortho is done below)
-    switch (Setup.Common[config_id].FrequencyBand) {
-    case SETUP_FREQUENCY_BAND_2P4_GHZ:
-        SetupMetaData.Mode_allowed_mask &= 0b000111; // filter down to 50 Hz, 31 Hz, 19 Hz
-        break;
-    case SETUP_FREQUENCY_BAND_915_MHZ_FCC:
-    case SETUP_FREQUENCY_BAND_868_MHZ:
-    case SETUP_FREQUENCY_BAND_70_CM_HAM:
-    case SETUP_FREQUENCY_BAND_433_MHZ:
-        SetupMetaData.Mode_allowed_mask &= 0b1100110110; // filter down to 31 Hz, 19 Hz, FSK, 19 Hz 7x, 17 Hz, 8 Hz
-        break;
-    default:
-        while(1){} // must not happen, should have been resolved in setup_sanitize()
-    }
-#elif defined DEVICE_HAS_LR20xx
-    // MULTIBAND capable hardware, so adjust allowed modes for hardware capabilities
-    // we now know the frequency band, so can adjust the allowed mask for Mode and Ortho (Ortho is done below)
-    switch (Setup.Common[config_id].FrequencyBand) {
-    case SETUP_FREQUENCY_BAND_2P4_GHZ:
-        SetupMetaData.Mode_allowed_mask &= 0b001111; // filter down to 50 Hz, 31 Hz, 19 Hz, FLRC
-        break;
-    case SETUP_FREQUENCY_BAND_915_MHZ_FCC:
-    case SETUP_FREQUENCY_BAND_868_MHZ:
-    case SETUP_FREQUENCY_BAND_70_CM_HAM:
-    case SETUP_FREQUENCY_BAND_433_MHZ:
-        SetupMetaData.Mode_allowed_mask &= 0b1100110110; // filter down to 31 Hz, 19 Hz, FSK, 19 Hz 7x, 17 Hz, 8 Hz
-        break;
-    default:
-        while(1){} // must not happen, should have been resolved in setup_sanitize()
-    }
 #endif
-
-    // 18 Hz and LR are 868 MHz channel plans; in the EU the 868 MHz on-time limits leave only these and FSK
-    if (Setup.Common[config_id].FrequencyBand == SETUP_FREQUENCY_BAND_868_MHZ) {
-#if defined DEVICE_HAS_LR11xx
-        SetupMetaData.Mode_allowed_mask |= (1 << MODE_18HZ) | (1 << MODE_LR);
-#elif defined DEVICE_HAS_SX126x && !defined DEVICE_HAS_DUAL_SX126x_SX126x
-        SetupMetaData.Mode_allowed_mask |= (1 << MODE_18HZ);
-#endif
-        if (Setup.Common[config_id].Region == REGION_EU) {
-            SetupMetaData.Mode_allowed_mask &= (1 << MODE_FSK_50HZ) | (1 << MODE_18HZ) | (1 << MODE_LR);
-        }
-    }
 
     // auto picks among the modes above: it needs two to choose from, and one receiver (the change restarts the link)
     {
@@ -538,6 +527,23 @@ void _setup_sanitize_config(uint8_t config_id, bool only_rx)
 
     SANITIZE(Common[config_id].Privacy, PRIVACY_NUM, SETUP_PRIVACY, PRIVACY_NONE);
     TST_NOTALLOWED(Privacy_allowed_mask, Common[config_id].Privacy, PRIVACY_NONE);
+
+    // RF Band 2: Mode = auto may move the link to a second band, on radios that run both, with one receiver, a plan
+    // of the region's own and no ortho (the plans and the ortho split are per band)
+    SetupMetaData.Band2_allowed_mask = 0;
+#if defined DEVICE_HAS_LR11xx || defined DEVICE_HAS_LR20xx
+    SetupMetaData.Band2_allowed_mask = 0x01; // off
+    if (Setup.Common[config_id].FrequencyBand < SETUP_FREQUENCY_DUAL_BAND_915_MHZ_2P4_GHZ &&
+        Setup.Common[config_id].Mode == MODE_AUTO && Setup.Common[config_id].RxCount == 0 &&
+        Setup.Common[config_id].Region != REGION_CUSTOM && Setup.Common[config_id].Ortho == ORTHO_NONE) {
+        for (uint8_t b = 0; b < SETUP_FREQUENCY_DUAL_BAND_915_MHZ_2P4_GHZ; b++) {
+            if (b == Setup.Common[config_id].FrequencyBand) continue;
+            if (SetupMetaData.FrequencyBand_allowed_mask & (1 << b)) SetupMetaData.Band2_allowed_mask |= (1 << (b + 1));
+        }
+    }
+#endif
+    SANITIZE(Common[config_id].Band2, SETUP_FREQUENCY_DUAL_BAND_915_MHZ_2P4_GHZ + 1, 0, 0);
+    TST_NOTALLOWED(Band2_allowed_mask, Common[config_id].Band2, 0);
 
     //-- Tx:
 if (!only_rx) {
@@ -985,47 +991,35 @@ uint8_t fhss_custom_plan_set(uint32_t centre_khz, uint16_t span_khz, uint16_t bw
 uint8_t mode_auto_current = MODE_AUTO; // MODE_AUTO: not chosen yet, the base
 uint8_t mode_auto_pending = MODE_AUTO; // the mode the link is about to restart with, MODE_AUTO = none
 
-// where auto starts and meets again: 19 Hz, on every chip and band; else the first mode the hardware has
-uint8_t mode_auto_base(void)
+
+
+//-- RF Band 2: the band in use lives here as well
+
+uint8_t band_auto_current = SETUP_FREQUENCY_BAND_NUM; // none chosen yet: the meeting band
+uint8_t band_auto_pending = SETUP_FREQUENCY_BAND_NUM;
+
+// where Mode = auto starts and meets again: the lower of the two bands, which reaches further, at its base mode
+uint8_t band_auto_meeting(void)
 {
-    uint16_t modes = SetupMetaData.Mode_allowed_mask & ~(1 << MODE_AUTO);
-    if (modes & (1 << MODE_19HZ)) return MODE_19HZ;
-    if (modes & (1 << MODE_19HZ_7X)) return MODE_19HZ_7X;
-    for (uint8_t i = 0; i < MODE_AUTO; i++) if (modes & (1 << i)) return i;
-    return MODE_19HZ;
+    if (Config.Band2 >= SETUP_FREQUENCY_BAND_NUM) return Config.Band1;
+    return (band_mhz(Config.Band2) < band_mhz(Config.Band1)) ? Config.Band2 : Config.Band1;
 }
 
-// the drivers' receiver sensitivities, by mode
-int8_t mode_sensitivity_dbm(uint8_t mode, bool is_2p4)
+uint8_t mode_auto_meeting(void)
 {
-    switch (mode) {
-    case MODE_50HZ: return -105;
-    case MODE_31HZ: return -108;
-    case MODE_19HZ:
-    case MODE_19HZ_7X: return -112;
-    case MODE_FLRC_111HZ: return -104;
-    case MODE_FSK_50HZ: return -106;
-    case MODE_18HZ: return -112;
-    case MODE_17HZ: return -114;
-    }
-    (void)is_2p4;
-    return -117; // MODE_LR, MODE_8HZ
+    return mode_auto_base(mode_mask_for_band(band_auto_meeting(), Config.Region) & ~(1 << MODE_AUTO));
 }
 
-// the next mode up or down the ladder of rates that both ends allow, MODE_AUTO when there is none
-uint8_t mode_auto_next(uint8_t mode, uint16_t allowed_mask, bool faster)
+bool mode_auto_at_meeting(void)
 {
-    const uint8_t ladder[] = { MODE_FLRC_111HZ, MODE_50HZ, MODE_FSK_50HZ, MODE_31HZ, MODE_19HZ, MODE_19HZ_7X, MODE_18HZ, MODE_17HZ, MODE_8HZ, MODE_LR };
-    const int8_t num = sizeof(ladder);
-    int8_t pos = -1;
-    for (int8_t i = 0; i < num; i++) if (ladder[i] == mode) pos = i;
-    if (pos < 0) return MODE_AUTO;
-    for (int8_t i = pos + ((faster) ? -1 : 1); i >= 0 && i < num; i += ((faster) ? -1 : 1)) {
-        if (allowed_mask & (1 << ladder[i])) return ladder[i];
-    }
-    return MODE_AUTO;
+    return (Config.FrequencyBand == band_auto_meeting() && Config.Mode == mode_auto_meeting());
 }
 
+void mode_auto_to_meeting(void)
+{
+    band_auto_current = band_auto_meeting();
+    mode_auto_current = mode_auto_meeting();
+}
 
 // a 91-byte frame's time in the air, the drivers' tables; where the chips of a band differ, the slower one, so both
 // ends of a link compute the same reply slot
@@ -1077,6 +1071,9 @@ void setup_configure_config(uint8_t config_id)
         Config.FrameSyncWord += 0x3C3C;
     }
 
+    // nor radios with a different RF Band 2: one would move to a band the other does not follow
+    Config.FrameSyncWord += 0x0707 * Setup.Common[config_id].Band2;
+
     //-- Diversity
     // Config.Diversity is not actually used for anything besides reporting to disp, cli, etc.
 
@@ -1088,8 +1085,19 @@ void setup_configure_config(uint8_t config_id)
 
     //-- FrequencyBand
 
-    Config.FrequencyBand = Setup.Common[config_id].FrequencyBand; // has hopefully been correctly sanitized in setup_sanitize_config()
+    // with Mode = auto and RF Band 2 the band in use, which starts and meets again on the lower of the two
+    Config.Band1 = Setup.Common[config_id].FrequencyBand; // has hopefully been correctly sanitized in setup_sanitize_config()
+    Config.Band2 = (Setup.Common[config_id].Band2) ? Setup.Common[config_id].Band2 - 1 : SETUP_FREQUENCY_BAND_NUM;
     Config.Region = Setup.Common[config_id].Region;
+    Config.FrequencyBand = Config.Band1;
+    bool auto_reset = false;
+    if (Setup.Common[config_id].Mode == MODE_AUTO && Config.Band2 < SETUP_FREQUENCY_BAND_NUM) {
+        if (band_auto_current != Config.Band1 && band_auto_current != Config.Band2) {
+            band_auto_current = band_auto_meeting();
+            auto_reset = true;
+        }
+        Config.FrequencyBand = band_auto_current;
+    }
 
     Config.IsDualBand = (Config.FrequencyBand == SETUP_FREQUENCY_DUAL_BAND_915_MHZ_2P4_GHZ ||
                          Config.FrequencyBand == SETUP_FREQUENCY_DUAL_BAND_868_MHZ_2P4_GHZ);
@@ -1101,7 +1109,8 @@ void setup_configure_config(uint8_t config_id)
     uint8_t mode = Setup.Common[config_id].Mode;
     Config.ModeAuto = (mode == MODE_AUTO);
     if (Config.ModeAuto) {
-        if (mode_auto_current >= MODE_AUTO || !(SetupMetaData.Mode_allowed_mask & (1 << mode_auto_current))) mode_auto_current = mode_auto_base();
+        uint16_t modes = mode_mask_for_band(Config.FrequencyBand, Config.Region) & ~(1 << MODE_AUTO);
+        if (auto_reset || mode_auto_current >= MODE_AUTO || !(modes & (1 << mode_auto_current))) mode_auto_current = mode_auto_base(modes);
         mode = mode_auto_current;
     }
     configure_mode(mode, Config.FrequencyBand);

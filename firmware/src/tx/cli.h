@@ -32,7 +32,6 @@ extern uint8_t tx_rx_selected(void);
 extern uint8_t tx_bond_lanes(void);
 extern uint8_t tx_antenna_lq(uint8_t antenna);
 extern uint8_t tx_mode_current(void);
-extern uint8_t tx_band_q(uint8_t band);
 extern bool tx_rx_slot_info(uint8_t slot, char* const name_21, uint32_t* const version, uint8_t* const lq, int8_t* const rssi);
 extern tSetup Setup;
 extern tGlobalConfig Config;
@@ -127,6 +126,9 @@ uint16_t param_get_allowed_mask(uint8_t param_idx)
         }
         if (ptr == &SetupMetaData.Mode_allowed_mask && SetupMetaData.rx_Mode_allowed_mask) {
             mask &= SetupMetaData.rx_Mode_allowed_mask;
+        }
+        if (ptr == &SetupMetaData.Band2_allowed_mask && SetupMetaData.rx_FrequencyBand_allowed_mask) {
+            mask &= (SetupMetaData.rx_FrequencyBand_allowed_mask << 1) | 0x01; // option b+1 is band b
         }
     }
     return mask;
@@ -827,17 +829,15 @@ void tTxCli::stream(void)
             puts("; split ");
             putc('0' + Setup.Common[Config.ConfigId].LinkSplit);
             puts(";");
-            if (Config.ModeAuto) { // the mode in use, MODE_ENUM
+            if (Config.ModeAuto) { // the mode in use, MODE_ENUM, and with RF Band 2 the band in use
                 puts(" mode ");
                 puts(u8toBCD_s(tx_mode_current()));
                 puts(";");
-            }
-            if (Config.IsDualBand) { // how much gets through on each band, 0..255
-                puts(" band ");
-                puts(u8toBCD_s(tx_band_q(0)));
-                putc('/');
-                puts(u8toBCD_s(tx_band_q(1)));
-                puts(";");
+                if (Config.Band2 < SETUP_FREQUENCY_BAND_NUM) {
+                    puts(" band ");
+                    putc('0' + Config.FrequencyBand);
+                    puts(";");
+                }
             }
             if (Config.Bonded) { // 2: a lane out of each radio, 1: one frame on both while a channel is poor
                 puts(" lanes ");
