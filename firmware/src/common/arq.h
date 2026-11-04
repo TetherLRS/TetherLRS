@@ -54,6 +54,7 @@ class tTransmitArq
 
     bool GetFreshPayload(void);
     bool WouldAdvance(void); // what GetFreshPayload() would answer, nothing changed: bonded lanes decide together
+    bool Acked(void); // the recipient acked the payload in flight: an advance for retries run out is not one
     void Settle(bool advance); // GetFreshPayload()'s bookkeeping with the answer imposed
     uint8_t SeqNo(void);
     void SetRetryCnt(uint8_t retry_cnt);
@@ -114,6 +115,12 @@ bool tTransmitArq::GetFreshPayload(void)
     bool advance = WouldAdvance();
     Settle(advance);
     return advance;
+}
+
+
+bool tTransmitArq::Acked(void)
+{
+    return (status == ARQ_TX_RECEIVED) && ((received_ack_seq_no & 0x01) == (payload_seq_no & 0x01));
 }
 
 
@@ -395,6 +402,7 @@ class tTransmitArq
     void AckReceived(uint8_t ack_seq_no) {}
 
     bool GetFreshPayload(void) { return true; }
+    bool Acked(void) { return true; }
     uint8_t SeqNo(void) { seq_no++; return seq_no; }
     void SetRetryCnt(uint8_t retry_cnt) {}
     void SetRetryCntAuto(int32_t _frame_cnt, uint8_t mode) {}

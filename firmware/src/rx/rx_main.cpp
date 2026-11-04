@@ -433,6 +433,8 @@ uint8_t payload_b_len = 0;
 
     // new data only when every lane is free, so the Tx can keep the lanes in order
     bool get_fresh_payload;
+    // read before the advance moves the seq on: the answer naming a new mode counts as delivered only when acked
+    bool acked = tarq[0].Acked();
     if (lanes) {
         get_fresh_payload = tarq[0].WouldAdvance() && tarq[1].WouldAdvance();
         tarq[0].Settle(get_fresh_payload);
@@ -441,7 +443,7 @@ uint8_t payload_b_len = 0;
         get_fresh_payload = tarq[0].GetFreshPayload();
     }
 
-    if (get_fresh_payload && link_restart_after_ack) { // the Tx has the answer naming the new mode: restart with it
+    if (get_fresh_payload && acked && link_restart_after_ack) { // the Tx has the answer naming the new mode: restart with it
         link_restart_after_ack = false;
         doLinkRestart = true;
     }
@@ -1123,6 +1125,9 @@ dbg.puts(s8toBCD_s(stats.last_rssi2));*/
             connect_state = CONNECT_STATE_LISTEN;
             connect_listen_cnt = 0;
             link_state = LINK_STATE_RECEIVE; // switch back to RX
+            // Mode = auto: silent since the answer naming the new mode went out, so the Tx has it and restarted (its
+            // last frame, the ack, can be lost or not sent); a Tx that gave the change up sends data frames
+            if (link_restart_after_ack) doLinkRestart = true;
         }
 
         // we didn't receive a valid frame
@@ -1144,6 +1149,11 @@ dbg.puts(s8toBCD_s(stats.last_rssi2));*/
         if (connect_state == CONNECT_STATE_LISTEN) {
             link_task_reset();
             link_task_set(LINK_TASK_RX_SEND_RX_SETUPDATA);
+            // any other link change is given up with the link, as the Tx gives it up
+            if (!doLinkRestart) {
+                mode_auto_pending = MODE_AUTO;
+                link_restart_after_ack = false;
+            }
         }
 
         if (!connected()) { tarq[0].Disconnected(); tarq[1].Disconnected(); rarq[0].Disconnected(); rarq[1].Disconnected(); }

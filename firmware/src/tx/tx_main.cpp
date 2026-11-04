@@ -609,6 +609,30 @@ void link_task_tick_ms(void)
 // called each cycle with no task running: which receiver gets a setup request. A connected one that has not answered
 // since it connected comes first, and the request stays until it answers. One that is not connected gets a STARTUP
 // with its key: every cycle while no receiver at all is connected, else one cycle in eight so the data keeps flowing.
+// the CLI's and the tool's tasks that found another one running wait here, in order, until it is done
+uint8_t link_task_queue[3];
+uint8_t link_task_queue_len;
+
+void link_task_queue_add(uint8_t task)
+{
+    for (uint8_t i = 0; i < link_task_queue_len; i++) if (link_task_queue[i] == task) return; // already waiting
+    if (link_task_queue_len < sizeof(link_task_queue)) link_task_queue[link_task_queue_len++] = task;
+}
+
+void link_task_from_queue(void)
+{
+    if (!link_task_queue_len || !link_task_free()) return;
+    uint8_t task = link_task_queue[0];
+    link_task_queue_len--;
+    for (uint8_t i = 0; i < link_task_queue_len; i++) link_task_queue[i] = link_task_queue[i + 1];
+    if (connected()) {
+        link_task_set(task);
+    } else if (task == LINK_TASK_TX_STORE_RX_PARAMS) {
+        doParamsStore = true;
+    }
+}
+
+
 void link_task_pick(void)
 {
     if (link_task != LINK_TASK_NONE || bind.IsInBind()) return;
@@ -1607,10 +1631,15 @@ IF_SX2(
         link_rx1_status = link_rx2_status = RX_STATUS_NONE;
         for (uint8_t s = 0; s < link_frames(); s++) rxslot[s].rx_status = RX_STATUS_NONE;
 
-        // a setup request to a receiver that is not connected goes out once, the data frames come back after it
-        if (link_task == LINK_TASK_TX_GET_RX_SETUPDATA_STARTUP && link_task_sent && !slot_connected(link_task_slot)) {
+        // a command to a receiver that is not connected goes out once: the data frames and the other receivers come
+        // back after it; a link change is given up with it (STORE ends on its own timer, a restart already counting down
+        // goes on)
+        if (link_task != LINK_TASK_NONE && link_task != LINK_TASK_TX_STORE_RX_PARAMS && link_task_sent &&
+            !slot_connected(link_task_slot) && !link_restart_cnt) {
+            if (link_task == LINK_TASK_TX_SET_LINK) mode_auto_pending = MODE_AUTO;
             link_task_reset();
         }
+        link_task_from_queue();
         link_task_pick();
 
         // the configured power, or less with Dyn Power; binding keeps its lowest power
@@ -1699,22 +1728,18 @@ IF_SX2(
     uint8_t tx_task = tasks.Task();
     switch (tx_task) {
     case TASK_RX_PARAM_SET:
-        if (connected()) {
-            link_task_set(LINK_TASK_TX_SET_RX_PARAMS);
-        }
+        if (connected() && !link_task_set(LINK_TASK_TX_SET_RX_PARAMS)) link_task_queue_add(LINK_TASK_TX_SET_RX_PARAMS);
         break;
     case TASK_PARAM_STORE:
-        if (connected()) {
-            link_task_set(LINK_TASK_TX_STORE_RX_PARAMS);
-        } else {
+        if (!connected()) {
             doParamsStore = true;
+        } else if (!link_task_set(LINK_TASK_TX_STORE_RX_PARAMS)) {
+            link_task_queue_add(LINK_TASK_TX_STORE_RX_PARAMS);
         }
         break;
     case TASK_PARAM_RELOAD:
         setup_reload();
-        if (connected()) {
-            link_task_set(LINK_TASK_TX_GET_RX_SETUPDATA_WRELOAD);
-        }
+        if (connected() && !link_task_set(LINK_TASK_TX_GET_RX_SETUPDATA_WRELOAD)) link_task_queue_add(LINK_TASK_TX_GET_RX_SETUPDATA_WRELOAD);
         break;
     case TASK_BIND_START: bind.StartBind(tasks.GetConfigIdValue()); break;
     case TASK_SELECT_RX: tx_select_rx(tasks.GetConfigIdValue()); break;
