@@ -536,7 +536,8 @@ void _setup_sanitize_config(uint8_t config_id, bool only_rx)
     TST_NOTALLOWED(Privacy_allowed_mask, Common[config_id].Privacy, PRIVACY_NONE);
 
     // RF Band 2: Mode = auto may move the link to a second band, on radios that run both, with one receiver, a plan
-    // of the region's own and no ortho (the plans and the ortho split are per band)
+    // of the region's own and no ortho (the plans and the ortho split are per band); only a band above RF Band, so the
+    // link starts and meets again on RF Band, which a receiver that cannot run RF Band 2 is on too
     SetupMetaData.Band2_allowed_mask = 0;
 #if defined DEVICE_HAS_LR11xx || defined DEVICE_HAS_LR20xx
     SetupMetaData.Band2_allowed_mask = 0x01; // off
@@ -544,7 +545,7 @@ void _setup_sanitize_config(uint8_t config_id, bool only_rx)
         Setup.Common[config_id].Mode == MODE_AUTO && Setup.Common[config_id].RxCount == 0 &&
         Setup.Common[config_id].Region != REGION_CUSTOM && Setup.Common[config_id].Ortho == ORTHO_NONE) {
         for (uint8_t b = 0; b < SETUP_FREQUENCY_DUAL_BAND_915_MHZ_2P4_GHZ; b++) {
-            if (b == Setup.Common[config_id].FrequencyBand) continue;
+            if (band_mhz(b) <= band_mhz(Setup.Common[config_id].FrequencyBand)) continue;
             if (SetupMetaData.FrequencyBand_allowed_mask & (1 << b)) SetupMetaData.Band2_allowed_mask |= (1 << (b + 1));
         }
     }

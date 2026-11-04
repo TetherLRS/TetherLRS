@@ -69,7 +69,7 @@ const META: Record<string, ParamMeta> = {
   },
   'RF Band 2': {
     label: 'Second band',
-    help: 'With Air mode = auto, on radios that run both bands (LR1121, LR2021): the link may move to this band when it is faster for the margin there, and back. It starts on the lower of the two bands, which reaches further, and both radios go back there after 5 s without a link. One receiver only; not with a custom plan or orthogonal hopping. It shows once Air mode = auto is saved.',
+    help: 'With Air mode = auto, on radios that run both bands (LR1121, LR2021): the link may move to this band when it is faster for the margin there, and back. It is a band above RF Band: the link starts on RF Band, which reaches further, and both radios go back there after 5 s without a link. One receiver only; not with a custom plan or orthogonal hopping. It shows once Air mode = auto is saved.',
   },
   'Rx Slot': {
     label: 'Reply slot',
