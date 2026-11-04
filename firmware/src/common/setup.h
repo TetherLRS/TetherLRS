@@ -1270,7 +1270,7 @@ void setup_configure_config(uint8_t config_id)
         bool bonded = (Setup.Common[config_id].RadioScheme != RADIO_SCHEME_DUAL_REDUNDANT) && (Config.RxCount == 1);
         Config.RadioScheme = (bonded) ? RADIO_SCHEME_DUAL_BONDED : RADIO_SCHEME_DUAL_REDUNDANT;
         Config.Bonded = bonded;
-        Config.Fhss2.Offset = Config.Fhss.Num / 2; // never the same frequency in the same slot
+        Config.Fhss2.Offset = 1; // trails by half the hops in use: never the same frequency in the same slot
         Config.ReceiveUseAntenna1 = Config.ReceiveUseAntenna2 = true; // both radios, whatever Diversity says
         Config.TransmitUseAntenna1 = Config.TransmitUseAntenna2 = true;
     }

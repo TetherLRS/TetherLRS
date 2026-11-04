@@ -526,7 +526,7 @@ typedef struct
     uint8_t Except;
     uint16_t BindScan_mask;
     uint8_t Plan; // FHSS_PLAN_ENUM, regional channel plans
-    uint8_t Offset; // the 2nd sequencer trails the 1st by this many hops: dual redundant on one band
+    uint8_t Offset; // not 0: the 2nd sequencer trails the 1st by half the hops, dual redundant and bonded on one band
 } tFhssGlobalConfig;
 
 

@@ -773,7 +773,8 @@ class tFhss
         fhss2ndBand.Init(fhss2->Num, fhss2->Seed,
                           fhss2->FrequencyBand, fhss2->BindScan_mask,
                           fhss2->Ortho, fhss2->Except, fhss2->Plan);
-        offset = fhss2->Offset;
+        // half the hops in use, which ortho and the WiFi except can cut below Num
+        offset = (fhss2->Offset) ? fhss1stBand.Cnt() / 2 : 0;
         if (offset) fhss2ndBand.SetCurrI(trail(fhss1stBand.GetCurrI()));
     }
 
@@ -783,6 +784,7 @@ class tFhss
     {
         fhss1stBand.Start();
         fhss2ndBand.Start();
+        if (offset) fhss2ndBand.SetCurrI(trail(0)); // Start puts both at 0
     }
 
     void HopToNext(void)

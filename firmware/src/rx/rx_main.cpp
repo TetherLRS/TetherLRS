@@ -262,6 +262,19 @@ bool rxFrameB_valid; // lane B's frame holds a payload it may send again
 tBondReorder bond; // the Tx's lanes, put out in order
 
 
+// the data a cycle carries up and down, for the autopilot's flow control: a frame's payload less the link header and
+// the crypto, twice with bonded lanes
+uint16_t rx_link_data_up(void)
+{
+    return (FRAME_PAYLOAD_LEN(Config.FrameLenRx) - FRAME_HDR_LEN - crypto.NonceLen()) * ((Config.Bonded && !bond_single_rx) ? 2 : 1);
+}
+
+uint16_t rx_link_data_down(void)
+{
+    return (FRAME_PAYLOAD_LEN(Config.FrameLenTx) - FRAME_HDR_LEN - crypto.NonceLen()) * ((Config.Bonded && !bond_single_rx) ? 2 : 1);
+}
+
+
 // what came down goes out of the serial port, or back up with the loopback test
 void rx_output(uint8_t* const data, uint8_t len)
 {
@@ -1069,7 +1082,8 @@ dbg.puts(s8toBCD_s(stats.last_rssi2));*/
                 if (!connect_occured_once) {
                     connect_sync_cnt_max = Config.connect_sync_cnt_max;
                 }
-                if ((connect_sync_cnt >= connect_sync_cnt_max) && (connect_fhss_index_band_seen != 0x03)) {
+                uint8_t band_seen_needed = (Config.IsDualBand) ? 0x03 : 0x01; // one band: the Tx always reports band 0
+                if ((connect_sync_cnt >= connect_sync_cnt_max) && ((connect_fhss_index_band_seen & band_seen_needed) != band_seen_needed)) {
                     connect_sync_cnt = connect_sync_cnt_max - 1; // not yet
                 }
                 if (connect_sync_cnt >= connect_sync_cnt_max && crypto.ValidKeys()) { // can't connect if crypto doesn't allow

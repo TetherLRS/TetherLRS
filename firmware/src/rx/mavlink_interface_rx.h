@@ -27,6 +27,8 @@ extern bool connected(void);
 extern tSetup Setup;
 extern tGlobalConfig Config;
 extern tStats stats;
+extern uint16_t rx_link_data_up(void);
+extern uint16_t rx_link_data_down(void);
 
 
 //-------------------------------------------------------
@@ -573,7 +575,7 @@ bool tRxMavlink::handle_txbuf_ardupilot(uint32_t tnow_ms)
         hysteresis--;
     }
     if (frame_cnt < 500) frame_cnt = 500;
-    uint32_t rate_max = (frame_cnt * FRAME_PAYLOAD_LEN(Config.FrameLenRx)) / Config.frame_rate_ms; // theoretical rate, bytes per sec
+    uint32_t rate_max = (frame_cnt * rx_link_data_up()) / Config.frame_rate_ms; // theoretical rate, bytes per sec
     uint32_t rate_percentage = (bytes_link_out * 100) / rate_max;
 #if 0 // debug
 dbg.puts("\nMa: ");dbg.puts(u16toBCD_s(frame_cnt_filtered));dbg.puts(" , ");dbg.puts(u16toBCD_s(frame_cnt));
@@ -686,7 +688,7 @@ bool tRxMavlink::handle_txbuf_method_b(uint32_t tnow_ms)
 
     // method C, with improvements
     // assumes 1 sec delta time
-    uint32_t rate_max = ((uint32_t)1000 * FRAME_PAYLOAD_LEN(Config.FrameLenRx)) / Config.frame_rate_ms; // theoretical rate, bytes per sec
+    uint32_t rate_max = ((uint32_t)1000 * rx_link_data_up()) / Config.frame_rate_ms; // theoretical rate, bytes per sec
     uint32_t rate_percentage = (bytes_link_out * 100) / rate_max;
 
     // https://github.com/ArduPilot/ardupilot/blob/fa6441544639bd5dc84c3e6e3d2f7bfd2aecf96d/libraries/GCS_MAVLink/GCS_Common.cpp#L782-L801
@@ -918,9 +920,9 @@ uint16_t tx_ser_data_rate, rx_ser_data_rate;
     mlrs_radio_link_information_tlast_ms = tnow_ms;
     mlrs_radio_link_information_power_dbm_last = power_dbm;
 
-    // what each direction carries at most, the Link Split profile's data in every frame
-    tx_ser_data_rate = FRAME_PAYLOAD_LEN(Config.FrameLenTx) * Config.frame_rate_hz;
-    rx_ser_data_rate = FRAME_PAYLOAD_LEN(Config.FrameLenRx) * Config.frame_rate_hz;
+    // what each direction carries at most: the Link Split profile's data in every frame, twice with bonded lanes
+    tx_ser_data_rate = rx_link_data_down() * Config.frame_rate_hz;
+    rx_ser_data_rate = rx_link_data_up() * Config.frame_rate_hz;
 
     fmav_mlrs_radio_link_information_t payload;
     payload.target_system = autopilot.sysid; // targets, we send to our autopilot sysid only, if not known it is zero // 0, 0,
