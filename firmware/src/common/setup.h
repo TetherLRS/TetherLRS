@@ -1270,9 +1270,12 @@ void setup_configure_config(uint8_t config_id)
 #endif
     Config.RadioScheme = RADIO_SCHEME_SINGLE;
     Config.Bonded = false;
+    // in the EU on 868 MHz the modes there fill the on-time limits with one radio sending (FSK 1.8 % per channel of
+    // PSA's 2.7 %, LR 9.4 % of 10 %): a second one would have frames held back every cycle, so one sends
+    bool eu_868 = (Config.Region == REGION_EU && Config.FrequencyBand == SETUP_FREQUENCY_BAND_868_MHZ);
     if (Config.IsDualBand) {
         Config.RadioScheme = RADIO_SCHEME_DUAL_BAND;
-    } else if (pair_two_radios && Setup.Common[config_id].RadioScheme != RADIO_SCHEME_SINGLE && Config.Fhss.Num >= 2) {
+    } else if (pair_two_radios && Setup.Common[config_id].RadioScheme != RADIO_SCHEME_SINGLE && Config.Fhss.Num >= 2 && !eu_868) {
         // auto is bonded: twice the data while both channels are good, one frame on both when one is poor; one
         // receiver only, the lanes and the reply slots both need the link header's bits
         bool bonded = (Setup.Common[config_id].RadioScheme != RADIO_SCHEME_DUAL_REDUNDANT) && (Config.RxCount == 1);

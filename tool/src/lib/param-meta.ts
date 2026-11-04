@@ -61,7 +61,7 @@ const META: Record<string, ParamMeta> = {
   },
   'Radio Scheme': {
     label: 'Radio scheme',
-    help: 'With two radios on both ends: dual bonded runs two lanes for twice the data and falls back to one frame on both radios while a channel is poor; dual redundant always sends every frame on two channels; single keeps the second radio for receiving only. Auto is bonded when the pair can.',
+    help: 'With two radios on both ends: dual bonded runs two lanes for twice the data and falls back to one frame on both radios while a channel is poor; dual redundant always sends every frame on two channels; single keeps the second radio for receiving only. Auto is bonded when the pair can. In the EU on 868 MHz one radio sends whatever the scheme: the on-time limits there are used up by one.',
   },
   'Rx Count': {
     label: 'Receivers',
