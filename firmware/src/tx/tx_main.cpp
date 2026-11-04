@@ -1192,6 +1192,9 @@ tRxFrame* frame = &rxFrames[slot];
     if (slot == rx_selected) {
         // we set it for all received frames
         stats.last_antenna = antenna;
+        // and its signal: the stats keep the last frame heard, which with several receivers can be another one's
+        if (antenna == ANTENNA_1) { stats.last_rssi1 = rxslot[slot].rssi; stats.last_snr1 = rxslot[slot].snr; }
+        else { stats.last_rssi2 = rxslot[slot].rssi; stats.last_snr2 = rxslot[slot].snr; }
 
         // we count all received frames
         stats.doFrameReceived();
@@ -1569,7 +1572,8 @@ IF_SX2(
             rs->decrypt_ok = valid;
             if (valid) valid_frame_received = true;
 
-            if (Config.Bonded && s == BOND_LANE_B) { // the lanes share lane A's connection
+            if (Config.Bonded && s == BOND_LANE_B) { // the lanes share lane A's connection, which either lane keeps
+                if (valid && rxslot[0].connect_state == CONNECT_STATE_CONNECTED) rxslot[0].connect_tmo_cnt = CONNECT_TMO_SYSTICKS;
                 if (!slot_connected(0) || bond_single) rarq[s].Disconnected();
                 continue;
             }
