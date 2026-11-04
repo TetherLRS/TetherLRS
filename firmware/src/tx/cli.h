@@ -131,6 +131,10 @@ uint16_t param_get_allowed_mask(uint8_t param_idx)
             mask &= (SetupMetaData.rx_FrequencyBand_allowed_mask << 1) | 0x01; // option b+1 is band b
         }
     }
+    // Mode = auto takes one receiver, since its changes restart the link: of the two, the one set second is refused
+    void* value_ptr = SetupParameter[param_idx].ptr;
+    if (value_ptr == &Setup.Common[0].Mode && Setup.Common[Config.ConfigId].RxCount > 0) mask &= ~(1 << MODE_AUTO);
+    if (value_ptr == &Setup.Common[0].RxCount && Setup.Common[Config.ConfigId].Mode == MODE_AUTO) mask &= 0x01;
     return mask;
 }
 

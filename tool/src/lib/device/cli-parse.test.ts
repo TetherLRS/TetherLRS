@@ -30,6 +30,10 @@ describe('parameter lines, as cli.h print_param() writes them', () => {
   it('bind phrase, with the 2.4 GHz except note dropped', () => {
     expect(parseParamLine('  Bind Phrase = mlrs.0 /e6')).toMatchObject({ kind: 'phrase', text: 'mlrs.0' });
   });
+  it('Rx Count belongs to the ground radio, with the common parameters', () => {
+    expect(parseParamLine('  Rx Count = 3 [2]')).toMatchObject({ group: 'common', index: 2 });
+    expect(parseParamLine('  Rx Slot = 1 [1]')).toMatchObject({ group: 'rx' });
+  });
   it('int8 value with unit', () => {
     expect(parseParamLine('  Rx FS Ch3 = -120 %')).toMatchObject({ group: 'rx', kind: 'value', text: '-120 %' });
   });

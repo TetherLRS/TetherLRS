@@ -510,6 +510,12 @@ void _setup_sanitize_config(uint8_t config_id, bool only_rx)
     }
 
     SANITIZE(Common[config_id].Mode, MODE_NUM, SETUP_MODE, MODE_DEFAULT);
+    // a Mode = auto that cannot run (several receivers, from a bind or an image) becomes the mode auto starts from,
+    // which both ends pick alike, and not this chip's default
+    if (Setup.Common[config_id].Mode == MODE_AUTO && !(SetupMetaData.Mode_allowed_mask & (1 << MODE_AUTO))) {
+        uint16_t modes = mode_mask_for_band(Setup.Common[config_id].FrequencyBand, Setup.Common[config_id].Region) & ~(1 << MODE_AUTO);
+        Setup.Common[config_id].Mode = mode_auto_base(modes);
+    }
     TST_NOTALLOWED(Mode_allowed_mask, Common[config_id].Mode, MODE_DEFAULT);
 
     SANITIZE(Common[config_id].Ortho, ORTHO_NUM, SETUP_RF_ORTHO, ORTHO_NONE);

@@ -226,7 +226,7 @@ export class DemoSerialPort {
   }
 
   private cli(line: string) {
-    const isRx = (p: DemoParam) => p.name.startsWith('Rx ');
+    const isRx = (p: DemoParam) => p.name.startsWith('Rx ') && p.name !== 'Rx Count';
     if (line === 'v') {
       this.putsn('  Tx: DAKEFPV 900 MAX 1W TX, v2.0-dev');
       this.putsn(this.rxConnected ? '  Rx: DAKEFPV 900 NANOPRO, v2.0-dev' : '  Rx: receiver not connected');

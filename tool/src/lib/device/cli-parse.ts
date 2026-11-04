@@ -110,9 +110,10 @@ export interface CustomPlan {
 // the CLI prints list indices as '0' + index, so 10 and above come out as ':' ';' '<' ...
 const indexFromChar = (c: string) => c.charCodeAt(0) - 48;
 
+// Rx Count is the ground radio's, a common parameter named after what it counts
 export function paramGroup(name: string): ParamGroup {
   if (name.startsWith('Tx ')) return 'tx';
-  if (name.startsWith('Rx ')) return 'rx';
+  if (name.startsWith('Rx ') && name !== 'Rx Count') return 'rx';
   return 'common';
 }
 

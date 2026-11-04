@@ -83,7 +83,7 @@
 
 
 // Tx parameters must begin with "Tx "
-// Rx parameters must begin with "Rx "
+// Rx parameters must begin with "Rx "; Rx Count is common all the same: see setup_param_is_rx() and the tool's paramGroup()
 // a parameter name is limited to 16 chars max
 // a LIST can have only 16 options at most
 // a LIST option string list is limited to 67 chars max

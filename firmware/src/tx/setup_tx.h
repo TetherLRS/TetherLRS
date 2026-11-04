@@ -93,22 +93,24 @@ const tSetupParameterItem SetupParameter[] = {
 // helper
 //-------------------------------------------------------
 
+// by where the value lives, not by the name: Rx Count is a common parameter, named after what it counts
 bool setup_param_is_tx(uint8_t param_idx)
 {
-    return (SetupParameter[param_idx].name[0] == 'T' && SetupParameter[param_idx].name[1] == 'x');
+    const uint8_t* ptr = (const uint8_t*)SetupParameter[param_idx].ptr;
+    return (ptr >= (const uint8_t*)&Setup.Tx[0] && ptr < (const uint8_t*)&Setup.Tx[1]);
 }
 
 
 bool setup_param_is_rx(uint8_t param_idx)
 {
-    return (SetupParameter[param_idx].name[0] == 'R' && SetupParameter[param_idx].name[1] == 'x');
+    const uint8_t* ptr = (const uint8_t*)SetupParameter[param_idx].ptr;
+    return (ptr >= (const uint8_t*)&Setup.Rx && ptr < (const uint8_t*)(&Setup.Rx + 1));
 }
 
 
 bool setup_param_is_for_rx(uint8_t param_idx)
 {
-    if (SetupParameter[param_idx].name[0] == 'T' && SetupParameter[param_idx].name[1] == 'x') return false;
-    return true; // not Tx -> common or Rx
+    return !setup_param_is_tx(param_idx); // common or Rx
 }
 
 
