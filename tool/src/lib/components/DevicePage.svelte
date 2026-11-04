@@ -105,7 +105,7 @@
   const bandsText = $derived(`${app.param('RF Band')?.text ?? '–'}${band2 && band2 !== 'off' ? ` and ${band2}` : ''}`);
 
   // the link at a glance, live while this page is open; a measure opens large on the Link page
-  const live = $derived(app.connected && app.state === 'connected' && !app.version?.onlyRx); // a receiver alone has no link
+  const live = $derived(app.connected && app.state === 'connected' && !app.version?.onlyRx && !app.binding); // a receiver alone has no link
   $effect(() => {
     if (live && app.page === 'device' && !app.streaming) void app.startStats();
   });

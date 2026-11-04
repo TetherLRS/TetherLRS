@@ -21,7 +21,7 @@
       };
     }),
   );
-  const disabled = $derived(app.state !== 'connected');
+  const disabled = $derived(app.state !== 'connected' || app.binding);
 </script>
 
 <div class="card rxlist">

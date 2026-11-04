@@ -115,8 +115,9 @@ export class TxSession {
     return { ok: /selected/.test(out) };
   }
 
-  async bind(slot = 0): Promise<SetResult> {
-    const out = await this.command(slot ? `bind = ${slot}` : 'bind');
+  // with a slot the receiver binding now gets it, else it keeps its own
+  async bind(slot?: number): Promise<SetResult> {
+    const out = await this.command(slot !== undefined ? `bind = ${slot}` : 'bind');
     const err = /err: (.*?)\r?$/m.exec(out);
     if (err) return { ok: false, message: err[1] };
     return { ok: /bind mode/.test(out) };

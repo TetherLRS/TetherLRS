@@ -23,6 +23,7 @@ export const DEFAULT_FIRMWARE_BASE =
 
 // another source (a local build, a fork's site) is remembered once a list has loaded from it
 const SOURCE = 'tetherlrs.firmwareSource';
+const BIND_WATCH_S = 180; // how long the tool waits for the Tx to restart after a bind
 
 function savedSource(): string {
   try {
@@ -54,6 +55,7 @@ class App {
   unsaved = $state(false);
   stats = $state<History>([]);
   streaming = $state(false);
+  binding = $state(false); // the Tx is binding a receiver: no stats stream, the CLI is waited on
   linkMetric = $state('lq'); // the measure the Link page shows large
   terminal = $state<string[]>([]); // the CLI conversation on the Terminal page
   linkKeySet = $state<boolean | undefined>(); // the connected radio holds a link key; undefined before 2.0 firmware answers
@@ -219,45 +221,75 @@ class App {
     this.rxList = this.version?.onlyRx || this.rxCount <= 1 ? [] : await this.tx.rxList();
   }
 
-  // the receiver the parameters and stats are of: the Tx asks it for its setup, which takes a few cycles
-  async selectRx(slot: number): Promise<boolean> {
-    return this.exclusive(async () => {
-      if (!this.tx) return false;
-      this.state = 'busy';
-      try {
-        const r = await this.tx.selectRx(slot);
-        if (!r.ok) {
-          this.error = `Receiver ${slot}: ${r.message ?? 'not selected'}`;
-          return false;
-        }
-        await sleep(1500);
-        await this.refresh();
-        this.error = '';
-        return true;
-      } finally {
-        this.state = 'connected';
-      }
-    });
+  // a command that holds the CLI: the stats stream stops first, and busy keeps the pages from starting it meanwhile
+  private async withoutStats<T>(fn: () => Promise<T>): Promise<T> {
+    this.state = 'busy';
+    try {
+      await this.stopStats();
+      return await this.exclusive(fn);
+    } finally {
+      if (this.tx) this.state = 'connected';
+    }
   }
 
-  // the Tx into bind mode; with several receivers the one binding now gets that slot
-  async bind(slot = 0): Promise<boolean> {
-    return this.exclusive(async () => {
+  // the receiver the parameters and stats are of: the Tx asks it for its setup, which takes a few cycles
+  async selectRx(slot: number): Promise<boolean> {
+    const wanted = this.statsWanted;
+    const ok = await this.withoutStats(async () => {
       if (!this.tx) return false;
-      this.state = 'busy';
-      try {
-        const r = await this.tx.bind(slot);
-        if (!r.ok) {
-          this.error = `Bind: ${r.message ?? 'not started'}`;
-          return false;
-        }
-        this.status = `Binding${this.rxCount > 1 ? ` a receiver to slot ${slot}` : ''}: power the receiver in bind mode. The Tx restarts when done.`;
-        this.error = '';
-        return true;
-      } finally {
-        this.state = 'connected';
+      const r = await this.tx.selectRx(slot);
+      if (!r.ok) {
+        this.error = `Receiver ${slot}: ${r.message ?? 'not selected'}`;
+        return false;
       }
+      await sleep(1500);
+      await this.refresh();
+      this.error = '';
+      return true;
     });
+    if (wanted) await this.startStats();
+    return ok;
+  }
+
+  // the Tx into bind mode; with a slot the receiver binding now gets it, else it keeps its own
+  async bind(slot?: number): Promise<boolean> {
+    const wanted = this.statsWanted;
+    const ok = await this.withoutStats(async () => {
+      if (!this.tx) return false;
+      const r = await this.tx.bind(slot);
+      if (!r.ok) {
+        this.error = `Bind: ${r.message ?? 'not started'}`;
+        return false;
+      }
+      this.binding = true; // before connected again: no stats stream while it binds
+      this.status = `Binding${slot !== undefined && this.rxCount > 1 ? ` a receiver to slot ${slot}` : ''}: power the receiver in bind mode. The Tx restarts when done.`;
+      this.error = '';
+      return true;
+    });
+    if (ok) void this.afterBind();
+    else if (wanted) await this.startStats();
+    return ok;
+  }
+
+  // once a receiver has bound the Tx restarts, out of its command mode: the tool goes in again
+  private async afterBind(): Promise<void> {
+    try {
+      for (let t = 0; t < BIND_WATCH_S && this.tx; t += 2) {
+        await sleep(2000);
+        const back = await this.exclusive(async () => {
+          if (!this.tx) return true;
+          if (await this.tx.version()) return false; // it answers: still binding
+          if (!(await this.tx.enterCommandMode())) return false;
+          await this.refresh();
+          this.status = 'Bound: the Tx restarted with the receiver';
+          return true;
+        });
+        if (back) break;
+      }
+    } finally {
+      this.binding = false;
+    }
+    if (this.tx && statsPage(this.page)) await this.startStats();
   }
 
   async setLinkKey(key: string): Promise<boolean> {
@@ -441,7 +473,7 @@ class App {
   }
 
   private wantStats(on: boolean): Promise<void> {
-    this.statsWanted = on && !this.version?.onlyRx; // a receiver alone has no link to measure
+    this.statsWanted = on && !this.version?.onlyRx && !this.binding; // a receiver alone has no link to measure
     this.statsMoving ??= (async () => {
       while (this.tx && this.streaming !== this.statsWanted) {
         if (this.statsWanted) {
