@@ -91,9 +91,10 @@ int main(void)
         uint8_t bad[CRYPTO_STARTUP_RANDOM_BUF_LEN];
         memcpy(bad, buf, sizeof(bad));
         bad[3] ^= 0x01;
-        check("a tampered STARTUP is refused", !rx.SetSessionKeysFromEncryptedBuf(bad) && rx.SessionRandom() == 0);
+        check("a tampered STARTUP is refused", rx.SetSessionKeysFromEncryptedBuf(bad, 0) == CRYPTO_STARTUP_REFUSED && rx.SessionRandom() == 0);
+        check("  and the receiver holds no keys", !rx.SessionKeys());
         check("the STARTUP gives the receiver the group random, and a new transmit key",
-              rx.SetSessionKeysFromEncryptedBuf(buf) && rx.SessionRandom() == 0xAAAA000011112222ULL);
+              rx.SetSessionKeysFromEncryptedBuf(buf, 0) == CRYPTO_STARTUP_NEW_KEY && rx.SessionRandom() == 0xAAAA000011112222ULL && rx.SessionKeys());
 
         send(tx, f, "down");
         check("the receiver reads the Tx with the group key", receive(rx, 0, f, "down"));
@@ -104,7 +105,9 @@ int main(void)
         // a second receiver on slot 1
         tx.SetReceiveKey(1, 0xCCCC000011112222ULL);
         tx.EncryptSessionRandoms(buf, 1, 0x0102030405060708ULL, 0x1112131415161718ULL);
-        rx2.SetSessionKeysFromEncryptedBuf(buf);
+        check("a STARTUP sealed for slot 1 is refused at slot 2 and slot 0", rx2.SetSessionKeysFromEncryptedBuf(buf, 2) == CRYPTO_STARTUP_REFUSED &&
+              rx2.SetSessionKeysFromEncryptedBuf(buf, 0) == CRYPTO_STARTUP_REFUSED && !rx2.SessionKeys());
+        rx2.SetSessionKeysFromEncryptedBuf(buf, 1);
         send(rx2, f, "up from slot 1");
         check("slot 1 has its own key", receive(tx, 1, f, "up from slot 1") && (!receive(tx, 0, f, "up from slot 1") || level == 1));
         send(tx, f, "down to all");
@@ -114,20 +117,20 @@ int main(void)
         rx.Init(tCrypto::RX, phrase, tx_uid, 0x1122334455667788ULL, level, no_key);
         tx.SetReceiveKey(0, 0xDDDD000011112222ULL);
         tx.EncryptSessionRandoms(buf, 0, 0x0102030405060708ULL, 0x1112131415161718ULL);
-        rx.SetSessionKeysFromEncryptedBuf(buf);
+        rx.SetSessionKeysFromEncryptedBuf(buf, 0);
         send(rx, f, "up after restart");
         check("a restarted receiver comes back under a new key", receive(tx, 0, f, "up after restart"));
         tFrame same = f;
-        bool changed = rx.SetSessionKeysFromEncryptedBuf(buf); // the Tx repeats the command until answered
+        uint8_t again = rx.SetSessionKeysFromEncryptedBuf(buf, 0); // the Tx repeats the command until answered
         send(rx, f, "up after restart");
-        check("  the repeated STARTUP changes nothing", !changed && receive(tx, 0, f, "up after restart") && memcmp(same.payload, f.payload, f.len) != 0);
+        check("  the repeated STARTUP changes nothing", again == CRYPTO_STARTUP_SAME && receive(tx, 0, f, "up after restart") && memcmp(same.payload, f.payload, f.len) != 0);
 
         // the Tx restarts: a new group random, the receiver takes it
         tx.Init(tCrypto::TX, phrase, tx_uid, 0x1122334455667788ULL, level, no_key);
         tx.SetTransmitKey(0xEEEE000011112222ULL);
         tx.SetReceiveKey(0, 0xFFF0000011112222ULL);
         tx.EncryptSessionRandoms(buf, 0, 0x0102030405060709ULL, 0x1112131415161718ULL);
-        rx.SetSessionKeysFromEncryptedBuf(buf);
+        rx.SetSessionKeysFromEncryptedBuf(buf, 0);
         send(tx, f, "down after Tx restart");
         check("a restarted Tx re-keys the receiver", receive(rx, 0, f, "down after Tx restart") && rx.SessionRandom() == 0xEEEE000011112222ULL);
 
@@ -149,7 +152,7 @@ int main(void)
     tx.SetTransmitKey(0x1111000011112222ULL);
     tx.SetReceiveKey(0, 0x2222000011112222ULL);
     tx.EncryptSessionRandoms(buf, 0, 0x0102030405060708ULL, UINT64_MAX);
-    rx.SetSessionKeysFromEncryptedBuf(buf);
+    rx.SetSessionKeysFromEncryptedBuf(buf, 0);
     send(tx, f, "fleet");
     check("  and reads the Tx it never bound with", receive(rx, 0, f, "fleet"));
     rx.Init(tCrypto::RX, phrase, other_uid, UINT64_MAX, 2, no_key);

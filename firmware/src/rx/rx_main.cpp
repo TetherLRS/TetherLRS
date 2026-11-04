@@ -290,6 +290,7 @@ void rx_output(uint8_t* const data, uint8_t len)
 
 uint8_t link_task;
 uint8_t transmit_frame_type;
+uint8_t startup_result; // the frame's STARTUP for this slot, CRYPTO_STARTUP_ENUM
 bool doParamsStore;
 bool doLinkRestart; // Mode = auto: the link restarts with mode_auto_current
 bool link_restart_after_ack; // the answer naming the new mode went out: restart once the Tx has it
@@ -359,8 +360,10 @@ tCmdFrameHeader* head = (tCmdFrameHeader*)FRAME_DATA(frame);
     case FRAME_CMD_GET_RX_SETUPDATA_STARTUP:
         if (!for_me) break; // the randoms in it are this slot's
         // request to send setup data, trigger sending RX_SETUPDATA in next transmission
-        if (crypto.SetSessionKeysFromEncryptedBuf(FRAME_DATA(frame) + 1)) { // the frames waiting to go again are sealed
-            tarq[0].Disconnected();                                          // with the old key: new ones go instead
+        // sealed for the slot it names: Rx Slot with the link header, else 0
+        startup_result = crypto.SetSessionKeysFromEncryptedBuf(FRAME_DATA(frame) + 1, (Config.LinkHeader) ? Config.RxSlot : 0);
+        if (startup_result == CRYPTO_STARTUP_NEW_KEY) { // the frames waiting to go again are sealed with the old key:
+            tarq[0].Disconnected();                       // new ones go instead
             tarq[1].Disconnected();
         }
         Config.SessionRandom = crypto.SessionRandom(); // only for reporting
@@ -696,6 +699,7 @@ tTxFrame* frame;
         msp.FrameLost();
     }
 
+    startup_result = CRYPTO_STARTUP_REFUSED;
     if (rx_status > RX_STATUS_INVALID && decrypt_ok) { // = RX_STATUS_VALID
 
         process_received_frame(frame, lane);
@@ -712,6 +716,12 @@ tTxFrame* frame;
     // we count all received frames
     if (!lq_frame_counted) { stats.doFrameReceived(); lq_frame_counted = true; }
 
+    // with a MAC only a frame that passed one takes the receiver towards a link: a plain command, which from the Tx is
+    // only ever a STARTUP, then counts only as one for this slot, else a receiver without keys syncs on another's
+    if (decrypt_ok && crypto.IsAuthenticated() && frame->status.frame_type == FRAME_TYPE_CMD &&
+        startup_result == CRYPTO_STARTUP_REFUSED) {
+        return false;
+    }
     return decrypt_ok;
 }
 
@@ -1106,7 +1116,8 @@ dbg.puts(s8toBCD_s(stats.last_rssi2));*/
                 if ((connect_sync_cnt >= connect_sync_cnt_max) && ((connect_fhss_index_band_seen & band_seen_needed) != band_seen_needed)) {
                     connect_sync_cnt = connect_sync_cnt_max - 1; // not yet
                 }
-                if (connect_sync_cnt >= connect_sync_cnt_max && crypto.ValidKeys()) { // can't connect if crypto doesn't allow
+                // can't connect if crypto doesn't allow, nor without the keys of a STARTUP
+                if (connect_sync_cnt >= connect_sync_cnt_max && crypto.ValidKeys() && crypto.SessionKeys()) {
                     connect_state = CONNECT_STATE_CONNECTED;
                     connect_occured_once = true;
                     bind.auto_bind_tmo_ms = 0; // the bind after power up is for a receiver that never linked

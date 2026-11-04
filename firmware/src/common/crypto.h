@@ -40,6 +40,12 @@ Key handling:
 #define CRYPTO_NONCE_MAX_LEN  12 // maximum length of nonce and mac
 #define CRYPTO_SLOT_NUM  4 // receivers a Tx holds a receive key for; the same on both roles, this header is one TU's view
 
+typedef enum {
+    CRYPTO_STARTUP_REFUSED = 0, // its MAC did not hold: not from the Tx, or for another slot
+    CRYPTO_STARTUP_SAME, // the keys held already, the counter goes on
+    CRYPTO_STARTUP_NEW_KEY, // a new transmit key
+} CRYPTO_STARTUP_ENUM;
+
 
 class tCrypto
 {
@@ -57,9 +63,10 @@ class tCrypto
     void SetTransmitKey(uint64_t random); // the key of the frames this side sends
     void SetReceiveKey(uint8_t slot, uint64_t random); // the key of the frames received from that slot, the Rx uses slot 0
     void EncryptSessionRandoms(uint8_t* const buf36, uint8_t slot, uint64_t startup_random, uint64_t bind_random); // Tx only
-    bool SetSessionKeysFromEncryptedBuf(uint8_t* const buf36); // Rx only; true when the transmit key changed
+    uint8_t SetSessionKeysFromEncryptedBuf(uint8_t* const buf36, uint8_t slot); // Rx only, CRYPTO_STARTUP_ENUM
 
     bool ValidKeys(uint8_t slot = 0);
+    bool SessionKeys(void) { return !_privacy_level || (_key_tx_set && _key_rx_set[0]); } // Rx: both, from a STARTUP
 
     uint8_t PrivacyLevel(void) { return _privacy_level; }
     bool IsAuthenticated(void) { return (_privacy_level >= 2); }

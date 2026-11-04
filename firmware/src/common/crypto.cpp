@@ -170,10 +170,14 @@ uint8_t randoms[16];
     memcpy(randoms, &_transmit_random, 8);
     memcpy(randoms + 8, &_receive_random[slot], 8);
 
+    nonce[11] ^= slot;
     crypto_chacha20_ietf(buf36, randoms, 16, _static_key, nonce, 1); // buf36[0] ... buf36[16 - 1]
+    nonce[11] ^= slot; // sent as drawn
 
     memcpy(buf36 + 16, nonce, 12); // buf36[16] ... buf36[28 - 1]
 
+    // the slot goes into the nonce the keys come from: moved to another slot, the STARTUP fails there; slot 0 as before
+    nonce[11] ^= slot;
     crypto_chacha20_ietf(poly1305_key, NULL, 32, _static_key, nonce, 0);
     crypto_poly1305(mac, buf36, 28, poly1305_key); // mac over the randoms & nonce
 
@@ -183,7 +187,7 @@ uint8_t randoms[16];
 
 // only Rx: called upon receive of a FRAME_CMD_GET_RX_SETUPDATA_STARTUP frame; the randoms are taken when they
 // changed, so a restarted Tx re-keys the receiver and a reconnect brings the receiver a fresh key of its own
-bool tCrypto::SetSessionKeysFromEncryptedBuf(uint8_t* const buf36)
+uint8_t tCrypto::SetSessionKeysFromEncryptedBuf(uint8_t* const buf36, uint8_t slot)
 {
 uint8_t nonce[12];
 uint8_t poly1305_key[32];
@@ -193,19 +197,20 @@ uint64_t group_random, own_random;
 
     memset(nonce, 0, 12);
     memcpy(nonce, buf36 + 16, 12);
+    nonce[11] ^= slot; // this receiver's slot: one sealed for another fails
 
     crypto_chacha20_ietf(poly1305_key, NULL, 32, _static_key, nonce, 0);
     crypto_poly1305(mac, buf36, 28, poly1305_key); // mac over the randoms & nonce
-    for (uint8_t i = 0; i < 8; i++) { if (buf36[28 + i] != mac[i]) return false; } // authentication failed
+    for (uint8_t i = 0; i < 8; i++) { if (buf36[28 + i] != mac[i]) return CRYPTO_STARTUP_REFUSED; } // authentication failed
 
     crypto_chacha20_ietf(randoms, buf36, 16, _static_key, nonce, 1);
     memcpy(&group_random, randoms, 8);
     memcpy(&own_random, randoms + 8, 8);
 
     if (!_key_rx_set[0] || group_random != _receive_random[0]) SetReceiveKey(0, group_random);
-    if (_key_tx_set && own_random == _transmit_random) return false; // a repeat: same key, the counter goes on
+    if (_key_tx_set && own_random == _transmit_random) return CRYPTO_STARTUP_SAME; // a repeat: the counter goes on
     SetTransmitKey(own_random);
-    return true;
+    return CRYPTO_STARTUP_NEW_KEY;
 }
 
 
