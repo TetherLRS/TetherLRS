@@ -402,6 +402,7 @@ uint8_t link_frames(void)
 //-- bonded radios: two lanes, or one frame on both while a channel is poor
 
 bool bond_single; // the Tx's choice, in every frame's link header; the receiver follows it
+bool bond_single_due; // chosen, it takes effect once both lanes' payloads are done, so lane B loses none
 uint8_t bond_cnt; // seconds the condition for a switch has held
 uint8_t bond_connected_s; // seconds since the connect, the lanes are judged after a few
 tStatsLQ ant_lq[2]; // valid frames on each antenna: a lane's health, also when one frame goes out on both
@@ -428,6 +429,7 @@ void bond_init(void)
     txFrameB_valid = false;
     tx_frame_held = false;
     bond_single = false;
+    bond_single_due = false;
     bond_cnt = 0;
     bond_connected_s = 0;
     ant_lq[0].Init(Config.frame_rate_hz);
@@ -449,6 +451,7 @@ void bond_update_1hz(void)
     if (!slot_connected(0)) { // a connect starts with the lanes
         if (bond_single) bond_lanes_resume();
         bond_single = false;
+        bond_single_due = false;
         bond_cnt = 0;
         bond_connected_s = 0;
         return;
@@ -460,7 +463,7 @@ void bond_update_1hz(void)
         for (uint8_t l = 0; l < 2; l++) if (lane_ack_lq[l].GetLQ() < lq) lq = lane_ack_lq[l].GetLQ();
     }
     if (!bond_single) {
-        if (lq < BOND_LANE_LQ_MIN) { if (++bond_cnt >= BOND_SINGLE_AFTER_S) { bond_single = true; bond_cnt = 0; } } else bond_cnt = 0;
+        if (lq < BOND_LANE_LQ_MIN) { if (++bond_cnt >= BOND_SINGLE_AFTER_S) { bond_single_due = true; bond_cnt = 0; } } else bond_cnt = 0;
     } else {
         if (lq > BOND_LANES_LQ_MIN) {
             if (++bond_cnt >= BOND_LANES_AFTER_S) {
@@ -924,7 +927,12 @@ uint8_t payload_len = 0;
 uint8_t payload_b[FRAME_PAYLOAD_MAX];
 uint8_t payload_b_len = 0;
 
-    // bonded radios: a frame per lane, unless a channel is poor and one frame goes out on both
+    // bonded radios: a frame per lane, unless a channel is poor and one frame goes out on both; the switch waits for a
+    // cycle that takes new data on both lanes
+    if (bond_single_due && !tx_frame_held && tarq[0].WouldAdvance() && tarq[1].WouldAdvance()) {
+        bond_single = true;
+        bond_single_due = false;
+    }
     bool lanes = (Config.Bonded && !bond_single);
 
     // a silent receiver never acks: its data goes one way, every frame a new payload
