@@ -161,6 +161,7 @@
 #define MODE_AUTO_DOWN_S                3
 #define MODE_AUTO_HOLD_S                20 // between two changes
 #define MODE_AUTO_REVERT_S              5 // without a link both ends go back to the base mode after this
+#define MODE_AUTO_REVERT_FRAMES         20 // and at least this many frames, at LR 11 s: time to connect in each turn
 #define MODE_AUTO_ANSWER_MISMATCH_MAX   3 // setup data answers that do not confirm the mode before the change is dropped
 
 #define CONNECT_TMO_MS                  1250 // time to disconnect, was 500, then 750 to better handle 19 Hz mode, now 1250

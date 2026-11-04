@@ -1029,6 +1029,35 @@ void mode_auto_to_meeting(void)
     mode_auto_current = mode_auto_meeting();
 }
 
+// without a link the meeting point and the mode the link went in take turns: ends left in different modes meet at
+// the base, and a link lost at range comes back in the mode that reached there, which the base may not
+uint8_t mode_auto_lost_mode = MODE_AUTO; // MODE_AUTO: linked, no turns
+uint8_t mode_auto_lost_band;
+
+// a turn's length: at least MODE_AUTO_REVERT_FRAMES frames
+uint8_t mode_auto_revert_s(void)
+{
+    uint32_t s = ((uint32_t)MODE_AUTO_REVERT_FRAMES * Config.frame_rate_ms + 999) / 1000;
+    return (s > MODE_AUTO_REVERT_S) ? s : MODE_AUTO_REVERT_S;
+}
+
+// the turn is over: true when the link restarts in the other place
+bool mode_auto_lost_next(void)
+{
+    if (mode_auto_lost_mode >= MODE_AUTO) { mode_auto_lost_mode = Config.Mode; mode_auto_lost_band = Config.FrequencyBand; }
+    if (!mode_auto_at_meeting()) {
+        mode_auto_to_meeting();
+        return true;
+    }
+    if (mode_auto_lost_mode == Config.Mode && mode_auto_lost_band == Config.FrequencyBand) return false; // went at the base
+    // back only to a mode that reaches further than the base: after a fade at a fast one the base keeps the turns
+    int16_t lost_dbm = mode_sensitivity_dbm(mode_auto_lost_mode) + band_offset_db(mode_auto_lost_band, Config.FrequencyBand);
+    if (lost_dbm >= mode_sensitivity_dbm(Config.Mode)) return false;
+    mode_auto_current = mode_auto_lost_mode;
+    band_auto_current = mode_auto_lost_band;
+    return true;
+}
+
 // a 91-byte frame's time in the air, the drivers' tables; where the chips of a band differ, the slower one, so both
 // ends of a link compute the same reply slot
 uint32_t mode_toa_us(uint8_t mode, bool is_2p4)

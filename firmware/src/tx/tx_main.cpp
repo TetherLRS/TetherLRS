@@ -819,16 +819,17 @@ void mode_auto_update_1hz(void)
 {
     if (!Config.ModeAuto || bind.IsInBind()) return;
 
-    if (!connected()) { // without a link both ends meet again at the base mode of the lower band
+    if (!connected()) { // without a link both ends take turns at the meeting point and where the link went
         mode_auto_up_s = mode_auto_down_s = 0;
-        if (!mode_auto_at_meeting() && ++mode_auto_lost_s >= MODE_AUTO_REVERT_S) {
+        if (++mode_auto_lost_s >= mode_auto_revert_s()) {
+            mode_auto_lost_s = 0;
             mode_auto_pending = MODE_AUTO;
-            mode_auto_to_meeting();
-            doLinkRestart = true;
+            if (mode_auto_lost_next()) doLinkRestart = true;
         }
         return;
     }
     mode_auto_lost_s = 0;
+    mode_auto_lost_mode = MODE_AUTO;
 
     if (link_task == LINK_TASK_TX_SET_LINK && !link_restart_cnt && ++mode_auto_task_s >= MODE_AUTO_REVERT_S) { // never answered: the data must flow
         mode_auto_pending = MODE_AUTO;
@@ -1783,6 +1784,7 @@ IF_SX2(
         switch (bind.Task()) {
         case BIND_TASK_CHANGED_TO_BIND:
             mode_auto_current = MODE_AUTO; // after the bind both ends start at the meeting point
+            mode_auto_lost_mode = MODE_AUTO;
             band_auto_current = SETUP_FREQUENCY_BAND_NUM;
             bind.ConfigForBind();
             fhss.SetToBind();

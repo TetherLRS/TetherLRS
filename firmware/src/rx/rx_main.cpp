@@ -1180,14 +1180,15 @@ dbg.puts(s8toBCD_s(stats.last_rssi2));*/
         DECc(tick_1hz_commensurate, Config.frame_rate_hz);
         if (!tick_1hz_commensurate) {
             stats.Update1Hz();
-            // Mode = auto: without a link both ends meet again at the base mode of the lower band
+            // Mode = auto: without a link both ends take turns at the meeting point and where the link went
             if (Config.ModeAuto && !bind.IsInBind()) {
                 if (connected()) {
                     mode_auto_lost_s = 0;
-                } else if (!mode_auto_at_meeting() && ++mode_auto_lost_s >= MODE_AUTO_REVERT_S) {
+                    mode_auto_lost_mode = MODE_AUTO;
+                } else if (++mode_auto_lost_s >= mode_auto_revert_s()) {
+                    mode_auto_lost_s = 0;
                     mode_auto_pending = MODE_AUTO;
-                    mode_auto_to_meeting();
-                    doLinkRestart = true;
+                    if (mode_auto_lost_next()) doLinkRestart = true;
                 }
             }
         }
@@ -1201,6 +1202,7 @@ dbg.puts(s8toBCD_s(stats.last_rssi2));*/
         switch (bind.Task()) {
         case BIND_TASK_CHANGED_TO_BIND:
             mode_auto_current = MODE_AUTO; // after the bind both ends start at the meeting point
+            mode_auto_lost_mode = MODE_AUTO;
             band_auto_current = SETUP_FREQUENCY_BAND_NUM;
             bind.ConfigForBind(); // may change Config
             rxclock.SetPeriod(Config.frame_rate_ms);
