@@ -30,6 +30,7 @@ extern bool connected_and_rx_setup_available(void);
 #endif
 extern bool serial_link_up(void);
 extern bool link_task_free(void);
+extern uint8_t tx_rx_selected(void);
 extern tSetup Setup;
 extern tGlobalConfig Config;
 extern tSerialPorts Serials;
@@ -72,9 +73,9 @@ class tTxMavlink
     void Init(void);
     void Do(void);
     uint8_t VehicleState(void);
-    void FrameLost(void);
+    void FrameLost(uint8_t slot);
 
-    void putc(char c);
+    void putbuf(uint8_t slot, uint8_t* const buf, uint16_t len);
     bool available(void);
     uint8_t getc(void);
     void flush(void);
@@ -93,11 +94,14 @@ class tTxMavlink
     tSerialBase* ser2;
     bool do_router(void) { return (ser2 != nullptr); }
 
-    // fields for link in -> parser -> serial out
-    fmav_status_t status_link_in; // status for link in parser
-    uint8_t buf_link_in[MAVLINK_BUF_SIZE]; // buffer for link in parser
+    // fields for link in -> parser -> serial out: a parser per receiver, their streams are not one; the fifo holds what
+    // a cycle brings, each payload behind its slot and length
+    fmav_status_t status_link_in[RX_SLOT_NUM]; // status for link in parser
+    uint8_t buf_link_in[RX_SLOT_NUM][MAVLINK_BUF_SIZE]; // buffer for link in parser
     fmav_status_t status_serial_out; // status for serial out (ser and ser2) messages
-    tFifo<char,128> fifo_link_in; // should need to only hold one OTA payload
+    tFifo<char,512> fifo_link_in; // a payload of each of four receivers, two of bonded lanes
+    uint8_t link_in_slot; // the payload being parsed: its receiver, and its bytes still in the fifo
+    uint8_t link_in_left;
     void parse_link_in_serial_out(void);
 
     // fields for ser/ser2 in -> parser -> link out
@@ -182,9 +186,10 @@ void tTxMavlink::Init(void)
 
     fmav_init();
 
-    status_link_in = {};
-    status_serial_out = {};
+    for (uint8_t s = 0; s < RX_SLOT_NUM; s++) status_link_in[s] = {};
     fifo_link_in.Init();
+    link_in_left = 0;
+    status_serial_out = {};
 
     fmavX_init();
     fmavX_config_compression((Config.Mode == MODE_19HZ || Config.Mode == MODE_19HZ_7X || Config.Mode == MODE_18HZ ||
@@ -221,10 +226,10 @@ uint8_t tTxMavlink::VehicleState(void)
 }
 
 
-void tTxMavlink::FrameLost(void)
+void tTxMavlink::FrameLost(uint8_t slot)
 {
     // reset parser link in -> serial out
-    fmav_parse_reset(&status_link_in);
+    if (slot < RX_SLOT_NUM) fmav_parse_reset(&status_link_in[slot]);
 }
 
 
@@ -237,6 +242,7 @@ void tTxMavlink::Do(void)
         //Init();
         radio_status_tlast_ms = tnow_ms;
         fifo_link_in.Flush();
+        link_in_left = 0;
         fifo_link_out.Flush();
         msg_seq_initialized = false;
     }
@@ -364,14 +370,22 @@ void tTxMavlink::parse_link_in_serial_out(void)
 {
 fmav_result_t result;
 
-    while (fifo_link_in.Available()) {
+    while (link_in_left || fifo_link_in.Available()) {
+        if (!link_in_left) { // the next payload's slot and length
+            link_in_slot = fifo_link_in.Get();
+            link_in_left = fifo_link_in.Get();
+            continue;
+        }
         char c = fifo_link_in.Get();
+        link_in_left--;
+        uint8_t slot = link_in_slot;
+        uint8_t* const buf_link_in = this->buf_link_in[slot];
 
         // parse link in -> serial out
         if (Setup.Rx.SerialLinkMode == SERIAL_LINK_MODE_MAVLINK_X) {
-            fmavX_parse_and_checkX_to_frame_buf(&result, buf_link_in, &status_link_in, c);
+            fmavX_parse_and_checkX_to_frame_buf(&result, buf_link_in, &status_link_in[slot], c);
         } else {
-            fmav_parse_and_check_to_frame_buf(&result, buf_link_in, &status_link_in, c);
+            fmav_parse_and_check_to_frame_buf(&result, buf_link_in, &status_link_in[slot], c);
         }
         if (result.res == FASTMAVLINK_PARSE_RESULT_OK) {
 
@@ -392,8 +406,9 @@ if (!do_router()) {
 
             fmav_frame_buf_to_msg(&msg_buf, &result, buf_link_in); // requires RESULT_OK
 
-            // we also want to capture it to extract some info
-            handle_msg_serial_out(&msg_buf);
+            // we also want to capture it to extract some info: the vehicle, the display and the stats follow the
+            // selected receiver
+            if (slot == tx_rx_selected()) handle_msg_serial_out(&msg_buf);
 
 #ifdef DEBUG_ENABLEDx
 // test if _buf = buf_link_in
@@ -439,9 +454,13 @@ void tTxMavlink::send_msg_serial_out(void)
 }
 
 
-void tTxMavlink::putc(char c)
+void tTxMavlink::putbuf(uint8_t slot, uint8_t* const buf, uint16_t len)
 {
-    fifo_link_in.Put(c);
+    // whole or not at all, or the slots and lengths in the fifo lose step
+    if (slot >= RX_SLOT_NUM || !len || len > UINT8_MAX || !fifo_link_in.HasSpace(len + 2)) return;
+    fifo_link_in.Put(slot);
+    fifo_link_in.Put(len);
+    fifo_link_in.PutBuf(buf, len);
 }
 
 

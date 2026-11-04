@@ -27,7 +27,8 @@ class tTxSxSerial : public tSerialBase
 
     bool available(void) override;
     char getc(void) override;
-    void putbuf(uint8_t* const buf, uint16_t len) override;
+    void putbuf(uint8_t* const buf, uint16_t len) override { putbuf_from(0, buf, len); }
+    void putbuf_from(uint8_t slot, uint8_t* const buf, uint16_t len); // a receiver's data, its slot keeps its stream apart
     void flush(void) override;
 
   private:
@@ -81,12 +82,12 @@ char tTxSxSerial::getc(void)
 }
 
 
-void tTxSxSerial::putbuf(uint8_t* const buf, uint16_t len)
+void tTxSxSerial::putbuf_from(uint8_t slot, uint8_t* const buf, uint16_t len)
 {
     if (!serial_link_up()) return;
 
     if (SERIAL_LINK_MODE_IS_MAVLINK(Setup.Rx.SerialLinkMode)) { // this has to go via the parser
-        for (uint16_t i = 0; i < len; i++) mavlink.putc(buf[i]);
+        mavlink.putbuf(slot, buf, len);
         return;
     }
     if (SERIAL_LINK_MODE_IS_MSP(Setup.Rx.SerialLinkMode)) { // this has to go via the parser

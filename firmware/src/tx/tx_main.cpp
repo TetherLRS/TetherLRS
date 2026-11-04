@@ -1030,11 +1030,12 @@ void process_received_frame(uint8_t slot, bool do_payload, tRxFrame* const frame
         return;
     }
 
-    // output data on serial; bonded lanes go out in order
+    // output data on serial, only of a connected receiver; bonded lanes go out in order
+    if (!slot_connected(slot)) return;
     if (Config.Bonded) {
         bond.Accepted(slot, frame->status.seq_no, FRAME_DATA(frame), FRAME_DATA_LEN(frame));
     } else {
-        sx_serial.putbuf(FRAME_DATA(frame), FRAME_DATA_LEN(frame));
+        sx_serial.putbuf_from(slot, FRAME_DATA(frame), FRAME_DATA_LEN(frame));
     }
 
     stats.bytes_received.Add(FRAME_DATA_LEN(frame));
@@ -1173,7 +1174,7 @@ tRxFrame* frame = &rxFrames[slot];
     }
     // check this before received data may be passed to parsers
     if (rarq[slot].FrameLost()) {
-        mavlink.FrameLost();
+        mavlink.FrameLost((Config.Bonded) ? 0 : slot); // the lanes are one receiver's stream
         msp.FrameLost();
     }
 
