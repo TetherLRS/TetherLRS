@@ -161,7 +161,7 @@ typedef struct
     uint8_t radio_count; // radios this transmitter has, 1 or 2
     uint8_t radio_bands; // bit per SX_FHSS_FREQUENCY_BAND_ENUM it can run
     uint8_t RxCount;
-    uint8_t bind_slot; // the slot the receiver binding now gets
+    uint8_t bind_slot; // the slot the receiver binding now gets, BIND_SLOT_KEEP: it keeps its own
     uint8_t Band2;
 
     uint8_t spare3[34];

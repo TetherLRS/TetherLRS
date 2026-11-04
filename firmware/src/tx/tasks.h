@@ -58,6 +58,8 @@ class tTxTasks
     void SetMavlinkTask(uint8_t task);
 
     uint32_t GetConfigIdValue(void);
+    void SetCliTaskBindSlot(uint8_t slot);
+    uint8_t GetBindSlot(void); // once: a bind from the display or a later one keeps the receiver's slot
     uint32_t GetHc04BridgeValue(void);
     char* GetEspBridgeStr(void);
 
@@ -68,6 +70,7 @@ class tTxTasks
     uint8_t mavlink_task_pending;
 
     uint32_t config_id_value;
+    uint8_t bind_slot_value;
     uint32_t hc04bridge_value;
     char espbridge_str[32+1];
 };

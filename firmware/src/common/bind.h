@@ -59,7 +59,7 @@ class tBindBase
   public:
     void Init(void);
     bool IsInBind(void) { return is_in_binding; }
-    void StartBind(uint8_t slot = 0) { if (!is_in_binding) { binding_requested = true; bind_slot = slot; } }
+    void StartBind(uint8_t slot = BIND_SLOT_KEEP) { if (!is_in_binding) { binding_requested = true; bind_slot = (slot < Config.RxCount) ? slot : BIND_SLOT_KEEP; } }
     uint8_t bind_slot; // Tx: the slot the receiver binding now gets
     void StopBind(void) { if (is_in_binding) binding_stop_requested = true; }
     void ConfigForBind(void);
@@ -100,6 +100,7 @@ void tBindBase::Init(void)
     is_in_binding = false;
     binding_requested = false;
     binding_stop_requested = false;
+    bind_slot = BIND_SLOT_KEEP;
     task = BIND_TASK_NONE;
     is_connected = false;
 
@@ -223,6 +224,7 @@ void tBindBase::Do(void)
     if (is_pressed) {
         if (tnow - button_tlast_ms > BIND_BUTTON_TMO_MS) {
             binding_requested = true;
+            bind_slot = BIND_SLOT_KEEP;
         }
     } else {
         button_tlast_ms = tnow;
@@ -369,7 +371,11 @@ void tBindBase::handle_receive(uint8_t antenna, uint8_t rx_status)
     Setup.Common[0].RadioScheme = txBindFrame.RadioScheme;
     Setup.Common[0].RxCount = txBindFrame.RxCount;
     Setup.Common[0].Band2 = txBindFrame.Band2;
-    if (txBindFrame.bind_slot < RX_SLOT_NUM) Setup.Rx.Slot = txBindFrame.bind_slot;
+    if (txBindFrame.bind_slot < RX_SLOT_NUM) {
+        Setup.Rx.Slot = txBindFrame.bind_slot;
+    } else if (Setup.Rx.Slot > txBindFrame.RxCount) { // kept, but the Tx has no such slot: it would never answer
+        Setup.Rx.Slot = 0;
+    }
     Setup.Common[0].CustomFreqKHz = txBindFrame.CustomFreqKHz;
     Setup.Common[0].CustomSpanKHz = txBindFrame.CustomSpanKHz;
     Setup.Common[0].CustomLbt = txBindFrame.CustomLbt;

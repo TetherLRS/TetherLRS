@@ -293,14 +293,21 @@
           {#if radios.role === 'Rx'}
             <div class="line phrase">
               <label>
+                <span class="caption">Receivers</span>
+                <select bind:value={radios.rxCount} disabled={radios.busy} aria-label="Receivers">
+                  <option value={undefined}>keep its own</option>
+                  {#each [1, 2, 3, 4] as n (n)}<option value={n}>{n}</option>{/each}
+                </select>
+              </label>
+              <label>
                 <span class="caption">Reply slot</span>
                 <select bind:value={radios.rxSlot} disabled={radios.busy} aria-label="Reply slot">
                   <option value={undefined}>keep its own</option>
-                  {#each [0, 1, 2, 3] as n (n)}<option value={n}>{n}</option>{/each}
+                  {#each [0, 1, 2, 3] as n (n)}<option value={n} disabled={radios.rxCount !== undefined && n >= radios.rxCount}>{n}</option>{/each}
                 </select>
               </label>
               <span class="caption hint">
-                With several receivers on one ground radio (Receivers under Advanced): the slot of the cycle this one answers in. Goes with the phrase into this flash only.
+                With several receivers on one ground radio: how many there are, as Receivers on the ground radio, and the slot of the cycle this one answers in. They go with the phrase into this flash only.
               </span>
             </div>
           {/if}

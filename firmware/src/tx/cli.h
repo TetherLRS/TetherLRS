@@ -1138,7 +1138,7 @@ bool rx_param_changed;
 
         } else
         if (is_cmd("bind")) {
-            tasks.SetCliTaskConfigIdValue(TASK_BIND_START, 0);
+            tasks.SetCliTaskBindSlot(BIND_SLOT_KEEP);
             putsn("  Tx entered bind mode");
 
         } else
@@ -1146,7 +1146,7 @@ bool rx_param_changed;
             if (value < 0 || value >= Config.RxCount) {
                 putsn("err: the slot is 0 up to Rx Count - 1");
             } else {
-                tasks.SetCliTaskConfigIdValue(TASK_BIND_START, value);
+                tasks.SetCliTaskBindSlot(value);
                 puts("  Tx entered bind mode, the receiver gets slot ");putc('0'+value);putsn("");
             }
 

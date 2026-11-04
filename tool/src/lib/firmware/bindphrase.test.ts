@@ -3,11 +3,15 @@ import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { keyBytes, randomKey, validKey, validPhrase, writeBindPhrase } from './bindphrase';
 
-// an ESP32 application image: 24 byte header with the SHA-256 flag, one data segment holding tlrs_bind, checksum, SHA
-function esp32Image(): Uint8Array {
+// an ESP32 application image: 24 byte header with the SHA-256 flag, one data segment holding tlrs_bind, checksum, SHA;
+// a 1.0 build's tlrs_bind ends at the stamp, with 0 in the byte that is the reply slot now, and other data after it
+function esp32Image(v1 = false): Uint8Array {
   const data = new Uint8Array(80);
-  data.set(new TextEncoder().encode('TLRSBND\0mlrs.0\0\0'), 16);
+  data.set(new TextEncoder().encode('TLRSBND\0mlrs.0\0'), 16);
+  data[31] = v1 ? 0 : 0xff;
   new DataView(data.buffer).setUint32(32, 0xffffffff, true);
+  if (v1) data.fill(0x5a, 36);
+  else data[68] = 0xff;
   const p = 24 + 8 + data.length;
   const end = (p + 1 + 15) & ~15;
   const img = new Uint8Array(end + 32);
@@ -50,17 +54,33 @@ describe('the bind phrase in the image', () => {
     expect(new DataView(img.buffer).getUint32(32 + 32, true)).toBe(0x12345678);
     expect(img.subarray(32 + 36, 32 + 68)).toEqual(key);
     expect(img[32 + 31]).toBe(0xff); // no reply slot given: the receiver keeps its own
+    expect(img[32 + 68]).toBe(0xff); // nor receivers
     let c = 0xef;
     for (const b of img.subarray(32, 32 + 80)) c ^= b;
     expect(img[end - 1]).toBe(c);
     expect(Buffer.from(img.subarray(end))).toEqual(sha(img, end));
   });
 
-  it('writes the reply slot when given', async () => {
+  it('writes the reply slot and the receivers when given', async () => {
     const img = esp32Image();
-    await writeBindPhrase(img, 0, true, 'k3y.9x', 0x12345678, undefined, 2);
+    await writeBindPhrase(img, 0, true, 'k3y.9x', 0x12345678, undefined, 2, 3);
     expect(img[32 + 31]).toBe(2);
+    expect(img[32 + 68]).toBe(3);
     await expect(writeBindPhrase(img, 0, true, 'k3y.9x', 0x12345679, undefined, 4)).rejects.toThrow('0 to 3');
+    await expect(writeBindPhrase(img, 0, true, 'k3y.9x', 0x12345679, undefined, 0, 5)).rejects.toThrow('1 to 4');
+    await expect(writeBindPhrase(img, 0, true, 'k3y.9x', 0x12345679, undefined, 3, 3)).rejects.toThrow('Receivers minus one');
+  });
+
+  it('a 1.0 build: the phrase and the stamp only, what follows them stays', async () => {
+    const img = esp32Image(true);
+    const end = img.length - 32;
+    await writeBindPhrase(img, 0, true, 'abc.12', 0x0a0b0c0d, undefined, 2, 3);
+    expect(new TextDecoder().decode(img.subarray(32 + 24, 32 + 31))).toBe('abc.12\0');
+    expect(img[32 + 31]).toBe(0);
+    expect(new DataView(img.buffer).getUint32(32 + 32, true)).toBe(0x0a0b0c0d);
+    expect(img.subarray(32 + 36, 32 + 80).every((b) => b === 0x5a)).toBe(true);
+    expect(Buffer.from(img.subarray(end))).toEqual(sha(img, end));
+    await expect(writeBindPhrase(esp32Image(true), 0, true, 'abc.12', 1, new Uint8Array(32))).rejects.toThrow(/older than the link key/);
   });
 
   it('refuses an image without the place, or one already spoiled', async () => {

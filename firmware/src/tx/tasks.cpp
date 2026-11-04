@@ -10,6 +10,7 @@
 
 #include <stdint.h>
 #include <string.h>
+#include "../common/common_conf.h"
 #include "tasks.h"
 
 
@@ -22,6 +23,7 @@ void tTxTasks::Init(void)
     display_task_pending = TASK_NONE;
     cli_task_pending = TASK_NONE;
     espbridge_task_pending = TASK_NONE;
+    bind_slot_value = BIND_SLOT_KEEP;
 }
 
 
@@ -66,6 +68,8 @@ void tTxTasks::SetEspBridgeTask(uint8_t task) { espbridge_task_pending = task; }
 void tTxTasks::SetMavlinkTask(uint8_t task) { mavlink_task_pending = task; }
 
 uint32_t tTxTasks::GetConfigIdValue(void) { return config_id_value; }
+void tTxTasks::SetCliTaskBindSlot(uint8_t slot) { cli_task_pending = TASK_BIND_START; bind_slot_value = slot; }
+uint8_t tTxTasks::GetBindSlot(void) { uint8_t slot = bind_slot_value; bind_slot_value = BIND_SLOT_KEEP; return slot; }
 uint32_t tTxTasks::GetHc04BridgeValue(void) { return hc04bridge_value; }
 char* tTxTasks::GetEspBridgeStr(void) { return espbridge_str; }
 

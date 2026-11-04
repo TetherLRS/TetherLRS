@@ -1742,7 +1742,7 @@ IF_SX2(
         setup_reload();
         if (connected() && !link_task_set(LINK_TASK_TX_GET_RX_SETUPDATA_WRELOAD)) link_task_queue_add(LINK_TASK_TX_GET_RX_SETUPDATA_WRELOAD);
         break;
-    case TASK_BIND_START: bind.StartBind(tasks.GetConfigIdValue()); break;
+    case TASK_BIND_START: bind.StartBind(tasks.GetBindSlot()); break;
     case TASK_SELECT_RX: tx_select_rx(tasks.GetConfigIdValue()); break;
     case TASK_BIND_STOP: bind.StopBind(); break;
     case TASK_SYSTEM_BOOT: enter_system_bootloader(); break;

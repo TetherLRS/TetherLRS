@@ -146,6 +146,7 @@
 #define FRAME_LEN_MIN                   73 // the other profiles: 73 + 109 = 91 + 91, a cycle's air time does not change
 #define FRAME_LEN_MAX                   109
 #define RX_SLOT_NUM                     4 // receivers one Tx can serve, a reply slot each
+#define BIND_SLOT_KEEP                  0xFF // a bind that leaves the receiver its own slot
 #define RX_SLOT_GUARD_US                2000 // between one reply and the next: the Tx re-arms, the Rx listens before talk
 #define BOND_LANE_LQ_MIN                70 // bonded radios: a lane under this for BOND_SINGLE_AFTER_S puts one frame on both
 #define BOND_SINGLE_AFTER_S             2

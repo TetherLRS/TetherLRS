@@ -65,7 +65,7 @@ const META: Record<string, ParamMeta> = {
   },
   'Rx Count': {
     label: 'Receivers',
-    help: 'How many aircraft radios this ground radio serves: each answers in its own slot of the cycle, which grows by a slot for every receiver beyond the first. Every receiver gets its slot when it binds, from the marker in its image or from its Rx Slot. The Device page lists them.',
+    help: 'How many aircraft radios this ground radio serves: each answers in its own slot of the cycle, which grows by a slot for every receiver beyond the first. A bind gives the receiver this count, and Bind to slot its slot too (a plain bind keeps the slot it has); without binding, set both on the Firmware page when flashing it. The Device page lists them.',
   },
   'RF Band 2': {
     label: 'Second band',

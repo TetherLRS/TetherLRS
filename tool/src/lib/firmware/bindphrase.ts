@@ -73,15 +73,21 @@ function crc8266(data: Uint8Array): number {
   return crc >>> 0;
 }
 
-// start: where the application image begins in this file (0x1000 on an ESP8266, behind its boot loader)
 export const KEY_LEN = 32;
+// after the magic: phrase (7 bytes), reply slot, stamp (4), link key, receivers; 1.0's ends at the stamp, and its spare
+// byte where the slot is now holds 0, while a build that has the slot holds 0xFF there until the tool writes it
+const LEN_1_0 = 12;
+const LEN = 12 + KEY_LEN + 1;
 
+// start: where the application image begins in this file (0x1000 on an ESP8266, behind its boot loader)
 // key: 32 bytes, or none for no key (the radio then clears the one it held); slot: a receiver's reply slot, 0 to 3,
-// or none to leave the one it has
-export async function writeBindPhrase(img: Uint8Array, start: number, esp32: boolean, phrase: string, stamp: number, key?: Uint8Array, slot?: number): Promise<void> {
+// and rxCount: the receivers on its link, 1 to 4, or none to leave the ones it has. A 1.0 build takes the phrase only
+export async function writeBindPhrase(img: Uint8Array, start: number, esp32: boolean, phrase: string, stamp: number, key?: Uint8Array, slot?: number, rxCount?: number): Promise<void> {
   if (!validPhrase(phrase)) throw new Error('The bind phrase is 6 characters: a to z, 0 to 9, # . _ -');
   if (key && key.length !== KEY_LEN) throw new Error('The link key is 32 bytes');
   if (slot !== undefined && (slot < 0 || slot > 3)) throw new Error('The reply slot is 0 to 3');
+  if (rxCount !== undefined && (rxCount < 1 || rxCount > 4)) throw new Error('Receivers is 1 to 4');
+  if (slot !== undefined && rxCount !== undefined && slot >= rxCount) throw new Error('The reply slot is 0 up to Receivers minus one');
   const v = new DataView(img.buffer, img.byteOffset, img.length);
   // the ESP8266 packer made the checksum with these two words at zero, then wrote the file's length and CRC into them
   const crcAt = start + 0x10;
@@ -93,16 +99,23 @@ export async function writeBindPhrase(img: Uint8Array, start: number, esp32: boo
   if (checksum(work, l) !== work[l.checksumAt] || (arduino && crc8266(work) !== crcWas)) {
     throw new Error('the image does not check out before the bind phrase goes in');
   }
-  const at = find(img, start, l.checksumAt).filter((i) => l.segments.some((s) => i >= s.at && i + 12 + KEY_LEN <= s.at + s.size));
+  const inSegment = (i: number, len: number) => l.segments.some((s) => i >= s.at && i + 8 + len <= s.at + s.size);
+  const at = find(img, start, l.checksumAt).filter((i) => inSegment(i, LEN_1_0));
   if (at.length !== 1) throw new Error('This build has no place for the bind phrase: it is older than the tool. Pick a newer one.');
-  if (arduino) img.fill(0, crcAt, crcAt + 8);
   const p = at[0] + 8;
+  const old = img[p + 7] === 0;
+  if (!old && !inSegment(at[0], LEN)) throw new Error('This build has no place for the bind phrase: it is older than the tool. Pick a newer one.');
+  if (old && key) throw new Error('This build is older than the link key: pick 2.0 or later, or clear the key.');
+  if (arduino) img.fill(0, crcAt, crcAt + 8);
   img.set(new TextEncoder().encode(phrase), p);
   img[p + 6] = 0;
-  img[p + 7] = slot === undefined ? 0xff : slot;
   v.setUint32(p + 8, stamp, true);
-  img.fill(0, p + 12, p + 12 + KEY_LEN);
-  if (key) img.set(key, p + 12);
+  if (!old) {
+    img[p + 7] = slot === undefined ? 0xff : slot;
+    img.fill(0, p + 12, p + 12 + KEY_LEN);
+    if (key) img.set(key, p + 12);
+    img[p + 12 + KEY_LEN] = rxCount === undefined ? 0xff : rxCount;
+  }
   img[l.checksumAt] = checksum(img, l);
   if (arduino) {
     const crc = crc8266(img);
