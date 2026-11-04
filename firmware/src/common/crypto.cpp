@@ -80,6 +80,14 @@ void tCrypto::Init(
 
     _static_valid = link_key_set || (tx_random != UINT64_MAX);
 
+    // the keys of a session, with the highest nonce each reached: only a power up forgets them
+    _key_tx_set = false; // nothing to keep of an object not set up before
+    for (uint8_t i = 0; i < CRYPTO_TX_RING_NUM; i++) {
+        _tx_ring_random[i] = 0;
+        _tx_ring_nonce[i] = 0;
+    }
+    _tx_ring_next = 0;
+
     Restart();
 }
 
@@ -87,6 +95,8 @@ void tCrypto::Init(
 // the session's secrets go, the static ones stay: at a restart of the link the keys are dealt afresh
 void tCrypto::Restart(void)
 {
+    _tx_ring_store(); // the key being left keeps its high-water nonce, a replay may bring it back
+
     _startup_nonce_u32 = 0;
 
     // the static key stands in until the real ones are known
@@ -132,12 +142,45 @@ uint8_t key_source[96]; // 78 + 8 = 86
 }
 
 
+// the current key's highest nonce is kept against its random, so switching back to it later resumes the count; a
+// random seen before (a few keys back) keeps its spot, a new one takes the oldest
+void tCrypto::_tx_ring_store(void)
+{
+    if (!_key_tx_set) return;
+    for (uint8_t i = 0; i < CRYPTO_TX_RING_NUM; i++) {
+        if (_tx_ring_random[i] == _transmit_random) {
+            if (_nonce_u32 > _tx_ring_nonce[i]) _tx_ring_nonce[i] = _nonce_u32;
+            return;
+        }
+    }
+    _tx_ring_random[_tx_ring_next] = _transmit_random;
+    _tx_ring_nonce[_tx_ring_next] = _nonce_u32;
+    _tx_ring_next = (_tx_ring_next + 1) % CRYPTO_TX_RING_NUM;
+}
+
+
+bool tCrypto::_tx_ring_restore(uint64_t random, uint32_t* const nonce)
+{
+    if (!random || random == UINT64_MAX) return false; // never a stored key, and the empty slots read 0
+    for (uint8_t i = 0; i < CRYPTO_TX_RING_NUM; i++) {
+        if (_tx_ring_random[i] == random) { *nonce = _tx_ring_nonce[i]; return true; }
+    }
+    return false;
+}
+
+
 void tCrypto::SetTransmitKey(uint64_t random)
 {
+    _tx_ring_store(); // the key being left keeps its high-water nonce
+
     _transmit_random = random;
     _derive_key(_key_tx, random);
     _key_tx_set = (random != UINT64_MAX);
-    _nonce_u32 = 0; // a new key, the counter may start over
+
+    // a new key starts the count over; a key this session already used resumes above its highest nonce, so a
+    // replayed STARTUP that switches back to it (I12) cannot force a nonce, hence a keystream, reuse
+    uint32_t resumed;
+    _nonce_u32 = (_key_tx_set && _tx_ring_restore(random, &resumed)) ? resumed : 0;
 }
 
 

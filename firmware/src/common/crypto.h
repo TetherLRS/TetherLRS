@@ -39,6 +39,7 @@ Key handling:
 #define CRYPTO_STARTUP_RANDOM_BUF_LEN  36 // two 8-byte randoms, the 12-byte nonce and the 8-byte mac
 #define CRYPTO_NONCE_MAX_LEN  12 // maximum length of nonce and mac
 #define CRYPTO_SLOT_NUM  4 // receivers a Tx holds a receive key for; the same on both roles, this header is one TU's view
+#define CRYPTO_TX_RING_NUM  4 // transmit keys kept with their highest nonce, so a replayed STARTUP cannot reset one
 
 typedef enum {
     CRYPTO_STARTUP_REFUSED = 0, // its MAC did not hold: not from the Tx, or for another slot
@@ -99,6 +100,14 @@ class tCrypto
     uint8_t _key_tx[32];
     bool _key_tx_set;
     uint32_t _nonce_u32;
+
+    // the transmit keys used this session, each with the highest nonce it reached: a replayed STARTUP that switches
+    // back to one of them continues its count instead of starting over, so the keystream is never reused
+    uint64_t _tx_ring_random[CRYPTO_TX_RING_NUM];
+    uint32_t _tx_ring_nonce[CRYPTO_TX_RING_NUM];
+    uint8_t _tx_ring_next;
+    void _tx_ring_store(void); // keep the current key's high-water before it is left
+    bool _tx_ring_restore(uint64_t random, uint32_t* const nonce); // a key seen before: its high-water
 
     uint64_t _receive_random[CRYPTO_SLOT_NUM];
     uint8_t _key_rx[CRYPTO_SLOT_NUM][32];

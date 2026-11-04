@@ -66,9 +66,47 @@ static void nonce_runs_out(void)
 }
 
 
+// a replayed STARTUP that switches the receiver back to a transmit key it already sent frames with must not reset
+// the nonce under that key: the keystream would repeat and an eavesdropper could xor two ciphertexts (I12). The
+// check: the same plaintext under the same key must give a different frame the second time, the nonce having gone on
+static void replay_no_nonce_reuse(void)
+{
+    const uint64_t A = 0x00AA000000000001ULL, B = 0x00BB000000000002ULL;
+    tCrypto rx;
+    tFrame first, again;
+
+    rx.Init(tCrypto::RX, phrase, tx_uid, 0x1122334455667788ULL, 2, no_key);
+
+    // the Tx's STARTUP gives the receiver transmit key A (own_random), then B, then A again (a replay of the first)
+    rx.SetTransmitKey(A);
+    send(rx, first, "same text");                       // key A, nonce 1
+    rx.SetTransmitKey(B);
+    send(rx, again, "filler under B");                  // key B
+    rx.SetTransmitKey(A);                           // the replay: back to A
+    send(rx, again, "same text");                       // key A, nonce must be 2, not 1
+
+    check("replay to an old key does not reset its nonce", again.len == first.len && memcmp(again.payload, first.payload, first.len) != 0);
+
+    // a restart of the link alone (Mode = auto's steps) drops the keys but not what the session used: the replay
+    // after it must still find key A's high-water
+    rx.Restart();
+    rx.SetTransmitKey(A);
+    send(rx, again, "same text");
+    check("  nor after a restart of the link", again.len == first.len && memcmp(again.payload, first.payload, first.len) != 0);
+
+    // a key never seen this session still starts at nonce 1: fresh keys are not held back
+    tCrypto rx2;
+    rx2.Init(tCrypto::RX, phrase, tx_uid, 0x1122334455667788ULL, 2, no_key);
+    rx2.SetTransmitKey(A);
+    send(rx2, again, "same text");
+    check("a fresh key starts its nonce at the beginning", again.len == first.len && memcmp(again.payload, first.payload, first.len) == 0);
+}
+
+
 int main(void)
 {
     nonce_runs_out();
+    replay_no_nonce_reuse();
     tCrypto tx, rx, rx2;
     uint8_t buf[CRYPTO_STARTUP_RANDOM_BUF_LEN];
     tFrame f;
