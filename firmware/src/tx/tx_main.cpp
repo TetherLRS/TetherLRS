@@ -1374,6 +1374,69 @@ bool serial_link_up(void)
 }
 
 
+// the link's state, at a restart of the controller and of the link alone
+void link_init(void)
+{
+    fhss.Init(&Config.Fhss, &Config.Fhss2);
+    fhss.Start();
+    rfpower.Init();
+    regulatory.Init();
+
+    sx.SetRfFrequency(fhss.GetCurrFreq());
+    sx2.SetRfFrequency(fhss.GetCurrFreq2());
+
+    tx_tick = 0;
+    isInTimeGuard = false;
+    doPreTransmit = false;
+    pretransmit_tstamp_us = 0;
+    link_state = LINK_STATE_IDLE;
+    connect_occured_once = false;
+    link_rx1_status = link_rx2_status = RX_STATUS_NONE;
+    link_rx_last_slot = 0;
+    link_tx_status = TX_STATUS_NONE;
+    for (uint8_t s = 0; s < RX_SLOT_NUM; s++) slot_init(s);
+    link_task_init();
+
+    stats.Init(Config.LQAveragingPeriod, Config.frame_rate_hz, Config.frame_rate_ms);
+    rdiversity.Init();
+    tdiversity.Init(Config.frame_rate_ms);
+#ifdef DEVICE_HAS_ANTENNA_SWITCH
+    antsw.Init();
+#endif
+    tarq[0].Init();
+    tarq[1].Init();
+    bond_init();
+    crypto.Restart();
+    crypto.SetTransmitKey(Config.SessionRandom);
+    link_task_set(LINK_TASK_TX_GET_RX_SETUPDATA_STARTUP, 0); // we start with wanting to get rx setup data; after crypto.Init, it draws a key
+}
+
+
+// Mode = auto's steps, a transmit key worn out: the link alone starts again, in mode_auto_current and with fresh
+// session randoms; the sessions on the serial ports and the setup in RAM, stored or not, stay as they are
+void link_restart(void)
+{
+    sx.SetToIdle();
+    sx2.SetToIdle();
+
+    setup_configure_link();
+    Config.SessionRandom = setup_new_random();
+    Config.StartupRandom = setup_new_random();
+
+    sx.StartUp(&Config.Sx); // only a radio not started yet, the link may need it now
+    sx2.StartUp(&Config.Sx2);
+    IF_SX(sx.Configure(&Config.Sx));
+    IF_SX2(sx2.Configure(&Config.Sx2));
+    irq_status = irq2_status = 0;
+    link_init();
+
+    cli.LinkRestarted();
+    mavlink.LinkRestarted();
+    msp.FrameLost();
+    fan.SetPower(SX_OR_SX2(sx.RfPower_dbm(),sx2.RfPower_dbm()));
+}
+
+
 void main_loop(void)
 {
 #ifdef BOARD_TEST_H
@@ -1398,42 +1461,12 @@ RESTARTCONTROLLER
     IF_SX(sx.StartUp(&Config.Sx));
     IF_SX2(sx2.StartUp(&Config.Sx2));
     bind.Init();
-    fhss.Init(&Config.Fhss, &Config.Fhss2);
-    fhss.Start();
-    rfpower.Init();
-    regulatory.Init();
-
-    sx.SetRfFrequency(fhss.GetCurrFreq());
-    sx2.SetRfFrequency(fhss.GetCurrFreq2());
-
-    tx_tick = 0;
-    isInTimeGuard = false;
-    doPreTransmit = false;
-    pretransmit_tstamp_us = 0;
-    link_state = LINK_STATE_IDLE;
-    connect_occured_once = false;
-    link_rx1_status = link_rx2_status = RX_STATUS_NONE;
-    link_rx_last_slot = 0;
-    link_tx_status = TX_STATUS_NONE;
     rx_selected = 0;
-    for (uint8_t s = 0; s < RX_SLOT_NUM; s++) slot_init(s);
-    link_task_init();
-
-    stats.Init(Config.LQAveragingPeriod, Config.frame_rate_hz, Config.frame_rate_ms);
-    rdiversity.Init();
-    tdiversity.Init(Config.frame_rate_ms);
-#ifdef DEVICE_HAS_ANTENNA_SWITCH
-    antsw.Init();
-#endif
-    tarq[0].Init();
-    tarq[1].Init();
-    bond_init();
     crypto.Init(tCrypto::TX,
         Setup.Common[Config.ConfigId].BindPhrase,
         Config.Uid, Setup.tx_random[Config.ConfigId],
         Setup.Common[Config.ConfigId].Privacy, Setup.LinkKey);
-    crypto.SetTransmitKey(Config.SessionRandom);
-    link_task_set(LINK_TASK_TX_GET_RX_SETUPDATA_STARTUP, 0); // we start with wanting to get rx setup data; after crypto.Init, it draws a key
+    link_init();
 
     mavlink.Init(); // serial ports selected by SerialPort, SerialPort2
     msp.Init(); // serial port selected by SerialPort
@@ -1819,15 +1852,17 @@ IF_SX2(
             link_restart_cnt--;
             if (!link_restart_cnt) doLinkRestart = true;
         }
-        if (doLinkRestart) {
-            sx.SetToIdle();
-            sx2.SetToIdle();
+        // a bind, a store or a command to a receiver take their course first (dropped or answered within cycles);
+        // the startup request, which link_task_pick() sets every cycle without a link, is dealt anew by the restart
+        bool link_task_in_flight = (link_task != LINK_TASK_NONE && link_task != LINK_TASK_TX_SET_LINK &&
+                                    link_task != LINK_TASK_TX_GET_RX_SETUPDATA_STARTUP);
+        if (doLinkRestart && !bind.IsInBind() && !link_task_in_flight) {
             if (mode_auto_pending != MODE_AUTO) {
                 mode_auto_current = mode_auto_pending;
                 band_auto_current = band_auto_pending;
             }
             mode_auto_hold_s = MODE_AUTO_HOLD_S;
-            GOTO_RESTARTCONTROLLER;
+            link_restart();
         }
 
 //dbg.puts((valid_frame_received) ? "\nvalid" : "\ninval");

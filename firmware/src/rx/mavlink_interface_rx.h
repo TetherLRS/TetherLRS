@@ -88,6 +88,7 @@ class tRxMavlink
     void Init(void);
     void Do(void);
     void FrameLost(void);
+    void LinkRestarted(void); // the payloads start over, the compression is the mode's
 
     void putc(char c);
     bool available(void);
@@ -185,8 +186,7 @@ void tRxMavlink::Init(void)
     status_serial_out = {};
 
     fmavX_init();
-    fmavX_config_compression((Config.Mode == MODE_19HZ || Config.Mode == MODE_19HZ_7X || Config.Mode == MODE_18HZ ||
-                              Config.Mode == MODE_LR || Config.Mode == MODE_17HZ || Config.Mode == MODE_8HZ) ? 1 : 0); // use compression only in the slow modes
+    LinkRestarted();
 
     status_serial_in = {};
     fifo_link_out.Init();
@@ -309,6 +309,14 @@ void tRxMavlink::FrameLost(void)
 {
     // reset parser link in -> serial out
     fmav_parse_reset(&status_link_in);
+}
+
+
+void tRxMavlink::LinkRestarted(void)
+{
+    FrameLost();
+    fmavX_config_compression((Config.Mode == MODE_19HZ || Config.Mode == MODE_19HZ_7X || Config.Mode == MODE_18HZ ||
+                              Config.Mode == MODE_LR || Config.Mode == MODE_17HZ || Config.Mode == MODE_8HZ) ? 1 : 0); // only the slow modes compress
 }
 
 

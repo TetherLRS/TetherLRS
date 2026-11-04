@@ -538,7 +538,12 @@ typedef struct
     uint8_t Mode;
     uint8_t Region;
     uint8_t PowerIdxMax; // highest rfpower_list index the region allows
+    uint8_t PowerIdx; // the power set, capped by PowerIdxMax for the band and mode in use
     uint8_t CustomLbt; // Region = custom: listen before every transmission
+    uint8_t CustomPowerMaxDbm; // its cap, centre and width
+    uint32_t CustomFreqKHz;
+    uint16_t CustomSpanKHz;
+    uint8_t RadioSchemeSet; // Radio Scheme as set, RADIO_SCHEME_SINGLE when an end has one radio
     uint8_t RadioScheme; // RADIO_SCHEME_ENUM resolved for this pair, never auto
     bool TransmitBoth; // the same frame goes out of both radios, dual band or dual redundant
     bool Bonded; // two radios, two lanes with a frame each: twice the data, one frame on both when a lane is poor
@@ -559,6 +564,7 @@ typedef struct
 
     uint16_t FrameSyncWord;
 
+    uint8_t FhssExcept2p4; // the WiFi band the bind phrase leaves out, on 2.4 GHz
     tFhssGlobalConfig Fhss;
     tFhssGlobalConfig Fhss2;
 

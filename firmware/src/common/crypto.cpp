@@ -80,9 +80,16 @@ void tCrypto::Init(
 
     _static_valid = link_key_set || (tx_random != UINT64_MAX);
 
+    Restart();
+}
+
+
+// the session's secrets go, the static ones stay: at a restart of the link the keys are dealt afresh
+void tCrypto::Restart(void)
+{
     _startup_nonce_u32 = 0;
 
-    // session secrets: the static key stands in until the real ones are known
+    // the static key stands in until the real ones are known
 
     _transmit_random = 0;
     _key_tx_set = false;

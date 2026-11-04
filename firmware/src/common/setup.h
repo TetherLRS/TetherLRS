@@ -1076,6 +1076,165 @@ uint32_t mode_toa_us(uint8_t mode, bool is_2p4)
 }
 
 
+// the link's part of the configuration, from Config and the mode and band in use: at a controller restart, and
+// again at a restart of the link alone (Mode = auto's steps, a worn transmit key), which leaves the setup in RAM as
+// it is, so changes not stored yet and the sessions on the serial ports survive it
+void setup_configure_link(void)
+{
+    //-- Diversity: two radios transmitting override it below
+
+    configure_diversity(Config.Diversity);
+
+    //-- FrequencyBand
+
+    // with Mode = auto and RF Band 2 the band in use, which starts and meets again on the lower of the two
+    Config.FrequencyBand = Config.Band1;
+    bool auto_reset = false;
+    if (Config.ModeAuto && Config.Band2 < SETUP_FREQUENCY_BAND_NUM) {
+        if (band_auto_current != Config.Band1 && band_auto_current != Config.Band2) {
+            band_auto_current = band_auto_meeting();
+            auto_reset = true;
+        }
+        Config.FrequencyBand = band_auto_current;
+    }
+
+    Config.IsDualBand = (Config.FrequencyBand == SETUP_FREQUENCY_DUAL_BAND_915_MHZ_2P4_GHZ ||
+                         Config.FrequencyBand == SETUP_FREQUENCY_DUAL_BAND_868_MHZ_2P4_GHZ);
+
+    //-- Mode, Mode dependent settings
+
+    // sets Mode and related, also sets Sx/Sx2.LoraConfigIndex, Sx/Sx2.is_lora, Sx/Sx2.FrequencyBand
+    // Mode = auto: the mode in use, the base until the link picked one
+    uint8_t mode = Config.Mode;
+    if (Config.ModeAuto) {
+        uint16_t modes = mode_mask_for_band(Config.FrequencyBand, Config.Region) & ~(1 << MODE_AUTO);
+        if (auto_reset || mode_auto_current >= MODE_AUTO || !(modes & (1 << mode_auto_current))) mode_auto_current = mode_auto_base(modes);
+        mode = mode_auto_current;
+    }
+    configure_mode(mode, Config.FrequencyBand);
+
+    //-- Multipoint: the cycle grows by one slot for each receiver beyond the first
+
+    Config.LinkHeader = (Config.RxCount > 1);
+    {
+    bool is_2p4 = Config.IsDualBand || (Config.Sx.FrequencyBand == SX_FHSS_FREQUENCY_BAND_2P4_GHZ);
+    uint32_t toa_us = mode_toa_us(Config.Mode, is_2p4);
+    uint32_t toa_tx_us = (toa_us * Config.FrameLenTx) / FRAME_TX_RX_LEN;
+    uint32_t toa_rx_us = (toa_us * Config.FrameLenRx) / FRAME_TX_RX_LEN;
+    Config.SlotPeriod_ms = (toa_rx_us + RX_SLOT_GUARD_US + 999) / 1000;
+    Config.FirstReplyEnd_ms = (1000 + toa_tx_us + 1000 + toa_rx_us + 999) / 1000; // the Tx sends 0.75 ms after its tick, the Rx answers 1 ms after the frame
+    if (Config.RxCount > 1) {
+        Config.frame_rate_ms += (Config.RxCount - 1) * Config.SlotPeriod_ms;
+        Config.frame_rate_hz = (1000 + Config.frame_rate_ms / 2) / Config.frame_rate_ms;
+        if (Config.frame_rate_hz < 1) Config.frame_rate_hz = 1;
+    }
+    }
+
+    //-- Sx12xx power: the region's cap for the band and mode in use
+
+    Config.PowerIdxMax = region_power_idx_max(Config.Region, Config.FrequencyBand, Config.Mode, Config.CustomPowerMaxDbm);
+    uint8_t power_idx = Config.PowerIdx;
+    if (power_idx > Config.PowerIdxMax) power_idx = Config.PowerIdxMax;
+    Config.Sx.Power_dbm = rfpower_list[power_idx].dbm;
+    Config.Sx2.Power_dbm = Config.Sx.Power_dbm;
+
+    //-- Fhss
+
+//TODO: sort out for dual band
+    Config.Fhss.Except = EXCEPT_NONE;
+    if (Config.Sx.FrequencyBand == SX_FHSS_FREQUENCY_BAND_2P4_GHZ) {
+        Config.Fhss.Except = Config.FhssExcept2p4;
+    }
+
+    Config.Fhss.FrequencyBand = cvt_to_sx_fhss_frequency_band(Config.FrequencyBand); // asserts if not a valid SETUP_FREQUENCY_BAND_ENUM
+
+    uint8_t fhss_num_list[SX_FHSS_FREQUENCY_BAND_NUM][MODE_NUM] = {
+// MODE_50HZ,         MODE_31HZ,              MODE_19HZ,                MODE_FLRC_111HZ,   MODE_FSK_50HZ,         MODE_19HZ_7X,            MODE_18HZ,         MODE_LR,         MODE_17HZ,           MODE_8HZ
+// SX_FHSS_FREQUENCY_BAND_2P4_GHZ
+{  FHSS_NUM_2P4_GHZ,  FHSS_NUM_2P4_GHZ_31HZ,  FHSS_NUM_2P4_GHZ_19HZ,    FHSS_NUM_2P4_GHZ,  1,                     1,                       1,                 1,               1,                   1},
+// SX_FHSS_FREQUENCY_BAND_915_MHZ_FCC
+{  1,                 FHSS_NUM_915_MHZ_FCC,   FHSS_NUM_915_MHZ_FCC,     1,                 FHSS_NUM_915_MHZ_FCC,  FHSS_NUM_915_MHZ_FCC,    1,                 1,               FHSS_NUM_915_MHZ_FCC, FHSS_NUM_915_MHZ_FCC},
+// SX_FHSS_FREQUENCY_BAND_868_MHZ
+{  1,                 FHSS_NUM_868_MHZ,       FHSS_NUM_868_MHZ,         1,                 FHSS_NUM_868_MHZ,      FHSS_NUM_868_MHZ,        FHSS_NUM_868_MHZ,  FHSS_NUM_869_LR, FHSS_NUM_868_MHZ,    FHSS_NUM_868_MHZ},
+// SX_FHSS_FREQUENCY_BAND_866_MHZ_IN
+{  1,                 FHSS_NUM_866_MHZ_IN,    FHSS_NUM_866_MHZ_IN,      1,                 FHSS_NUM_866_MHZ_IN,   FHSS_NUM_866_MHZ_IN,     1,                 1,               FHSS_NUM_866_MHZ_IN, FHSS_NUM_866_MHZ_IN},
+// SX_FHSS_FREQUENCY_BAND_433_MHZ
+{  1,                 FHSS_NUM_433_MHZ,       FHSS_NUM_433_MHZ,         1,                 FHSS_NUM_433_MHZ,      FHSS_NUM_433_MHZ,        1,                 1,               FHSS_NUM_433_MHZ,    FHSS_NUM_433_MHZ},
+// SX_FHSS_FREQUENCY_BAND_70_CM_HAM
+{  1,                 FHSS_NUM_70_CM_HAM,     FHSS_NUM_70_CM_HAM_19HZ,  1,                 FHSS_NUM_70_CM_HAM,    FHSS_NUM_70_CM_HAM_19HZ, 1,                 1,               FHSS_NUM_70_CM_HAM,  FHSS_NUM_70_CM_HAM}
+    };
+    Config.Fhss.Num = fhss_num_list[Config.Fhss.FrequencyBand][Config.Mode];
+
+    // regional and LR channel plans replace the band's list, and use all of their channels
+    Config.Fhss.Plan = region_fhss_plan(Config.Region, Config.Fhss.FrequencyBand, Config.Mode);
+    switch (Config.Fhss.Plan) {
+    case FHSS_PLAN_868_EU_LORA: Config.Fhss.Num = FHSS_NUM_868_EU_LORA; break;
+    case FHSS_PLAN_868_EU_FSK: Config.Fhss.Num = FHSS_NUM_868_EU_FSK; break;
+    case FHSS_PLAN_869_LR: Config.Fhss.Num = FHSS_NUM_869_LR; break;
+    case FHSS_PLAN_CUSTOM:
+        Config.Fhss.Num = fhss_custom_plan_set(Config.CustomFreqKHz, Config.CustomSpanKHz,
+                                               mode_bandwidth_khz(Config.Mode, Config.Fhss.FrequencyBand == SX_FHSS_FREQUENCY_BAND_2P4_GHZ),
+                                               Config.Fhss.FrequencyBand == SX_FHSS_FREQUENCY_BAND_2P4_GHZ);
+        break;
+    }
+
+    // ensure equal fhss1, fhss2, is required in single band mode
+    Config.Fhss.Offset = 0;
+    Config.Fhss2 = Config.Fhss;
+
+    //-- Radio Scheme: what this pair runs here
+
+    Config.RadioScheme = RADIO_SCHEME_SINGLE;
+    Config.Bonded = false;
+    // in the EU on 868 MHz the modes there fill the on-time limits with one radio sending (FSK 1.8 % per channel of
+    // PSA's 2.7 %, LR 9.4 % of 10 %): a second one would have frames held back every cycle, so one sends
+    bool eu_868 = (Config.Region == REGION_EU && Config.FrequencyBand == SETUP_FREQUENCY_BAND_868_MHZ);
+    if (Config.IsDualBand) {
+        Config.RadioScheme = RADIO_SCHEME_DUAL_BAND;
+    } else if (Config.RadioSchemeSet != RADIO_SCHEME_SINGLE && Config.Fhss.Num >= 2 && !eu_868) {
+        // auto is bonded: twice the data while both channels are good, one frame on both when one is poor; one
+        // receiver only, the lanes and the reply slots both need the link header's bits
+        bool bonded = (Config.RadioSchemeSet != RADIO_SCHEME_DUAL_REDUNDANT) && (Config.RxCount == 1);
+        Config.RadioScheme = (bonded) ? RADIO_SCHEME_DUAL_BONDED : RADIO_SCHEME_DUAL_REDUNDANT;
+        Config.Bonded = bonded;
+        Config.Fhss2.Offset = 1; // trails by half the hops in use: never the same frequency in the same slot
+        Config.ReceiveUseAntenna1 = Config.ReceiveUseAntenna2 = true; // both radios, whatever Diversity says
+        Config.TransmitUseAntenna1 = Config.TransmitUseAntenna2 = true;
+    }
+    Config.TransmitBoth = (Config.RadioScheme != RADIO_SCHEME_SINGLE);
+    if (Config.Bonded) Config.LinkHeader = true;
+
+#if defined DEVICE_HAS_DUAL_SX126x_SX128x
+    if (Config.IsDualBand) { // only modify if in dual band mode, otherwise keep fhss1 = fhss2
+        Config.Fhss2.FrequencyBand = SX_FHSS_FREQUENCY_BAND_2P4_GHZ;
+        Config.Fhss2.Num = fhss_num_list[Config.Fhss2.FrequencyBand][Config.Mode];
+    }
+#elif defined DEVICE_HAS_DUAL_SX126x_SX126x
+    Config.IsDualBand = true; // currently only dual band mode supported
+    Config.Fhss2.FrequencyBand = SX_FHSS_FREQUENCY_BAND_433_MHZ;
+    Config.Fhss2.Num = FHSS_NUM_433_MHZ;
+#endif
+
+    //-- More Config, may depend on above config settings
+
+    uint16_t connect_tmo_ms = CONNECT_TMO_MS;
+    if (connect_tmo_ms < 5 * Config.frame_rate_ms) connect_tmo_ms = 5 * Config.frame_rate_ms; // LR needs a few frames
+    Config.connect_tmo_systicks = SYSTICK_DELAY_MS(connect_tmo_ms);
+    if (Config.Fhss.Num >= Config.Fhss2.Num) {
+        Config.connect_sync_cnt_max = Config.Fhss.Num / 2;
+        Config.connect_listen_hop_cnt = (uint8_t)(1.5f * Config.Fhss.Num);
+    } else {
+        Config.connect_sync_cnt_max = Config.Fhss2.Num / 2;
+        Config.connect_listen_hop_cnt = (uint8_t)(1.5f * Config.Fhss2.Num);
+    }
+    if (Config.connect_sync_cnt_max < CONNECT_SYNC_CNT) Config.connect_sync_cnt_max = CONNECT_SYNC_CNT;
+
+    Config.LQAveragingPeriod = (LQ_AVERAGING_MS/Config.frame_rate_ms);
+
+}
+
+
+// from the setup: what a restart of the controller reads, the link's part follows in setup_configure_link()
 void setup_configure_config(uint8_t config_id)
 {
     //-- SyncWord
@@ -1117,37 +1276,13 @@ void setup_configure_config(uint8_t config_id)
     configure_diversity(Setup.Rx.Diversity); // has hopefully been correctly sanitized in setup_sanitize_config()
 #endif
 
-    //-- FrequencyBand
+    //-- FrequencyBand, Mode: the bands and the mode set; which are in use is the link's part
 
-    // with Mode = auto and RF Band 2 the band in use, which starts and meets again on the lower of the two
     Config.Band1 = Setup.Common[config_id].FrequencyBand; // has hopefully been correctly sanitized in setup_sanitize_config()
     Config.Band2 = (Setup.Common[config_id].Band2) ? Setup.Common[config_id].Band2 - 1 : SETUP_FREQUENCY_BAND_NUM;
     Config.Region = Setup.Common[config_id].Region;
-    Config.FrequencyBand = Config.Band1;
-    bool auto_reset = false;
-    if (Setup.Common[config_id].Mode == MODE_AUTO && Config.Band2 < SETUP_FREQUENCY_BAND_NUM) {
-        if (band_auto_current != Config.Band1 && band_auto_current != Config.Band2) {
-            band_auto_current = band_auto_meeting();
-            auto_reset = true;
-        }
-        Config.FrequencyBand = band_auto_current;
-    }
-
-    Config.IsDualBand = (Config.FrequencyBand == SETUP_FREQUENCY_DUAL_BAND_915_MHZ_2P4_GHZ ||
-                         Config.FrequencyBand == SETUP_FREQUENCY_DUAL_BAND_868_MHZ_2P4_GHZ);
-
-    //-- Mode, Mode dependent settings
-
-    // sets Mode and related, also sets Sx/Sx2.LoraConfigIndex, Sx/Sx2.is_lora, Sx/Sx2.FrequencyBand
-    // Mode = auto: the mode in use, the base until the link picked one
-    uint8_t mode = Setup.Common[config_id].Mode;
-    Config.ModeAuto = (mode == MODE_AUTO);
-    if (Config.ModeAuto) {
-        uint16_t modes = mode_mask_for_band(Config.FrequencyBand, Config.Region) & ~(1 << MODE_AUTO);
-        if (auto_reset || mode_auto_current >= MODE_AUTO || !(modes & (1 << mode_auto_current))) mode_auto_current = mode_auto_base(modes);
-        mode = mode_auto_current;
-    }
-    configure_mode(mode, Config.FrequencyBand);
+    Config.Mode = Setup.Common[config_id].Mode;
+    Config.ModeAuto = (Config.Mode == MODE_AUTO);
 
     //-- Link Split: the frame length of each direction, their sum stays the same so a cycle's air time does too
 
@@ -1157,7 +1292,7 @@ void setup_configure_config(uint8_t config_id)
     case LINK_SPLIT_UPLINK: Config.FrameLenTx = FRAME_LEN_MAX; Config.FrameLenRx = FRAME_LEN_MIN; break;
     }
 
-    //-- Multipoint: a reply slot per receiver, the cycle grows by one slot for each receiver beyond the first
+    //-- Multipoint: a reply slot per receiver
 
     Config.RxCount = Setup.Common[config_id].RxCount + 1;
 #ifdef DEVICE_IS_RECEIVER
@@ -1165,26 +1300,12 @@ void setup_configure_config(uint8_t config_id)
 #else
     Config.RxSlot = 0;
 #endif
-    Config.LinkHeader = (Config.RxCount > 1);
-    {
-    bool is_2p4 = Config.IsDualBand || (Config.Sx.FrequencyBand == SX_FHSS_FREQUENCY_BAND_2P4_GHZ);
-    uint32_t toa_us = mode_toa_us(Config.Mode, is_2p4);
-    uint32_t toa_tx_us = (toa_us * Config.FrameLenTx) / FRAME_TX_RX_LEN;
-    uint32_t toa_rx_us = (toa_us * Config.FrameLenRx) / FRAME_TX_RX_LEN;
-    Config.SlotPeriod_ms = (toa_rx_us + RX_SLOT_GUARD_US + 999) / 1000;
-    Config.FirstReplyEnd_ms = (1000 + toa_tx_us + 1000 + toa_rx_us + 999) / 1000; // the Tx sends 0.75 ms after its tick, the Rx answers 1 ms after the frame
-    if (Config.RxCount > 1) {
-        Config.frame_rate_ms += (Config.RxCount - 1) * Config.SlotPeriod_ms;
-        Config.frame_rate_hz = (1000 + Config.frame_rate_ms / 2) / Config.frame_rate_ms;
-        if (Config.frame_rate_hz < 1) Config.frame_rate_hz = 1;
-    }
-    }
 
     //-- Sx12xx
     //     LoraConfigIndex; <- set by configure_mode()
     //     FskSyncWord
     //     FlrcSyncWord;
-    //     Power_dbm;
+    //     Power_dbm;       <- set by setup_configure_link(), the region's cap is the band's and mode's
     //     FrequencyBand;   <- set by configure_mode()
     //     is_lora;         <- set by configure_mode()
 
@@ -1202,22 +1323,21 @@ void setup_configure_config(uint8_t config_id)
 
     // note: the actually used power will be determined later when the SX are set up
     Config.CustomLbt = Setup.Common[config_id].CustomLbt;
-    Config.PowerIdxMax = region_power_idx_max(Config.Region, Config.FrequencyBand, Config.Mode, Setup.Common[config_id].CustomPowerMaxDbm);
+    Config.CustomPowerMaxDbm = Setup.Common[config_id].CustomPowerMaxDbm;
+    Config.CustomFreqKHz = Setup.Common[config_id].CustomFreqKHz;
+    Config.CustomSpanKHz = Setup.Common[config_id].CustomSpanKHz;
 #ifdef DEVICE_IS_TRANSMITTER
-    uint8_t power_idx = Setup.Tx[config_id].Power;
+    Config.PowerIdx = Setup.Tx[config_id].Power;
 #else // DEVICE_IS_RECEIVER
-    uint8_t power_idx = Setup.Rx.Power;
+    Config.PowerIdx = Setup.Rx.Power;
 #endif
-    if (power_idx > Config.PowerIdxMax) power_idx = Config.PowerIdxMax;
-    Config.Sx.Power_dbm = rfpower_list[power_idx].dbm;
-    Config.Sx2.Power_dbm = Config.Sx.Power_dbm;
 
     //-- Fhss
-    //     Num;
+    //     Num;             <- set by setup_configure_link()
     //     Seed;
-    //     FrequencyBand;
+    //     FrequencyBand;   <- set by setup_configure_link()
     //     Ortho;
-    //     Except;
+    //     Except;          <- set by setup_configure_link(), on 2.4 GHz
     //     BindScan_mask;
 
     //Config.FhssSeed = bind_dblword;
@@ -1227,13 +1347,7 @@ void setup_configure_config(uint8_t config_id)
 
     Config.Fhss.Ortho = Setup.Common[config_id].Ortho; // has hopefully been correctly sanitized in setup_sanitize_config()
 
-//TODO: sort out for dual band
-    Config.Fhss.Except = EXCEPT_NONE;
-    if (Config.Sx.FrequencyBand == SX_FHSS_FREQUENCY_BAND_2P4_GHZ) {
-        Config.Fhss.Except = except_from_bindphrase(Setup.Common[config_id].BindPhrase);
-    }
-
-    Config.Fhss.FrequencyBand = cvt_to_sx_fhss_frequency_band(Config.FrequencyBand); // asserts if not a valid SETUP_FREQUENCY_BAND_ENUM
+    Config.FhssExcept2p4 = except_from_bindphrase(Setup.Common[config_id].BindPhrase);
 
     // this mask is only used in bind, to determine the frequencies to cycle through
     // since both fhss should cycle in sync, we always set them to be equal and have all frequencies
@@ -1257,92 +1371,13 @@ void setup_configure_config(uint8_t config_id)
         Config.Fhss.BindScan_mask |= (1 << SX_FHSS_FREQUENCY_BAND_866_MHZ_IN);
     }
 
-    uint8_t fhss_num_list[SX_FHSS_FREQUENCY_BAND_NUM][MODE_NUM] = {
-// MODE_50HZ,         MODE_31HZ,              MODE_19HZ,                MODE_FLRC_111HZ,   MODE_FSK_50HZ,         MODE_19HZ_7X,            MODE_18HZ,         MODE_LR,         MODE_17HZ,           MODE_8HZ
-// SX_FHSS_FREQUENCY_BAND_2P4_GHZ
-{  FHSS_NUM_2P4_GHZ,  FHSS_NUM_2P4_GHZ_31HZ,  FHSS_NUM_2P4_GHZ_19HZ,    FHSS_NUM_2P4_GHZ,  1,                     1,                       1,                 1,               1,                   1},
-// SX_FHSS_FREQUENCY_BAND_915_MHZ_FCC
-{  1,                 FHSS_NUM_915_MHZ_FCC,   FHSS_NUM_915_MHZ_FCC,     1,                 FHSS_NUM_915_MHZ_FCC,  FHSS_NUM_915_MHZ_FCC,    1,                 1,               FHSS_NUM_915_MHZ_FCC, FHSS_NUM_915_MHZ_FCC},
-// SX_FHSS_FREQUENCY_BAND_868_MHZ
-{  1,                 FHSS_NUM_868_MHZ,       FHSS_NUM_868_MHZ,         1,                 FHSS_NUM_868_MHZ,      FHSS_NUM_868_MHZ,        FHSS_NUM_868_MHZ,  FHSS_NUM_869_LR, FHSS_NUM_868_MHZ,    FHSS_NUM_868_MHZ},
-// SX_FHSS_FREQUENCY_BAND_866_MHZ_IN
-{  1,                 FHSS_NUM_866_MHZ_IN,    FHSS_NUM_866_MHZ_IN,      1,                 FHSS_NUM_866_MHZ_IN,   FHSS_NUM_866_MHZ_IN,     1,                 1,               FHSS_NUM_866_MHZ_IN, FHSS_NUM_866_MHZ_IN},
-// SX_FHSS_FREQUENCY_BAND_433_MHZ
-{  1,                 FHSS_NUM_433_MHZ,       FHSS_NUM_433_MHZ,         1,                 FHSS_NUM_433_MHZ,      FHSS_NUM_433_MHZ,        1,                 1,               FHSS_NUM_433_MHZ,    FHSS_NUM_433_MHZ},
-// SX_FHSS_FREQUENCY_BAND_70_CM_HAM
-{  1,                 FHSS_NUM_70_CM_HAM,     FHSS_NUM_70_CM_HAM_19HZ,  1,                 FHSS_NUM_70_CM_HAM,    FHSS_NUM_70_CM_HAM_19HZ, 1,                 1,               FHSS_NUM_70_CM_HAM,  FHSS_NUM_70_CM_HAM}
-    };
-    Config.Fhss.Num = fhss_num_list[Config.Fhss.FrequencyBand][Config.Mode];
-
-    // regional and LR channel plans replace the band's list, and use all of their channels
-    Config.Fhss.Plan = region_fhss_plan(Config.Region, Config.Fhss.FrequencyBand, Config.Mode);
-    switch (Config.Fhss.Plan) {
-    case FHSS_PLAN_868_EU_LORA: Config.Fhss.Num = FHSS_NUM_868_EU_LORA; break;
-    case FHSS_PLAN_868_EU_FSK: Config.Fhss.Num = FHSS_NUM_868_EU_FSK; break;
-    case FHSS_PLAN_869_LR: Config.Fhss.Num = FHSS_NUM_869_LR; break;
-    case FHSS_PLAN_CUSTOM:
-        Config.Fhss.Num = fhss_custom_plan_set(Setup.Common[config_id].CustomFreqKHz, Setup.Common[config_id].CustomSpanKHz,
-                                               mode_bandwidth_khz(Config.Mode, Config.Fhss.FrequencyBand == SX_FHSS_FREQUENCY_BAND_2P4_GHZ),
-                                               Config.Fhss.FrequencyBand == SX_FHSS_FREQUENCY_BAND_2P4_GHZ);
-        break;
-    }
-
-    // ensure equal fhss1, fhss2, is required in single band mode
-    Config.Fhss.Offset = 0;
-    Config.Fhss2 = Config.Fhss;
-
-    //-- Radio Scheme: what this pair runs, from what both ends have; the peer's radios came with the bind
+    //-- Radio Scheme: what this pair may run, from what both ends have; the peer's radios came with the bind
 #if defined USE_SX2 && !defined DEVICE_HAS_DUAL_SX126x_SX128x && !defined DEVICE_HAS_DUAL_SX126x_SX126x // two radios on one band here
     bool pair_two_radios = (Setup.Common[config_id].PeerRadioCount == 2);
 #else
     bool pair_two_radios = false;
 #endif
-    Config.RadioScheme = RADIO_SCHEME_SINGLE;
-    Config.Bonded = false;
-    // in the EU on 868 MHz the modes there fill the on-time limits with one radio sending (FSK 1.8 % per channel of
-    // PSA's 2.7 %, LR 9.4 % of 10 %): a second one would have frames held back every cycle, so one sends
-    bool eu_868 = (Config.Region == REGION_EU && Config.FrequencyBand == SETUP_FREQUENCY_BAND_868_MHZ);
-    if (Config.IsDualBand) {
-        Config.RadioScheme = RADIO_SCHEME_DUAL_BAND;
-    } else if (pair_two_radios && Setup.Common[config_id].RadioScheme != RADIO_SCHEME_SINGLE && Config.Fhss.Num >= 2 && !eu_868) {
-        // auto is bonded: twice the data while both channels are good, one frame on both when one is poor; one
-        // receiver only, the lanes and the reply slots both need the link header's bits
-        bool bonded = (Setup.Common[config_id].RadioScheme != RADIO_SCHEME_DUAL_REDUNDANT) && (Config.RxCount == 1);
-        Config.RadioScheme = (bonded) ? RADIO_SCHEME_DUAL_BONDED : RADIO_SCHEME_DUAL_REDUNDANT;
-        Config.Bonded = bonded;
-        Config.Fhss2.Offset = 1; // trails by half the hops in use: never the same frequency in the same slot
-        Config.ReceiveUseAntenna1 = Config.ReceiveUseAntenna2 = true; // both radios, whatever Diversity says
-        Config.TransmitUseAntenna1 = Config.TransmitUseAntenna2 = true;
-    }
-    Config.TransmitBoth = (Config.RadioScheme != RADIO_SCHEME_SINGLE);
-    if (Config.Bonded) Config.LinkHeader = true;
-
-#if defined DEVICE_HAS_DUAL_SX126x_SX128x
-    if (Config.IsDualBand) { // only modify if in dual band mode, otherwise keep fhss1 = fhss2
-        Config.Fhss2.FrequencyBand = SX_FHSS_FREQUENCY_BAND_2P4_GHZ;
-        Config.Fhss2.Num = fhss_num_list[Config.Fhss2.FrequencyBand][Config.Mode];
-    }
-#elif defined DEVICE_HAS_DUAL_SX126x_SX126x
-    Config.IsDualBand = true; // currently only dual band mode supported
-    Config.Fhss2.FrequencyBand = SX_FHSS_FREQUENCY_BAND_433_MHZ;
-    Config.Fhss2.Num = FHSS_NUM_433_MHZ;
-#endif
-
-    //-- More Config, may depend on above config settings
-
-    uint16_t connect_tmo_ms = CONNECT_TMO_MS;
-    if (connect_tmo_ms < 5 * Config.frame_rate_ms) connect_tmo_ms = 5 * Config.frame_rate_ms; // LR needs a few frames
-    Config.connect_tmo_systicks = SYSTICK_DELAY_MS(connect_tmo_ms);
-    if (Config.Fhss.Num >= Config.Fhss2.Num) {
-        Config.connect_sync_cnt_max = Config.Fhss.Num / 2;
-        Config.connect_listen_hop_cnt = (uint8_t)(1.5f * Config.Fhss.Num);
-    } else {
-        Config.connect_sync_cnt_max = Config.Fhss2.Num / 2;
-        Config.connect_listen_hop_cnt = (uint8_t)(1.5f * Config.Fhss2.Num);
-    }
-    if (Config.connect_sync_cnt_max < CONNECT_SYNC_CNT) Config.connect_sync_cnt_max = CONNECT_SYNC_CNT;
-
-    Config.LQAveragingPeriod = (LQ_AVERAGING_MS/Config.frame_rate_ms);
+    Config.RadioSchemeSet = (pair_two_radios) ? Setup.Common[config_id].RadioScheme : RADIO_SCHEME_SINGLE;
 
     //-- Serial
 #ifdef DEVICE_IS_TRANSMITTER
@@ -1372,6 +1407,8 @@ void setup_configure_config(uint8_t config_id)
     default:
         Config.SerialBaudrate2 = 115200;
     }
+
+    setup_configure_link();
 }
 
 

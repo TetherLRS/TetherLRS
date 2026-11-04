@@ -74,6 +74,7 @@ class tTxMavlink
     void Do(void);
     uint8_t VehicleState(void);
     void FrameLost(uint8_t slot);
+    void LinkRestarted(void); // the payloads start over, the compression is the mode's
 
     void putbuf(uint8_t slot, uint8_t* const buf, uint16_t len);
     bool available(void);
@@ -192,8 +193,7 @@ void tTxMavlink::Init(void)
     status_serial_out = {};
 
     fmavX_init();
-    fmavX_config_compression((Config.Mode == MODE_19HZ || Config.Mode == MODE_19HZ_7X || Config.Mode == MODE_18HZ ||
-                              Config.Mode == MODE_LR || Config.Mode == MODE_17HZ || Config.Mode == MODE_8HZ) ? 1 : 0); // use compression only in the slow modes
+    LinkRestarted();
 
     status_ser_in = {};
     status_ser2_in = {};
@@ -230,6 +230,18 @@ void tTxMavlink::FrameLost(uint8_t slot)
 {
     // reset parser link in -> serial out
     if (slot < RX_SLOT_NUM) fmav_parse_reset(&status_link_in[slot]);
+}
+
+
+// a restart of the link: its payloads start over, so what of them waits to be parsed goes with them; only the slow
+// modes compress
+void tTxMavlink::LinkRestarted(void)
+{
+    fifo_link_in.Flush();
+    link_in_left = 0;
+    for (uint8_t s = 0; s < RX_SLOT_NUM; s++) FrameLost(s);
+    fmavX_config_compression((Config.Mode == MODE_19HZ || Config.Mode == MODE_19HZ_7X || Config.Mode == MODE_18HZ ||
+                              Config.Mode == MODE_LR || Config.Mode == MODE_17HZ || Config.Mode == MODE_8HZ) ? 1 : 0);
 }
 
 

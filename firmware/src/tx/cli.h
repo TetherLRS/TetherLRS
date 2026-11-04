@@ -343,6 +343,7 @@ class tTxCli
 {
   public:
     void Init(void);
+    void LinkRestarted(void); // the frame rate changed: as many lines per cycle as fit
     void Do(void);
 
   private:
@@ -428,6 +429,15 @@ void tTxCli::Init(void)
     sik_store_pending = false;
 #endif
 
+    LinkRestarted();
+
+    print_index = 0;
+    print_pl_flag = 0;
+}
+
+
+void tTxCli::LinkRestarted(void)
+{
     // 9 ms, 20 ms, 32 ms, 53 ms
     if (Config.frame_rate_ms < 19) {
         print_chunks_max = 1;
@@ -439,9 +449,6 @@ void tTxCli::Init(void)
         print_chunks_max = 8;
     }
     if (print_chunks_max > CLI_PRINT_CHUNKS_CNT_MAX) print_chunks_max = CLI_PRINT_CHUNKS_CNT_MAX;
-
-    print_index = 0;
-    print_pl_flag = 0;
 }
 
 

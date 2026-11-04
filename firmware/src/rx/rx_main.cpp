@@ -765,29 +765,9 @@ bool connected(void)
 }
 
 
-void main_loop(void)
+// the link's state, at a restart of the controller and of the link alone
+void link_init(void)
 {
-#ifdef BOARD_TEST_H
-    main_test();
-#endif
-INITCONTROLLER_ONCE
-    usb_port.InitOnce();
-    stack_check_init();
-RESTARTCONTROLLER
-    init_hw();
-    DBG_MAIN(dbg.puts("\n\n\nHello\n\n");)
-
-    // startup sign of life
-    leds.Init();
-    (void)tlrs_marker_ref;
-
-    // start up sx
-    if (!sx.isOk()) { FAILALWAYS(BLINK_RD_GR_OFF, "Sx not ok"); } // fail!
-    if (!sx2.isOk()) { FAILALWAYS(BLINK_GR_RD_OFF, "Sx2 not ok"); } // fail!
-    irq_status = irq2_status = 0;
-    IF_SX(sx.StartUp(&Config.Sx));
-    IF_SX2(sx2.StartUp(&Config.Sx2));
-    bind.Init();
     fhss.Init(&Config.Fhss, &Config.Fhss2);
     fhss.Start();
     rfpower.Init();
@@ -822,9 +802,63 @@ RESTARTCONTROLLER
     bond_single_rx = false;
     rxFrameB_valid = false;
     bond.Init(rx_output, FRAME_PAYLOAD_MAX);
+    crypto.Restart();
+}
+
+
+// Mode = auto's steps: the link alone starts again, in mode_auto_current; the sessions on the serial ports and the
+// setup in RAM, stored or not, stay as they are
+void link_restart(void)
+{
+    sx.SetToIdle();
+    sx2.SetToIdle();
+
+    setup_configure_link();
+    rxclock.SetPeriod(Config.frame_rate_ms);
+    rxclock.SetShift(rxclock_shift_us());
+    rxclock.Reset();
+    doPostReceive = false;
+
+    sx.StartUp(&Config.Sx); // only a radio not started yet, the link may need it now
+    sx2.StartUp(&Config.Sx2);
+    IF_SX(sx.Configure(&Config.Sx));
+    IF_SX2(sx2.Configure(&Config.Sx2));
+    irq_status = irq2_status = 0;
+    link_init();
+
+    mavlink.LinkRestarted();
+    msp.FrameLost();
+    fan.SetPower(SX_OR_SX2(sx.RfPower_dbm(),sx2.RfPower_dbm()));
+}
+
+
+void main_loop(void)
+{
+#ifdef BOARD_TEST_H
+    main_test();
+#endif
+INITCONTROLLER_ONCE
+    usb_port.InitOnce();
+    stack_check_init();
+RESTARTCONTROLLER
+    init_hw();
+    DBG_MAIN(dbg.puts("\n\n\nHello\n\n");)
+
+    // startup sign of life
+    leds.Init();
+    (void)tlrs_marker_ref;
+
+    // start up sx
+    if (!sx.isOk()) { FAILALWAYS(BLINK_RD_GR_OFF, "Sx not ok"); } // fail!
+    if (!sx2.isOk()) { FAILALWAYS(BLINK_GR_RD_OFF, "Sx2 not ok"); } // fail!
+    irq_status = irq2_status = 0;
+    IF_SX(sx.StartUp(&Config.Sx));
+    IF_SX2(sx2.StartUp(&Config.Sx2));
+    bind.Init();
     crypto.Init(tCrypto::RX,
         Setup.Common[0].BindPhrase, Setup.peer_uid[0], Setup.tx_random[0],
         Setup.Common[0].Privacy, Setup.LinkKey);
+    link_init();
 
     loop_fifo.Init();
     mavlink.Init();
@@ -1276,15 +1310,13 @@ dbg.puts(s8toBCD_s(stats.last_rssi2));*/
         GOTO_RESTARTCONTROLLER;
     }
 
-    // Mode = auto: the link restarts with the mode the Tx chose, nothing stored
-    if (doLinkRestart) {
-        sx.SetToIdle();
-        sx2.SetToIdle();
+    // Mode = auto: the link restarts with the mode the Tx chose, nothing stored; a bind takes its course first
+    if (doLinkRestart && !bind.IsInBind()) {
         if (mode_auto_pending != MODE_AUTO) {
             mode_auto_current = mode_auto_pending;
             band_auto_current = band_auto_pending;
         }
-        GOTO_RESTARTCONTROLLER;
+        link_restart();
     }
 
 }//end of main_loop

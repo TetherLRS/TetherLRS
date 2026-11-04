@@ -60,6 +60,7 @@ class tCrypto
         char* const bind_phrase, uint8_t tx_uid[12], uint64_t tx_random,
         uint8_t privacy_level, const uint8_t* const link_key);
 
+    void Restart(void); // the session's secrets go, the static ones stay: the link starts again
     void SetTransmitKey(uint64_t random); // the key of the frames this side sends
     void SetReceiveKey(uint8_t slot, uint64_t random); // the key of the frames received from that slot, the Rx uses slot 0
     void EncryptSessionRandoms(uint8_t* const buf36, uint8_t slot, uint64_t startup_random, uint64_t bind_random); // Tx only
