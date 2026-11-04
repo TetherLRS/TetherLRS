@@ -54,7 +54,7 @@ class tRegulatory
 
     bool CcaNeeded(uint8_t antenna, uint32_t freq_reg)
     {
-        uint8_t r = rule(freq_reg);
+        uint8_t r = rule(antenna, freq_reg);
         if (r == REGULATORY_RULE_PSA) return true;
         if (r == REGULATORY_RULE_LBT) return (Config.Region == REGION_CUSTOM) || (power_dbm(antenna) > 10); // a custom plan always, EN 300 328 above 10 dBm
         return false;
@@ -64,28 +64,39 @@ class tRegulatory
     // true: send now, its time is booked
     bool TxGo(uint8_t antenna, uint32_t freq_reg)
     {
-        uint8_t r = rule(freq_reg);
-        if (r == REGULATORY_RULE_NONE) return true;
-
-        uint32_t toa_us = (antenna == ANTENNA_1) ? sx.TimeOverAir_us() : sx2.TimeOverAir_us();
         uint32_t tnow_ms = millis32();
+        int8_t slot;
+        if (!time_allowed(antenna, freq_reg, tnow_ms, &slot)) return false;
 
-        int8_t slot = -1;
-        if (r == REGULATORY_RULE_PSA || r == REGULATORY_RULE_DUTY10) {
-            slot = find_slot(freq_reg, tnow_ms);
-            if (slot < 0 || !time_ok(slot, r, toa_us, tnow_ms)) { blocked_cnt++; return false; }
-        }
-
-        if (CcaNeeded(antenna, freq_reg) && !cca_clear(antenna, cca_threshold_dbm(r, power_dbm(antenna)))) {
+        bool a1 = (antenna == ANTENNA_1);
+        if (CcaNeeded(antenna, freq_reg) && !cca_clear(a1, !a1, threshold(antenna, freq_reg), threshold(antenna, freq_reg))) {
             cca_busy_cnt++;
             return false;
         }
 
-        if (slot >= 0) {
-            credit_us[slot] -= toa_us;
-            tlast_tx_ms[slot] = tnow_ms;
-            tx_seen[slot] = true;
+        book(antenna, slot, tnow_ms);
+        return true;
+    }
+
+    // both radios at once, each on its own channel: one held back holds both, so neither books time it does not use,
+    // and they listen in the same window
+    bool TxGoBoth(uint32_t freq1_reg, uint32_t freq2_reg)
+    {
+        uint32_t tnow_ms = millis32();
+        int8_t slot1, slot2;
+        bool ok1 = time_allowed(ANTENNA_1, freq1_reg, tnow_ms, &slot1);
+        bool ok2 = time_allowed(ANTENNA_2, freq2_reg, tnow_ms, &slot2); // both: each channel's bucket starts and fills alike
+        if (!ok1 || !ok2) return false;
+
+        bool cca1 = CcaNeeded(ANTENNA_1, freq1_reg);
+        bool cca2 = CcaNeeded(ANTENNA_2, freq2_reg);
+        if ((cca1 || cca2) && !cca_clear(cca1, cca2, threshold(ANTENNA_1, freq1_reg), threshold(ANTENNA_2, freq2_reg))) {
+            cca_busy_cnt++;
+            return false;
         }
+
+        book(ANTENNA_1, slot1, tnow_ms);
+        book(ANTENNA_2, slot2, tnow_ms);
         return true;
     }
 
@@ -93,11 +104,14 @@ class tRegulatory
     uint32_t blocked_cnt; // frames not sent, on-time or off-time limit
 
   private:
-    uint8_t rule(uint32_t freq_reg)
+    // each radio by its own band: in dual band the second one is on 2.4 GHz
+    uint8_t band(uint8_t antenna) { return (antenna == ANTENNA_2) ? Config.Sx2.FrequencyBand : Config.Sx.FrequencyBand; }
+
+    uint8_t rule(uint8_t antenna, uint32_t freq_reg)
     {
         if (Config.Region == REGION_CUSTOM) return (Config.CustomLbt) ? REGULATORY_RULE_LBT : REGULATORY_RULE_NONE;
         if (Config.Region != REGION_EU) return REGULATORY_RULE_NONE;
-        if (Config.Sx.FrequencyBand == SX_FHSS_FREQUENCY_BAND_2P4_GHZ) return REGULATORY_RULE_LBT;
+        if (band(antenna) == SX_FHSS_FREQUENCY_BAND_2P4_GHZ) return REGULATORY_RULE_LBT;
 #ifdef SX12XX_FREQ_MHZ_TO_REG
         if (freq_reg >= SX12XX_FREQ_MHZ_TO_REG(869.4) && freq_reg <= SX12XX_FREQ_MHZ_TO_REG(869.65)) return REGULATORY_RULE_DUTY10;
 #endif
@@ -109,12 +123,35 @@ class tRegulatory
         return (antenna == ANTENNA_1) ? sx.RfPower_dbm() : sx2.RfPower_dbm();
     }
 
+    // its channel and its time allow a frame; slot: the channel's bucket, -1 when the rule has none
+    bool time_allowed(uint8_t antenna, uint32_t freq_reg, uint32_t tnow_ms, int8_t* const slot)
+    {
+        *slot = -1;
+        uint8_t r = rule(antenna, freq_reg);
+        if (r != REGULATORY_RULE_PSA && r != REGULATORY_RULE_DUTY10) return true;
+        *slot = find_slot(freq_reg, tnow_ms);
+        if (*slot < 0 || !time_ok(*slot, r, toa_us(antenna), tnow_ms)) { blocked_cnt++; return false; }
+        return true;
+    }
+
+    void book(uint8_t antenna, int8_t slot, uint32_t tnow_ms)
+    {
+        if (slot < 0) return;
+        credit_us[slot] -= toa_us(antenna);
+        tlast_tx_ms[slot] = tnow_ms;
+        tx_seen[slot] = true;
+    }
+
+    uint32_t toa_us(uint8_t antenna) { return (antenna == ANTENNA_1) ? sx.TimeOverAir_us() : sx2.TimeOverAir_us(); }
+
+    int8_t threshold(uint8_t antenna, uint32_t freq_reg) { return cca_threshold_dbm(antenna, rule(antenna, freq_reg), power_dbm(antenna)); }
+
     // at the chip, i.e. including the LNA gain
-    int8_t cca_threshold_dbm(uint8_t r, int8_t pwr_dbm)
+    int8_t cca_threshold_dbm(uint8_t antenna, uint8_t r, int8_t pwr_dbm)
     {
         int16_t thr;
-        if (r == REGULATORY_RULE_LBT && Config.Sx.FrequencyBand == SX_FHSS_FREQUENCY_BAND_2P4_GHZ) { // ExpressLRS EU_CE_2400 for 25/50/100 mW
-            bool lora = Config.Sx.is_lora;
+        if (r == REGULATORY_RULE_LBT && band(antenna) == SX_FHSS_FREQUENCY_BAND_2P4_GHZ) { // ExpressLRS EU_CE_2400 for 25/50/100 mW
+            bool lora = (antenna == ANTENNA_2) ? Config.Sx2.is_lora : Config.Sx.is_lora;
             if (pwr_dbm <= 14) {
                 thr = (lora) ? -65 : -67;
             } else if (pwr_dbm <= 17) {
@@ -130,12 +167,14 @@ class tRegulatory
         return thr + SX_LNA_GAIN_DB;
     }
 
-    bool cca_clear(uint8_t antenna, int8_t threshold_dbm)
+    // the radios asked for listen on their own channels, in one window
+    bool cca_clear(bool on1, bool on2, int8_t threshold1_dbm, int8_t threshold2_dbm)
     {
 #ifndef USE_REGION_EU
         return true; // the region stays free on chips without an instantaneous RSSI read
 #else
-        if (antenna == ANTENNA_1) { sx.SetToRx(); } else { sx2.SetToRx(); }
+        if (on1) sx.SetToRx();
+        if (on2) sx2.SetToRx();
 
         uint16_t t0_us = micros16();
         while ((uint16_t)(micros16() - t0_us) < REGULATORY_CCA_RSSI_VALID_US) {}
@@ -143,11 +182,12 @@ class tRegulatory
         bool clear = true;
         t0_us = micros16();
         do {
-            int8_t rssi = (antenna == ANTENNA_1) ? sx.GetRssiInst_dbm() : sx2.GetRssiInst_dbm();
-            if (rssi >= threshold_dbm) { clear = false; break; }
+            if (on1 && sx.GetRssiInst_dbm() >= threshold1_dbm) { clear = false; break; }
+            if (on2 && sx2.GetRssiInst_dbm() >= threshold2_dbm) { clear = false; break; }
         } while ((uint16_t)(micros16() - t0_us) < REGULATORY_CCA_WINDOW_US);
 
-        if (antenna == ANTENNA_1) { sx.SetToIdle(); } else { sx2.SetToIdle(); }
+        if (on1) sx.SetToIdle();
+        if (on2) sx2.SetToIdle();
         return clear;
 #endif
     }

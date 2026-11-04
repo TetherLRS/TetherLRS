@@ -896,8 +896,10 @@ INITCONTROLLER_END
         sx.SetFrameLength(Config.FrameLenRx);
         sx2.SetFrameLength(Config.FrameLenRx);
         rfpower.Update();
-        bool go = regulatory.TxGo(tdiversity.Antenna(), fhss.GetCurrFreq());
-        if (go && Config.TransmitBoth && !Config.IsDualBand) go = regulatory.TxGo(ANTENNA_2, fhss.GetCurrFreq2()); // the 2nd channel books its time too
+        // each radio on its own channel; both sending, both are checked and listen at once
+        uint8_t ant = tdiversity.Antenna();
+        bool go = (Config.TransmitBoth) ? regulatory.TxGoBoth(fhss.GetCurrFreq(), fhss.GetCurrFreq2()) :
+                                          regulatory.TxGo(ant, (ant == ANTENNA_1) ? fhss.GetCurrFreq() : fhss.GetCurrFreq2());
         if (!go) { // not this frame, the ARQ resends its data
             link_state = LINK_STATE_RECEIVE;
             break;

@@ -1508,14 +1508,18 @@ INITCONTROLLER_END
 
     case LINK_STATE_TRANSMIT_SEND: {
         uint16_t dt = micros16() - pretransmit_tstamp_us;
-        bool cca = regulatory.CcaNeeded(tdiversity.Antenna(), fhss.GetCurrFreq());
+        // each radio on its own channel; both sending, both are checked and listen at once
+        uint8_t ant = tdiversity.Antenna();
+        uint32_t freq_ant = (ant == ANTENNA_1) ? fhss.GetCurrFreq() : fhss.GetCurrFreq2();
+        bool cca = (Config.TransmitBoth) ?
+            regulatory.CcaNeeded(ANTENNA_1, fhss.GetCurrFreq()) || regulatory.CcaNeeded(ANTENNA_2, fhss.GetCurrFreq2()) :
+            regulatory.CcaNeeded(ant, freq_ant);
         if (dt + ((cca) ? REGULATORY_CCA_TIME_US : 0) < 750) break; // listening ends about when the frame would go
         isInTimeGuard = false;
         rfpower.Update();
         sx.SetRfFrequency(fhss.GetCurrFreq());
         sx2.SetRfFrequency(fhss.GetCurrFreq2());
-        bool go = regulatory.TxGo(tdiversity.Antenna(), fhss.GetCurrFreq());
-        if (go && Config.TransmitBoth && !Config.IsDualBand) go = regulatory.TxGo(ANTENNA_2, fhss.GetCurrFreq2()); // the 2nd channel books its time too
+        bool go = (Config.TransmitBoth) ? regulatory.TxGoBoth(fhss.GetCurrFreq(), fhss.GetCurrFreq2()) : regulatory.TxGo(ant, freq_ant);
         if (!go) { // not this frame: the next cycle sends it, one way too, where the ARQ never sends again
             tx_frame_held = true;
             link_state = LINK_STATE_RECEIVE;

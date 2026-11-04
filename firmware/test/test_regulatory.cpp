@@ -19,7 +19,8 @@ static uint32_t now_us = 0;
 uint32_t millis32(void) { return now_us / 1000; }
 uint16_t micros16(void) { now_us += 5; return (uint16_t)now_us; } // each call takes 5 us
 
-struct { uint8_t Region; uint8_t Mode; uint8_t CustomLbt; struct { uint8_t FrequencyBand; bool is_lora; } Sx; } Config;
+struct tSxCfg { uint8_t FrequencyBand; bool is_lora; };
+struct { uint8_t Region; uint8_t Mode; uint8_t CustomLbt; tSxCfg Sx; tSxCfg Sx2; } Config;
 // as setup.h: 500 kHz LoRa, 250 kHz FSK below 1 GHz, 800 kHz at 2.4 GHz
 uint16_t mode_bandwidth_khz(uint8_t mode, bool is_2p4) { (void)mode; return (is_2p4) ? 800 : (Config.Sx.is_lora) ? 500 : 250; }
 
@@ -36,7 +37,9 @@ struct tSxStub {
 };
 tSxStub sx, sx2;
 
+#define private public // the buckets, to see what was booked
 #include "regulatory.h"
+#undef private
 
 static int fails = 0;
 static void check(const char* name, bool ok)
@@ -54,7 +57,9 @@ static void eu868(bool lora = true)
     Config.Region = REGION_EU;
     Config.Sx.FrequencyBand = SX_FHSS_FREQUENCY_BAND_868_MHZ;
     Config.Sx.is_lora = lora;
+    Config.Sx2 = Config.Sx;
     sx = tSxStub();
+    sx2 = tSxStub();
     now_us = 0;
 }
 
@@ -219,6 +224,30 @@ int main()
         uint32_t blocked = r.blocked_cnt;
         bool extra = r.TxGo(ANTENNA_1, F1 + 1000 * REGULATORY_FREQ_NUM);
         check("PSA: 24 frequencies go, the 25th is refused and counted", ok == REGULATORY_FREQ_NUM && !extra && r.blocked_cnt == blocked + 1);
+    }
+    {   // two radios on their own channels: both checked before either books, and each listens on its own
+        tRegulatory r; eu868(); r.Init();
+        r.TxGoBoth(F1, F2); // a channel's bucket starts empty when first seen
+        now_us += 100000000u; // and holds a frame now
+        bool first = r.TxGoBoth(F1, F2);
+        bool two_listened = (sx.rx_calls == 1 && sx2.rx_calls == 1 && sx.rssi_reads > 0 && sx2.rssi_reads > 0);
+        now_us += 200000u;
+        sx2.rssi = -40; // radio 2's channel busy
+        int32_t credit_f1 = r.credit_us[r.find_slot(F1, millis32())];
+        bool held = !r.TxGoBoth(F1, F2);
+        r.time_ok(r.find_slot(F1, millis32()), REGULATORY_RULE_PSA, 0, millis32()); // refills to now, books nothing
+        bool f1_unbooked = (r.credit_us[r.find_slot(F1, millis32())] >= credit_f1);
+        check("two radios: both listen, a busy radio 2 holds both, radio 1 books nothing", first && two_listened && held && f1_unbooked);
+    }
+    {   // dual band: the 2.4 GHz radio listens by its own rule
+        tRegulatory r; eu868(); Config.Sx2.FrequencyBand = SX_FHSS_FREQUENCY_BAND_2P4_GHZ; r.Init();
+        r.TxGoBoth(F1, 2440000);
+        now_us += 100000000u;
+        sx2.power = 20; sx2.rssi = -71;
+        bool busy = !r.TxGoBoth(F1, 2440000);
+        sx2.rssi = -90;
+        bool clear = r.TxGoBoth(F1, 2440000);
+        check("dual band: radio 2 at 2.4 GHz listens with its own threshold", busy && clear && r.CcaNeeded(ANTENNA_2, 2440000));
     }
     printf("%s\n", fails ? "FAILED" : "all passed");
     return fails ? 1 : 0;
