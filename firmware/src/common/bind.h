@@ -111,7 +111,10 @@ void tBindBase::Init(void)
     memcpy(&TxSignature, BIND_SIGNATURE_TX_STR, 8);
     memcpy(&RxSignature, BIND_SIGNATURE_RX_STR, 8);
 
-    auto_bind_tmo_ms = 1000 * RX_BIND_MODE_AFTER_POWERUP_TIME_SEC;
+    // after the power up only: a restart of the controller (Mode = auto, a store) is none, and a link disarms it
+    static bool powered_up = true;
+    auto_bind_tmo_ms = (powered_up) ? 1000 * RX_BIND_MODE_AFTER_POWERUP_TIME_SEC : 0;
+    powered_up = false;
 
     mode_mask = 0;
 }

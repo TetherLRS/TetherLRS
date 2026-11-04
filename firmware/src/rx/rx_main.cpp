@@ -1107,6 +1107,7 @@ dbg.puts(s8toBCD_s(stats.last_rssi2));*/
                 if (connect_sync_cnt >= connect_sync_cnt_max && crypto.ValidKeys()) { // can't connect if crypto doesn't allow
                     connect_state = CONNECT_STATE_CONNECTED;
                     connect_occured_once = true;
+                    bind.auto_bind_tmo_ms = 0; // the bind after power up is for a receiver that never linked
                 }
                 break;
             }
