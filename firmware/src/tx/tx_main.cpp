@@ -309,6 +309,8 @@ void init_hw(void)
 
 volatile uint32_t irq_status;
 volatile uint32_t irq2_status;
+volatile bool rx_foreign; // a frame of another link: the radio stands by, while more replies may still come
+volatile bool rx2_foreign;
 
 IRQHANDLER(
 void SX_DIO_EXTI_IRQHandler(void)
@@ -323,7 +325,7 @@ void SX_DIO_EXTI_IRQHandler(void)
         } else {
             uint16_t sync_word;
             sx.ReadBuffer(0, (uint8_t*)&sync_word, 2); // rxStartBufferPointer is always 0, so no need for sx.GetRxBufferStatus()
-            if (sync_word != Config.FrameSyncWord) irq_status = 0; // not for us, so ignore it
+            if (sync_word != Config.FrameSyncWord) { irq_status = 0; rx_foreign = true; } // not for us, so ignore it
         }
     }
 })
@@ -341,7 +343,7 @@ void SX2_DIO_EXTI_IRQHandler(void)
         } else {
             uint16_t sync_word;
             sx2.ReadBuffer(0, (uint8_t*)&sync_word, 2);
-            if (sync_word != Config.FrameSyncWord) irq2_status = 0;
+            if (sync_word != Config.FrameSyncWord) { irq2_status = 0; rx2_foreign = true; }
         }
     }
 })
@@ -1535,6 +1537,10 @@ INITCONTROLLER_END
     }//end of switch(link_state)
 
 IF_SX(
+    if (rx_foreign) { // several receivers: listen again for the replies still to come, as after one of them
+        rx_foreign = false;
+        if (link_state == LINK_STATE_RECEIVE_WAIT && Config.RxCount > 1) sx.SetToRx();
+    }
     if (irq_status) {
         if (link_state == LINK_STATE_TRANSMIT_WAIT) {
             if (irq_status & SX_IRQ_TX_DONE) {
@@ -1571,6 +1577,10 @@ IF_SX(
     }//end of if(irq_status)
 );
 IF_SX2(
+    if (rx2_foreign) {
+        rx2_foreign = false;
+        if (link_state == LINK_STATE_RECEIVE_WAIT && Config.RxCount > 1) sx2.SetToRx();
+    }
     if (irq2_status) {
         if (link_state == LINK_STATE_TRANSMIT_WAIT) {
             if (irq2_status & SX2_IRQ_TX_DONE) {
