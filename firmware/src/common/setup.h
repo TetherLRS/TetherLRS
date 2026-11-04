@@ -15,6 +15,7 @@
 #include "setup_types.h"
 #include "hal/hal.h"
 #include "auto_ladder.h"
+#include "thirdparty/monocypher/src/monocypher.h"
 
 
 tSetupMetaData SetupMetaData;
@@ -1346,9 +1347,26 @@ uint64_t random = UINT64_MAX;
 
 #if defined DEVICE_IS_TRANSMITTER && \
     (defined STM32G4 || defined STM32WL || defined ESP32) // trng is available, note, must match Privacy_allowed_mask
-    // trng_get32() can return UINT32_MAX, so give it few chances, but terminate
-    for (uint8_t i = 0; i < 4; i++) {
-        if (random == UINT64_MAX) random = ((uint64_t)trng_get32() << 32) + trng_get32();
+    // the TRNG gives a seed once and BLAKE2b(seed, counter) the randoms: the ESP32 harvests only a small pool at
+    // power up, and every connect of a receiver slot draws one. No seed (no TRNG): UINT64_MAX, as before
+    static uint8_t drbg[32 + 8]; // seed, counter
+    static bool seeded = false;
+    if (!seeded) {
+        seeded = true;
+        for (uint8_t i = 0; i < 8; i++) {
+            uint32_t r = UINT32_MAX;
+            for (uint8_t k = 0; k < 4 && r == UINT32_MAX; k++) r = trng_get32(); // it can return UINT32_MAX
+            if (r == UINT32_MAX) seeded = false;
+            memcpy(&drbg[4 * i], &r, 4);
+        }
+        if (!seeded) memset(drbg, 0, sizeof(drbg)); // and it is tried again at the next draw
+    }
+    for (uint8_t i = 0; seeded && i < 4 && random == UINT64_MAX; i++) {
+        uint64_t counter;
+        memcpy(&counter, &drbg[32], 8);
+        counter++;
+        memcpy(&drbg[32], &counter, 8);
+        crypto_blake2b((uint8_t*)&random, 8, drbg, sizeof(drbg));
     }
 #endif
     return random;
