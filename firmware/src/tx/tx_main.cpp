@@ -372,6 +372,9 @@ typedef struct {
     char device_name[20+1];
     uint32_t firmware_version;
     tStatsLQ lq; // its valid frames
+    tStatsLQ lq_serial; // its frames with fresh data: the downlink LQ it is told
+    int8_t received_rssi; // what it reports of the Tx's frames: Dyn Power serves the weakest
+    uint8_t received_LQ_serial;
 } tRxSlot;
 
 tRxSlot rxslot[RX_SLOT_NUM];
@@ -480,6 +483,9 @@ void slot_init(uint8_t slot)
     rs->device_name[0] = '\0';
     rs->firmware_version = 0;
     rs->lq.Init(Config.frame_rate_hz);
+    rs->lq_serial.Init(Config.frame_rate_hz);
+    rs->received_rssi = RSSI_INVALID;
+    rs->received_LQ_serial = 100; // nothing reported yet
     rarq[slot].Init();
 }
 
@@ -964,6 +970,10 @@ uint8_t payload_b_len = 0;
 if (!Config.TransmitBoth && (fhss1_curr_i != fhss2_curr_i)) while(1){} // must not happen, catch it
 
     frame_stats.LQ_serial = stats.GetLQ_serial();
+    if (Config.RxCount > 1) { // each receiver its own downlink LQ, as with the other fields of its slot
+        uint8_t lq = rxslot[stats_slot].lq_serial.GetLQ();
+        frame_stats.LQ_serial = (!slot_connected(stats_slot)) ? 0 : (lq) ? lq : 1;
+    }
     frame_stats.rx_silent = (one_way) ? 1 : 0;
 
     if (get_fresh_payload) {
@@ -1004,11 +1014,19 @@ if (!Config.TransmitBoth && (fhss1_curr_i != fhss2_curr_i)) while(1){} // must n
 }
 
 
+// what the cycle counted: bonded lanes are one receiver's, and the stats are the selected one's
+bool lq_frame_counted, lq_valid_counted;
+uint8_t lq_serial_counted; // a bit per receiver
+
+
 void process_received_frame(uint8_t slot, bool do_payload, tRxFrame* const frame)
 {
     bool accept_payload = rarq[slot].AcceptPayload();
 
     rxslot[slot].ack = frame->status.ack;
+    tRxSlot* rs = &rxslot[(Config.Bonded) ? 0 : slot];
+    rs->received_rssi = rssi_i8_from_u7(frame->status.rssi_u7);
+    rs->received_LQ_serial = frame->status.LQ_serial;
     if (slot == rx_selected) {
         stats.received_antenna = frame->status.antenna;
         stats.received_transmit_antenna = frame->status.transmit_antenna;
@@ -1039,7 +1057,12 @@ void process_received_frame(uint8_t slot, bool do_payload, tRxFrame* const frame
     }
 
     stats.bytes_received.Add(FRAME_DATA_LEN(frame));
-    stats.serial_data_received.Inc();
+    uint8_t rx = (Config.Bonded) ? 0 : slot;
+    if (!(lq_serial_counted & (1 << rx))) {
+        lq_serial_counted |= (1 << rx);
+        rxslot[rx].lq_serial.Inc();
+        if (rx == rx_selected) stats.serial_data_received.Inc();
+    }
 }
 
 
@@ -1178,6 +1201,8 @@ tRxFrame* frame = &rxFrames[slot];
         msp.FrameLost();
     }
 
+    bool selected = (((Config.Bonded) ? 0 : slot) == rx_selected); // bonded lanes are one receiver's
+
     if (rx_status > RX_STATUS_INVALID && decrypt_ok) { // = RX_STATUS_VALID
 
         bool do_payload = true; // has no rc data, so do_payload is always
@@ -1185,7 +1210,8 @@ tRxFrame* frame = &rxFrames[slot];
         process_received_frame(slot, do_payload, frame);
 
         rxslot[slot].lq.Inc();
-        if (slot == rx_selected) stats.doValidFrameReceived(); // counts both rx and cmd frames, but cmd frames are rare, so no worry
+        // counts both rx and cmd frames, but cmd frames are rare, so no worry
+        if (selected && !lq_valid_counted) { stats.doValidFrameReceived(); lq_valid_counted = true; }
 
     } else { // RX_STATUS_INVALID or !decrypt_ok
     }
@@ -1196,9 +1222,10 @@ tRxFrame* frame = &rxFrames[slot];
         // and its signal: the stats keep the last frame heard, which with several receivers can be another one's
         if (antenna == ANTENNA_1) { stats.last_rssi1 = rxslot[slot].rssi; stats.last_snr1 = rxslot[slot].snr; }
         else { stats.last_rssi2 = rxslot[slot].rssi; stats.last_snr2 = rxslot[slot].snr; }
-
-        // we count all received frames
+    }
+    if (selected && !lq_frame_counted) { // we count all received frames
         stats.doFrameReceived();
+        lq_frame_counted = true;
     }
 
     return decrypt_ok;
@@ -1561,6 +1588,8 @@ IF_SX2(
         sx2.SetToIdle();
 
         bool valid_frame_received = false; // from any receiver
+        lq_frame_counted = lq_valid_counted = false;
+        lq_serial_counted = 0;
 
         for (uint8_t s = 0; s < link_frames(); s++) {
             tRxSlot* rs = &rxslot[s];
@@ -1651,14 +1680,24 @@ IF_SX2(
         // the configured power, or less with Dyn Power; binding keeps its lowest power
         if (!bind.IsInBind()) {
             rfpower.Set(Setup.Tx[Config.ConfigId].Power);
-            rfpower.Dynamic(Setup.Common[Config.ConfigId].DynPower, connected(), stats.received_rssi, stats.received_LQ_serial,
-                            sx.ReceiverSensitivity_dbm());
+            int8_t rssi = stats.received_rssi;
+            uint8_t lq = stats.received_LQ_serial;
+            if (Config.RxCount > 1) { // the weakest connected receiver decides: the power has to reach every one
+                rssi = RSSI_INVALID;
+                lq = 100;
+                for (uint8_t s = 0; s < Config.RxCount; s++) {
+                    if (!slot_connected(s)) continue;
+                    if (rxslot[s].received_rssi < rssi) rssi = rxslot[s].received_rssi;
+                    if (rxslot[s].received_LQ_serial < lq) lq = rxslot[s].received_LQ_serial;
+                }
+            }
+            rfpower.Dynamic(Setup.Common[Config.ConfigId].DynPower, connected(), rssi, lq, sx.ReceiverSensitivity_dbm());
         }
 
         DECc(tick_1hz_commensurate, Config.frame_rate_hz);
         if (!tick_1hz_commensurate) {
             stats.Update1Hz();
-            for (uint8_t s = 0; s < link_frames(); s++) rxslot[s].lq.Update1Hz();
+            for (uint8_t s = 0; s < link_frames(); s++) { rxslot[s].lq.Update1Hz(); rxslot[s].lq_serial.Update1Hz(); }
             bond_update_1hz();
             mode_auto_update_1hz();
         }

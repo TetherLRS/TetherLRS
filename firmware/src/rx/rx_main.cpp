@@ -394,6 +394,10 @@ void pack_rxcmdframe(tRxFrame* const frame, tFrameStats* const frame_stats)
 }
 
 
+// bonded lanes bring two frames a cycle: the LQ counts the cycle once
+bool lq_frame_counted, lq_valid_counted, lq_serial_counted;
+
+
 //-- normal Tx, Rx frames handling
 // transmit
 //   -> do_transmit(antenna)
@@ -568,7 +572,7 @@ void process_received_frame(tTxFrame* const frame, uint8_t lane)
     }
 
     stats.bytes_received.Add(FRAME_DATA_LEN(frame));
-    stats.serial_data_received.Inc();
+    if (!lq_serial_counted) { stats.serial_data_received.Inc(); lq_serial_counted = true; }
 }
 
 
@@ -690,7 +694,8 @@ tTxFrame* frame;
 
         process_received_frame(frame, lane);
 
-        stats.doValidFrameReceived(); // counts both rx and cmd frames, but cmd frames are rare, so no worry
+        // counts both rx and cmd frames, but cmd frames are rare, so no worry
+        if (!lq_valid_counted) { stats.doValidFrameReceived(); lq_valid_counted = true; }
 
     } else { // RX_STATUS_INVALID or !decrypt_ok
     }
@@ -699,7 +704,7 @@ tTxFrame* frame;
     stats.last_antenna = antenna;
 
     // we count all received frames
-    stats.doFrameReceived();
+    if (!lq_frame_counted) { stats.doFrameReceived(); lq_frame_counted = true; }
 
     return decrypt_ok;
 }
@@ -1002,6 +1007,7 @@ dbg.puts(s8toBCD_s(stats.last_rssi2));*/
 
         // bonded radios: each antenna is a lane, unless the Tx's frames say one went out on both: the better copy then
         bool lanes = false;
+        lq_frame_counted = lq_valid_counted = lq_serial_counted = false;
         if (Config.Bonded) {
             bool single = bond_single_rx;
             if (link_rx1_status == RX_STATUS_VALID) single = (txFrame.payload[0] & LINK_HDR_BOND_SINGLE) != 0;

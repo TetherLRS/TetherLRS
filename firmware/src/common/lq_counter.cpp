@@ -34,6 +34,7 @@ void tStatsLQ::Update1Hz(void)
 
     counts_per_sec = count - count_last;
     LQ = (counts_per_sec * 100) / frame_rate_hz;
+    if (LQ > 100) LQ = 100; // a safety net: the 7 bit status fields wrap above 127
 
     count_last = count;
 }
