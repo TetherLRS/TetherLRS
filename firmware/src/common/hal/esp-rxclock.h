@@ -147,9 +147,9 @@ void IRAM_ATTR timer1_isr() { event_callback(); }
 class tRxClock
 {
   public:
-    void Init(uint16_t period_ms, uint16_t shift_us = 1000);
+    void Init(uint16_t period_ms, uint32_t shift_us = 1000);
     void SetPeriod(uint16_t period_ms);
-    void SetShift(uint16_t shift_us);
+    void SetShift(uint32_t shift_us);
     void Reset(void);
 
   private:
@@ -157,7 +157,7 @@ class tRxClock
 };
 
 
-void tRxClock::Init(uint16_t period_ms, uint16_t shift_us)
+void tRxClock::Init(uint16_t period_ms, uint32_t shift_us)
 {
     CLOCK_PERIOD_US = period_ms * 1000;
     CLOCK_SHIFT_US = shift_us;
@@ -195,7 +195,7 @@ IRAM_ATTR void tRxClock::SetPeriod(uint16_t period_ms)
 }
 
 
-IRAM_ATTR void tRxClock::SetShift(uint16_t shift_us)
+IRAM_ATTR void tRxClock::SetShift(uint32_t shift_us)
 {
     ENTER_CRITICAL_API();
     CLOCK_SHIFT_US = shift_us;

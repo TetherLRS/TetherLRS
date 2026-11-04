@@ -53,9 +53,9 @@ void CLOCK_IRQHandler(void)
 class tRxClock
 {
   public:
-    void Init(uint16_t period_ms, uint16_t shift_us = 1000);
+    void Init(uint16_t period_ms, uint32_t shift_us = 1000);
     void SetPeriod(uint16_t period_ms);
-    void SetShift(uint16_t shift_us);
+    void SetShift(uint32_t shift_us);
     void Reset(void);
 
     void init_isr_off(void);
@@ -63,7 +63,7 @@ class tRxClock
 };
 
 
-void tRxClock::Init(uint16_t period_ms, uint16_t shift_us)
+void tRxClock::Init(uint16_t period_ms, uint32_t shift_us)
 {
     CLOCK_PERIOD_10US = period_ms * 100; // frame rate in units of 10us
     CLOCK_SHIFT_10US = shift_us / 10;
@@ -80,7 +80,7 @@ void tRxClock::SetPeriod(uint16_t period_ms)
 }
 
 
-void tRxClock::SetShift(uint16_t shift_us)
+void tRxClock::SetShift(uint32_t shift_us)
 {
     CLOCK_SHIFT_10US = shift_us / 10;
 }

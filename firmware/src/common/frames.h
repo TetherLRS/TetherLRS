@@ -189,6 +189,10 @@ uint8_t check_txframe(tTxFrame* const frame)
     if (FRAME_TYPE_IS_ENCRYPTABLE(frame->status.frame_type) && FRAME_DATA_LEN(frame) < crypto.NonceLen()) {
         return CHECK_ERROR_HEADER;
     }
+    // multipoint: another receiver's answer, heard after the Tx's frame was missed, has its sync word, CRC and length
+    if (frame->status.frame_type == FRAME_TYPE_CMD && ((tCmdFrameHeader*)FRAME_DATA(frame))->cmd == FRAME_CMD_RX_SETUPDATA) {
+        return CHECK_ERROR_HEADER;
+    }
 
     if (!frame_crc_ok(frame, Config.FrameLenTx)) return CHECK_ERROR_CRC;
 

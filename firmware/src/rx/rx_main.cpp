@@ -171,10 +171,10 @@ tRxDroneCan dronecan;
 // Init
 //-------------------------------------------------------
 
-// the receiver answers 1 ms after the frame, and later by its slot when there are several
-uint16_t rxclock_shift_us(void)
+// the receiver answers 1 ms after the frame, and later by its slot when there are several (up to about 200 ms)
+uint32_t rxclock_shift_us(void)
 {
-    uint16_t shift_us = 1000;
+    uint32_t shift_us = 1000;
     if (Config.RxSlot < Config.RxCount) shift_us += Config.RxSlot * Config.SlotPeriod_ms * 1000;
     return shift_us;
 }
