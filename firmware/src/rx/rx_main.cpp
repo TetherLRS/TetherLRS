@@ -359,7 +359,10 @@ tCmdFrameHeader* head = (tCmdFrameHeader*)FRAME_DATA(frame);
     case FRAME_CMD_GET_RX_SETUPDATA_STARTUP:
         if (!for_me) break; // the randoms in it are this slot's
         // request to send setup data, trigger sending RX_SETUPDATA in next transmission
-        crypto.SetSessionKeysFromEncryptedBuf(FRAME_DATA(frame) + 1);
+        if (crypto.SetSessionKeysFromEncryptedBuf(FRAME_DATA(frame) + 1)) { // the frames waiting to go again are sealed
+            tarq[0].Disconnected();                                          // with the old key: new ones go instead
+            tarq[1].Disconnected();
+        }
         Config.SessionRandom = crypto.SessionRandom(); // only for reporting
         link_task_set(LINK_TASK_RX_SEND_RX_SETUPDATA);
         break;

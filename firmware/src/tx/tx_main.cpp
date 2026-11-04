@@ -1751,6 +1751,9 @@ IF_SX2(
             for (uint8_t s = 0; s < link_frames(); s++) { rxslot[s].lq.Update1Hz(); rxslot[s].lq_serial.Update1Hz(); }
             bond_update_1hz();
             mode_auto_update_1hz();
+            // before the 3 byte nonce wraps: a restart draws a new key, which the receivers take at their STARTUP;
+            // theirs change then too, and count no more frames than the Tx
+            if (crypto.NonceRunsOut()) doLinkRestart = true;
         }
         stats.Next();
         if (!connected()) stats.Clear();

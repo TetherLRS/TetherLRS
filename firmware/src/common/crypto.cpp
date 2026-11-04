@@ -183,7 +183,7 @@ uint8_t randoms[16];
 
 // only Rx: called upon receive of a FRAME_CMD_GET_RX_SETUPDATA_STARTUP frame; the randoms are taken when they
 // changed, so a restarted Tx re-keys the receiver and a reconnect brings the receiver a fresh key of its own
-void tCrypto::SetSessionKeysFromEncryptedBuf(uint8_t* const buf36)
+bool tCrypto::SetSessionKeysFromEncryptedBuf(uint8_t* const buf36)
 {
 uint8_t nonce[12];
 uint8_t poly1305_key[32];
@@ -196,18 +196,27 @@ uint64_t group_random, own_random;
 
     crypto_chacha20_ietf(poly1305_key, NULL, 32, _static_key, nonce, 0);
     crypto_poly1305(mac, buf36, 28, poly1305_key); // mac over the randoms & nonce
-    for (uint8_t i = 0; i < 8; i++) { if (buf36[28 + i] != mac[i]) return; } // authentication failed
+    for (uint8_t i = 0; i < 8; i++) { if (buf36[28 + i] != mac[i]) return false; } // authentication failed
 
     crypto_chacha20_ietf(randoms, buf36, 16, _static_key, nonce, 1);
     memcpy(&group_random, randoms, 8);
     memcpy(&own_random, randoms + 8, 8);
 
     if (!_key_rx_set[0] || group_random != _receive_random[0]) SetReceiveKey(0, group_random);
-    if (!_key_tx_set || own_random != _transmit_random) SetTransmitKey(own_random);
+    if (_key_tx_set && own_random == _transmit_random) return false; // a repeat: same key, the counter goes on
+    SetTransmitKey(own_random);
+    return true;
 }
 
 
 //-- API miscellaneous
+
+bool tCrypto::NonceRunsOut(void)
+{
+    if (!_nonce_len || _nonce_len >= 4) return false; // 4 bytes last years
+    return (_nonce_u32 >= (1UL << (8 * _nonce_len)) - (1UL << 20)); // over an hour ahead, at any frame rate
+}
+
 
 uint16_t tCrypto::NonceLen(void)
 {

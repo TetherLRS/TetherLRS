@@ -57,13 +57,14 @@ class tCrypto
     void SetTransmitKey(uint64_t random); // the key of the frames this side sends
     void SetReceiveKey(uint8_t slot, uint64_t random); // the key of the frames received from that slot, the Rx uses slot 0
     void EncryptSessionRandoms(uint8_t* const buf36, uint8_t slot, uint64_t startup_random, uint64_t bind_random); // Tx only
-    void SetSessionKeysFromEncryptedBuf(uint8_t* const buf36); // Rx only
+    bool SetSessionKeysFromEncryptedBuf(uint8_t* const buf36); // Rx only; true when the transmit key changed
 
     bool ValidKeys(uint8_t slot = 0);
 
     uint8_t PrivacyLevel(void) { return _privacy_level; }
     bool IsAuthenticated(void) { return (_privacy_level >= 2); }
     uint16_t NonceLen(void);
+    bool NonceRunsOut(void); // a 3 byte nonce nears its wrap under this transmit key, which has to change
     void Encrypt(void* const header, uint8_t header_len, void* const data, uint8_t len);
     void RecalculateMac(void* const header, uint8_t header_len, void* const data, uint8_t len);
     bool Decrypt(uint8_t slot, void* const header, uint8_t header_len, void* const data, uint8_t len);

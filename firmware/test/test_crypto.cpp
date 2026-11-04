@@ -7,7 +7,9 @@
 // exchange, the link key without an air bind. Run with test/run_tests.sh.
 #include <cstdio>
 #include <cstring>
+#define private public // the nonce counter, set close to its end
 #include "crypto.h"
+#undef private
 #include "crypto.cpp"
 extern "C" {
 #include "thirdparty/monocypher/src/monocypher.c"
@@ -44,8 +46,29 @@ static bool receive(tCrypto& to, uint8_t slot, tFrame f, const char* text)
     return f.len == strlen(text) && memcmp(f.payload, text, f.len) == 0;
 }
 
+// the 3 byte nonce of levels 1 and 2 wraps after 2^24 frames: the Tx restarts with a new key 2^20 frames before
+static void nonce_runs_out(void)
+{
+    for (uint8_t level = 1; level <= 3; level++) {
+        tCrypto c;
+        c.Init(tCrypto::TX, phrase, tx_uid, 1, level, no_key);
+        c.SetTransmitKey(0x0123456789ABCDEFULL);
+        c._nonce_u32 = (1UL << 24) - (1UL << 20) - 1; // the frames sent so far under this key
+        bool before = c.NonceRunsOut();
+        tFrame f;
+        send(c, f, "one more");
+        char name[96];
+        snprintf(name, sizeof(name), "level %u: the nonce runs out %s", level, (level < 3) ? "2^20 frames before its wrap" : "never, it has 4 bytes");
+        check(name, !before && c.NonceRunsOut() == (level < 3));
+        c.SetTransmitKey(0x1111222233334444ULL);
+        check("  a new key starts the count over", !c.NonceRunsOut());
+    }
+}
+
+
 int main(void)
 {
+    nonce_runs_out();
     tCrypto tx, rx, rx2;
     uint8_t buf[CRYPTO_STARTUP_RANDOM_BUF_LEN];
     tFrame f;
@@ -68,10 +91,9 @@ int main(void)
         uint8_t bad[CRYPTO_STARTUP_RANDOM_BUF_LEN];
         memcpy(bad, buf, sizeof(bad));
         bad[3] ^= 0x01;
-        rx.SetSessionKeysFromEncryptedBuf(bad);
-        check("a tampered STARTUP is refused", rx.SessionRandom() == 0);
-        rx.SetSessionKeysFromEncryptedBuf(buf);
-        check("the STARTUP gives the receiver the group random", rx.SessionRandom() == 0xAAAA000011112222ULL);
+        check("a tampered STARTUP is refused", !rx.SetSessionKeysFromEncryptedBuf(bad) && rx.SessionRandom() == 0);
+        check("the STARTUP gives the receiver the group random, and a new transmit key",
+              rx.SetSessionKeysFromEncryptedBuf(buf) && rx.SessionRandom() == 0xAAAA000011112222ULL);
 
         send(tx, f, "down");
         check("the receiver reads the Tx with the group key", receive(rx, 0, f, "down"));
@@ -96,9 +118,9 @@ int main(void)
         send(rx, f, "up after restart");
         check("a restarted receiver comes back under a new key", receive(tx, 0, f, "up after restart"));
         tFrame same = f;
-        rx.SetSessionKeysFromEncryptedBuf(buf); // the Tx repeats the command until answered
+        bool changed = rx.SetSessionKeysFromEncryptedBuf(buf); // the Tx repeats the command until answered
         send(rx, f, "up after restart");
-        check("  the repeated STARTUP changes nothing", receive(tx, 0, f, "up after restart") && memcmp(same.payload, f.payload, f.len) != 0);
+        check("  the repeated STARTUP changes nothing", !changed && receive(tx, 0, f, "up after restart") && memcmp(same.payload, f.payload, f.len) != 0);
 
         // the Tx restarts: a new group random, the receiver takes it
         tx.Init(tCrypto::TX, phrase, tx_uid, 0x1122334455667788ULL, level, no_key);
