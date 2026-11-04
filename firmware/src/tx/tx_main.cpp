@@ -405,6 +405,7 @@ bool bond_single; // the Tx's choice, in every frame's link header; the receiver
 uint8_t bond_cnt; // seconds the condition for a switch has held
 uint8_t bond_connected_s; // seconds since the connect, the lanes are judged after a few
 tStatsLQ ant_lq[2]; // valid frames on each antenna: a lane's health, also when one frame goes out on both
+tStatsLQ lane_ack_lq[2]; // with lanes, cycles whose payload the receiver acked: the way there too, which ant_lq misses
 tBondReorder bond; // the receiver's lanes, put out in order
 
 bool txFrameB_valid; // lane B's frame holds a payload it may send again
@@ -431,6 +432,8 @@ void bond_init(void)
     bond_connected_s = 0;
     ant_lq[0].Init(Config.frame_rate_hz);
     ant_lq[1].Init(Config.frame_rate_hz);
+    lane_ack_lq[0].Init(Config.frame_rate_hz);
+    lane_ack_lq[1].Init(Config.frame_rate_hz);
     bond.Init(bond_emit, FRAME_PAYLOAD_MAX);
 }
 
@@ -439,6 +442,8 @@ void bond_update_1hz(void)
 {
     ant_lq[0].Update1Hz();
     ant_lq[1].Update1Hz();
+    lane_ack_lq[0].Update1Hz();
+    lane_ack_lq[1].Update1Hz();
     if (!Config.Bonded) return;
 
     if (!slot_connected(0)) { // a connect starts with the lanes
@@ -451,6 +456,9 @@ void bond_update_1hz(void)
     if (bond_connected_s < BOND_GRACE_S) { bond_connected_s++; return; }
 
     uint8_t lq = (ant_lq[0].GetLQ() < ant_lq[1].GetLQ()) ? ant_lq[0].GetLQ() : ant_lq[1].GetLQ();
+    if (!bond_single) { // a lane the receiver does not get, the way there, shows in its acks
+        for (uint8_t l = 0; l < 2; l++) if (lane_ack_lq[l].GetLQ() < lq) lq = lane_ack_lq[l].GetLQ();
+    }
     if (!bond_single) {
         if (lq < BOND_LANE_LQ_MIN) { if (++bond_cnt >= BOND_SINGLE_AFTER_S) { bond_single = true; bond_cnt = 0; } } else bond_cnt = 0;
     } else {
@@ -923,6 +931,11 @@ uint8_t payload_b_len = 0;
     if (one_way) { tarq[0].SetRetryCnt(0); tarq[1].SetRetryCnt(0); }
 
     // new data only when every lane is free, so the receiver can keep the lanes in order
+    if (lanes) { // each lane's payload in flight, acked or not: a lane's health both ways
+        if (tarq[0].Acked()) lane_ack_lq[0].Inc();
+        if (tarq[1].Acked()) lane_ack_lq[1].Inc();
+    }
+
     bool get_fresh_payload;
     if (tx_frame_held) { // the regulator held the last frame back: it goes now as it was, using no retry
         get_fresh_payload = false;
