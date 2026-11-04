@@ -1161,7 +1161,8 @@ tRxFrame* frame = &rxFrames[slot];
     // check decrypt_rxframe()
     bool decrypt_ok = false;
     if (rx_status > RX_STATUS_INVALID) {
-        decrypt_ok = decrypt_rxframe(frame, slot); // don't do for INVALID, payload is nonsense
+        // don't do for INVALID, payload is nonsense; bonded lanes are one receiver, whose key is slot 0's
+        decrypt_ok = decrypt_rxframe(frame, (Config.Bonded) ? 0 : slot);
     }
 
     // handle receive ARQ, must come before process_received_frame()
