@@ -408,6 +408,7 @@ tStatsLQ ant_lq[2]; // valid frames on each antenna: a lane's health, also when 
 tBondReorder bond; // the receiver's lanes, put out in order
 
 bool txFrameB_valid; // lane B's frame holds a payload it may send again
+bool tx_frame_held; // the regulator did not let the frame out
 
 void bond_emit(uint8_t* const data, uint8_t len) { sx_serial.putbuf(data, len); }
 
@@ -424,6 +425,7 @@ void bond_lanes_resume(void)
 void bond_init(void)
 {
     txFrameB_valid = false;
+    tx_frame_held = false;
     bond_single = false;
     bond_cnt = 0;
     bond_connected_s = 0;
@@ -922,13 +924,16 @@ uint8_t payload_b_len = 0;
 
     // new data only when every lane is free, so the receiver can keep the lanes in order
     bool get_fresh_payload;
-    if (lanes) {
+    if (tx_frame_held) { // the regulator held the last frame back: it goes now as it was, using no retry
+        get_fresh_payload = false;
+    } else if (lanes) {
         get_fresh_payload = tarq[0].WouldAdvance() && tarq[1].WouldAdvance();
         tarq[0].Settle(get_fresh_payload);
         tarq[1].Settle(get_fresh_payload);
     } else {
         get_fresh_payload = tarq[0].GetFreshPayload();
     }
+    tx_frame_held = false;
 
     if (get_fresh_payload) {
         if (transmit_frame_type == TRANSMIT_FRAME_TYPE_NORMAL) {
@@ -1511,7 +1516,8 @@ INITCONTROLLER_END
         sx2.SetRfFrequency(fhss.GetCurrFreq2());
         bool go = regulatory.TxGo(tdiversity.Antenna(), fhss.GetCurrFreq());
         if (go && Config.TransmitBoth && !Config.IsDualBand) go = regulatory.TxGo(ANTENNA_2, fhss.GetCurrFreq2()); // the 2nd channel books its time too
-        if (!go) { // not this frame, the Rx sees it as lost and the ARQ sends it again
+        if (!go) { // not this frame: the next cycle sends it, one way too, where the ARQ never sends again
+            tx_frame_held = true;
             link_state = LINK_STATE_RECEIVE;
             break;
         }
@@ -1630,6 +1636,12 @@ IF_SX2(
 
         for (uint8_t s = 0; s < link_frames(); s++) {
             tRxSlot* rs = &rxslot[s];
+            if (Config.Bonded && s == BOND_LANE_B && bond_single) { // one frame on both: a lane B frame is an old one
+                rs->rx_status = RX_STATUS_NONE;
+                rs->decrypt_ok = false;
+                rarq[s].Disconnected();
+                continue;
+            }
             bool valid = false;
             if (rs->rx_status > RX_STATUS_NONE) { // frame received
                 valid = handle_receive(s); // false when it could not be read: counts as invalid

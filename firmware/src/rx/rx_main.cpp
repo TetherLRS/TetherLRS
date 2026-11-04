@@ -536,18 +536,8 @@ void process_received_frame(tTxFrame* const frame, uint8_t lane)
     stats.received_LQ_serial = frame->status.LQ_serial;
     rx_silent = frame->status.rx_silent;
 
-    if (Config.Bonded) { // the Tx says how its frames go: a lane each, or one on both; lane B starts afresh on a change
-        bool single = (FRAME_LINK_HDR(frame) & LINK_HDR_BOND_SINGLE) != 0;
-        if (single != bond_single_rx) {
-            bond_single_rx = single;
-            tarq[1].Disconnected();
-            rarq[1].Disconnected();
-            tarq[1].payload_seq_no = tarq[0].payload_seq_no; // the lanes' payloads pair by seq no
-            rxFrameB_valid = false; // and lane B has no old payload to send again
-        }
-    }
-
-    bool accept_payload = rarq[lane].AcceptPayload(); // a payload sent again is one we already have
+    // a payload sent again is one we already have; one way the Tx sends none again, so every one is new
+    bool accept_payload = rarq[lane].AcceptPayload() || rx_silent;
 
     // handle cmd frame
     if (frame->status.frame_type == FRAME_TYPE_CMD || frame->status.frame_type == FRAME_TYPE_CMD_ENCRYPTED) {
@@ -678,14 +668,27 @@ tTxFrame* frame;
         tarq[lane].FrameMissed();
     }
 
+    // bonded: the Tx says how its frames go, a lane each or one on both; on a change lane B starts afresh, before this
+    // frame feeds the receive ARQ, else lane B's payload sent again would go out twice
+    if (Config.Bonded && rx_status == RX_STATUS_VALID && decrypt_ok) {
+        bool single = (FRAME_LINK_HDR(frame) & LINK_HDR_BOND_SINGLE) != 0;
+        if (single != bond_single_rx) {
+            bond_single_rx = single;
+            tarq[1].Disconnected();
+            rarq[1].Disconnected();
+            tarq[1].payload_seq_no = tarq[0].payload_seq_no; // the lanes' payloads pair by seq no
+            rxFrameB_valid = false; // and lane B has no old payload to send again
+        }
+    }
+
     // handle receive ARQ, must come before process_received_frame()
     if (rx_status == RX_STATUS_VALID && decrypt_ok) { // we have valid information on seq_no
         rarq[lane].Received(frame->status.seq_no);
     } else {
         rarq[lane].FrameMissed();
     }
-    // check this before received data may be passed to parsers
-    if (rarq[lane].FrameLost()) {
+    // check this before received data may be passed to parsers; one way, any frame missed is data lost
+    if (rarq[lane].FrameLost() || (rx_silent && !(rx_status == RX_STATUS_VALID && decrypt_ok))) {
         mavlink.FrameLost();
         msp.FrameLost();
     }
@@ -715,6 +718,10 @@ void handle_receive_none(uint8_t lane) // called if RX_STATUS_NONE
 {
     tarq[lane].FrameMissed();
     rarq[lane].FrameMissed();
+    if (rx_silent) { // one way: the data is lost, the Tx does not send it again
+        mavlink.FrameLost();
+        msp.FrameLost();
+    }
 }
 
 
