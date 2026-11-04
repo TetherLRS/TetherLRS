@@ -523,6 +523,7 @@ uint8_t link_task_slot; // the receiver the command is for
 uint8_t transmit_frame_type;
 uint16_t link_task_delay_ms;
 bool link_task_sent; // the command went out at least once
+uint8_t link_task_answers; // multipoint: the receivers that answered a change that goes to all of them
 bool doParamsStore;
 uint8_t link_startup_cnt; // cycles since the last setup request to a receiver that is not connected
 bool doLinkRestart; // Mode = auto: the link restarts with mode_auto_current
@@ -566,6 +567,7 @@ bool link_task_set(uint8_t task, uint8_t slot = 0xFF) // 0xFF: the selected rece
     transmit_frame_type = TRANSMIT_FRAME_TYPE_CMD;
 
     link_task_delay_ms = 0;
+    link_task_answers = 0;
 
     // set a timeout if relevant, or do other things as needed
     switch (link_task) {
@@ -582,6 +584,9 @@ bool link_task_set(uint8_t task, uint8_t slot = 0xFF) // 0xFF: the selected rece
     case LINK_TASK_TX_STORE_RX_PARAMS: // store rx parameters
         link_task_delay_ms = 500; // we set a delay, the actual store is triggered when it expires
         break;
+    case LINK_TASK_TX_SET_RX_PARAMS: // multipoint: every connected receiver answers it, or it ends here
+        if (Config.RxCount > 1) link_task_delay_ms = 5000;
+        break;
     }
 
     return true;
@@ -594,6 +599,23 @@ void link_task_reset(void)
     link_task_delay_ms = 0;
     link_task_sent = false;
     transmit_frame_type = TRANSMIT_FRAME_TYPE_NORMAL;
+}
+
+
+// a change of the link goes to every receiver, and is done once each connected one has answered: a store after it
+// must not find one with the old setup
+bool link_task_to_all(void)
+{
+    return (Config.RxCount > 1 && link_task == LINK_TASK_TX_SET_RX_PARAMS);
+}
+
+
+bool link_task_all_answered(void)
+{
+    for (uint8_t s = 0; s < Config.RxCount; s++) {
+        if (slot_connected(s) && !(link_task_answers & (1 << s))) return false;
+    }
+    return true;
 }
 
 
@@ -687,6 +709,11 @@ tCmdFrameHeader* head = (tCmdFrameHeader*)FRAME_DATA(frame);
                 mode_auto_pending = MODE_AUTO;
                 link_task_reset();
             }
+            break;
+        }
+        if (link_task_to_all()) {
+            link_task_answers |= (1 << slot);
+            if (link_task_all_answered()) link_task_reset();
             break;
         }
         if (link_task_slot == slot) link_task_reset();
@@ -1670,10 +1697,12 @@ IF_SX2(
         // back after it; a link change is given up with it (STORE ends on its own timer, a restart already counting down
         // goes on)
         if (link_task != LINK_TASK_NONE && link_task != LINK_TASK_TX_STORE_RX_PARAMS && link_task_sent &&
-            !slot_connected(link_task_slot) && !link_restart_cnt) {
+            !slot_connected(link_task_slot) && !link_restart_cnt && !link_task_to_all()) {
             if (link_task == LINK_TASK_TX_SET_LINK) mode_auto_pending = MODE_AUTO;
             link_task_reset();
         }
+        // a change to every receiver: also done when the ones still missing went away
+        if (link_task_to_all() && link_task_sent && link_task_all_answered()) link_task_reset();
         link_task_from_queue();
         link_task_pick();
 
