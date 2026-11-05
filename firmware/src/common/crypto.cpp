@@ -80,15 +80,20 @@ void tCrypto::Init(
 
     _static_valid = link_key_set || (tx_random != UINT64_MAX);
 
-    // the keys of a session, with the highest nonce each reached: only a power up forgets them
-    _key_tx_set = false; // nothing to keep of an object not set up before
+    Restart();
+}
+
+
+// the keys used since power up, with the highest nonce each reached: a restart of the controller (a store, a bind)
+// runs Init() in the same process and must not forget them, a replay would find a counter at zero
+tCrypto::tCrypto(void)
+{
+    _key_tx_set = false;
     for (uint8_t i = 0; i < CRYPTO_TX_RING_NUM; i++) {
         _tx_ring_random[i] = 0;
         _tx_ring_nonce[i] = 0;
     }
     _tx_ring_next = 0;
-
-    Restart();
 }
 
 

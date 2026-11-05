@@ -819,9 +819,9 @@ void link_restart(void)
     rxclock.Reset();
     doPostReceive = false;
 
-    sx.StartUp(&Config.Sx); // only a radio not started yet, the link may need it now
-    sx2.StartUp(&Config.Sx2);
-    IF_SX(sx.Configure(&Config.Sx));
+    IF_SX(sx.StartUp(&Config.Sx)); // a radio the link needs now and not started yet: StartUp is a no-op once started
+    IF_SX2(sx2.StartUp(&Config.Sx2));
+    IF_SX(sx.Configure(&Config.Sx)); // from standby, as Configure begins
     IF_SX2(sx2.Configure(&Config.Sx2));
     irq_status = irq2_status = 0;
     link_init();
@@ -1225,6 +1225,9 @@ dbg.puts(s8toBCD_s(stats.last_rssi2));*/
         DECc(tick_1hz_commensurate, Config.frame_rate_hz);
         if (!tick_1hz_commensurate) {
             stats.Update1Hz();
+            // a key resumed after a replay counts on from where it was: before its 3 byte nonce wraps the keys go,
+            // the Tx deals new ones at the reconnect
+            if (crypto.NonceRunsOut()) crypto.Restart();
             // Mode = auto: without a link both ends take turns at the meeting point and where the link went
             if (Config.ModeAuto && !bind.IsInBind()) {
                 if (connected()) {

@@ -247,6 +247,11 @@ class Lr11xxDriverCommon : public Lr11xxDriverBase
 
     void Configure(tSxGlobalConfig* const global_config)
     {
+        // after a reset the chip is here already; a restart of the link comes from FS, and the image calibration
+        // and the packet type want STDBY_RC
+        SetStandby(LR11XX_STDBY_CONFIG_STDBY_RC);
+        delay_us(1000);
+
         // Order from User Manual: SetPacketType, SetModulationParams, SetPacketParams, SetPAConfig, SetTxParams
         SetRxTxFallbackMode(LR11XX_RX_TX_FALLBACK_MODE_FS);
         SetRxBoosted(LR11XX_RX_GAIN_BOOSTED_GAIN);
@@ -271,8 +276,6 @@ class Lr11xxDriverCommon : public Lr11xxDriverBase
             default:
                 while(1){} // protection
         }
-
-        SetStandby(LR11XX_STDBY_CONFIG_STDBY_RC);
 
         if (gconfig->modeIsLora()) {
             SetPacketType(LR11XX_PACKET_TYPE_LORA);

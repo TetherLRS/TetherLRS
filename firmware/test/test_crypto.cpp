@@ -94,6 +94,13 @@ static void replay_no_nonce_reuse(void)
     send(rx, again, "same text");
     check("  nor after a restart of the link", again.len == first.len && memcmp(again.payload, first.payload, first.len) != 0);
 
+    // a restart of the controller (a store, a bind) runs Init() again in the same process: the keys used before it
+    // must not come back at zero either
+    rx.Init(tCrypto::RX, phrase, tx_uid, 0x1122334455667788ULL, 2, no_key);
+    rx.SetTransmitKey(A);
+    send(rx, again, "same text");
+    check("  nor after Init() runs again", again.len == first.len && memcmp(again.payload, first.payload, first.len) != 0);
+
     // a key never seen this session still starts at nonce 1: fresh keys are not held back
     tCrypto rx2;
     rx2.Init(tCrypto::RX, phrase, tx_uid, 0x1122334455667788ULL, 2, no_key);

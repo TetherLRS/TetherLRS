@@ -220,6 +220,11 @@ class Sx126xDriverCommon : public Sx126xDriverBase
     {
         gconfig = global_config;
 
+        // after a reset the chip is here already; a restart of the link comes from FS, and the packet type and the
+        // image calibration want STDBY_RC
+        SetStandby(SX126X_STDBY_CONFIG_STDBY_RC);
+        delay_us(1000);
+
         if (gconfig->modeIsLora()) {
             SetPacketType(SX126X_PACKET_TYPE_LORA);
         } else {

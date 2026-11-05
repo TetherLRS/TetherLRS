@@ -543,6 +543,7 @@ bool doParamsStore;
 uint8_t link_startup_cnt; // cycles since the last setup request to a receiver that is not connected
 bool doLinkRestart; // Mode = auto: the link restarts with mode_auto_current
 uint8_t link_restart_cnt; // the restart waits for this many cycles: the next frame acks the receiver's answer
+bool link_restart_acked; // the receiver's answer was acked: the restart takes the mode it named
 uint8_t mode_auto_up_s, mode_auto_down_s, mode_auto_lost_s, mode_auto_mismatch, mode_auto_task_s;
 uint8_t mode_auto_hold_s = 0; // seconds before the next change; not reset by the restart a change makes
 
@@ -559,6 +560,7 @@ void link_task_init(void)
     doParamsStore = false;
     doLinkRestart = false;
     link_restart_cnt = 0;
+    link_restart_acked = false;
     mode_auto_up_s = mode_auto_down_s = mode_auto_lost_s = mode_auto_mismatch = mode_auto_task_s = 0;
     mode_auto_pending = MODE_AUTO;
 }
@@ -790,7 +792,7 @@ void mode_auto_set(uint8_t band, uint8_t mode)
 // a step's link budget: the power the region allows there, the mode's sensitivity, the band's extra path loss
 int16_t mode_auto_budget(uint8_t band, uint8_t mode)
 {
-    uint8_t idx = region_power_idx_max(Config.Region, band, mode, Setup.Common[Config.ConfigId].CustomPowerMaxDbm);
+    uint8_t idx = region_power_idx_max(Config.Region, band, mode, Config.CustomPowerMaxDbm);
     if (Setup.Tx[Config.ConfigId].Power < idx) idx = Setup.Tx[Config.ConfigId].Power;
     return rfpower_list[idx].dbm - mode_sensitivity_dbm(mode) - band_offset_db(band, band_auto_meeting());
 }
@@ -1423,9 +1425,9 @@ void link_restart(void)
     Config.SessionRandom = setup_new_random();
     Config.StartupRandom = setup_new_random();
 
-    sx.StartUp(&Config.Sx); // only a radio not started yet, the link may need it now
-    sx2.StartUp(&Config.Sx2);
-    IF_SX(sx.Configure(&Config.Sx));
+    IF_SX(sx.StartUp(&Config.Sx)); // a radio the link needs now and not started yet: StartUp is a no-op once started
+    IF_SX2(sx2.StartUp(&Config.Sx2));
+    IF_SX(sx.Configure(&Config.Sx)); // from standby, as Configure begins
     IF_SX2(sx2.Configure(&Config.Sx2));
     irq_status = irq2_status = 0;
     link_init();
@@ -1850,12 +1852,13 @@ IF_SX2(
         // Mode = auto: the link restarts with the mode chosen, nothing stored
         if (link_restart_cnt) {
             link_restart_cnt--;
-            if (!link_restart_cnt) doLinkRestart = true;
+            if (!link_restart_cnt) { doLinkRestart = true; link_restart_acked = true; }
         }
-        // a bind, a store or a command to a receiver take their course first (dropped or answered within cycles);
+        // a bind, a store or a command to a receiver take their course first (dropped or answered within cycles), a
+        // change of the link too until its answer is acked (a re-key must not take a mode the receiver never took);
         // the startup request, which link_task_pick() sets every cycle without a link, is dealt anew by the restart
-        bool link_task_in_flight = (link_task != LINK_TASK_NONE && link_task != LINK_TASK_TX_SET_LINK &&
-                                    link_task != LINK_TASK_TX_GET_RX_SETUPDATA_STARTUP);
+        bool link_task_in_flight = (link_task != LINK_TASK_NONE && link_task != LINK_TASK_TX_GET_RX_SETUPDATA_STARTUP &&
+                                    !(link_task == LINK_TASK_TX_SET_LINK && link_restart_acked));
         if (doLinkRestart && !bind.IsInBind() && !link_task_in_flight) {
             if (mode_auto_pending != MODE_AUTO) {
                 mode_auto_current = mode_auto_pending;

@@ -181,6 +181,10 @@ class Sx128xDriverCommon : public Sx128xDriverBase
     {
         gconfig = global_config;
 
+        // after a reset the chip is here already; a restart of the link comes from FS, the packet type wants STDBY_RC
+        SetStandby(SX1280_STDBY_CONFIG_STDBY_RC);
+        delay_us(1000);
+
         if (gconfig->modeIsLora()) {
             SetPacketType(SX1280_PACKET_TYPE_LORA);
             SetAutoFs(true);

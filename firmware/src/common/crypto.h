@@ -39,7 +39,7 @@ Key handling:
 #define CRYPTO_STARTUP_RANDOM_BUF_LEN  36 // two 8-byte randoms, the 12-byte nonce and the 8-byte mac
 #define CRYPTO_NONCE_MAX_LEN  12 // maximum length of nonce and mac
 #define CRYPTO_SLOT_NUM  4 // receivers a Tx holds a receive key for; the same on both roles, this header is one TU's view
-#define CRYPTO_TX_RING_NUM  4 // transmit keys kept with their highest nonce, so a replayed STARTUP cannot reset one
+#define CRYPTO_TX_RING_NUM  8 // transmit keys kept with their highest nonce, so a replayed STARTUP cannot reset one
 
 typedef enum {
     CRYPTO_STARTUP_REFUSED = 0, // its MAC did not hold: not from the Tx, or for another slot
@@ -55,6 +55,8 @@ class tCrypto
         TX = 0,
         RX,
     } ROLE_ENUM;
+
+    tCrypto(void); // once, at power up: what Init(), run at every restart of the controller, must not forget
 
     void Init(
         uint8_t role,
