@@ -17,7 +17,7 @@ export type ConnState = 'idle' | 'connecting' | 'connected' | 'busy';
 // the web app on GitHub Pages has the firmware next to it; the desktop app and a local dev server fetch it from there
 const PAGES_FIRMWARE = 'https://tetherlrs.github.io/TetherLRS/firmware/latest/';
 export const DEFAULT_FIRMWARE_BASE =
-  typeof location !== 'undefined' && location.protocol === 'https:' && location.hostname.endsWith('github.io')
+  typeof location !== 'undefined' && location.protocol === 'https:' && /(^|\.)github\.io$/.test(location.hostname)
     ? new URL('firmware/latest/', location.href).href
     : PAGES_FIRMWARE;
 
