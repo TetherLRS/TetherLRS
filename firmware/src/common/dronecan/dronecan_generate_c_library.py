@@ -57,8 +57,6 @@ def generate_dsdl():
 
 
 desired_dsdl_list = [
-    'dronecan.sensors.rc.RCInput',
-
     'uavcan.protocol.NodeStatus',
 
     'uavcan.protocol.GetNodeInfo',

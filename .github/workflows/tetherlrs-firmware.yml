@@ -22,6 +22,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: The radio driver headers the fhss test includes
+        run: git submodule update --init --depth 1 firmware/src/modules/sx12xx-lib
       - name: Firmware host tests
         run: firmware/test/run_tests.sh
       - uses: actions/setup-node@v4

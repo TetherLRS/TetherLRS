@@ -44,7 +44,7 @@ info = {'env': ENV, 'version': VERSION}
 # the device name, role and bands, as the marker in the image says them: the tool matches a running radio to its env
 # by them and shows the bands with the board
 with open(firmware, 'rb') as f:
-    marker = re.search(rb'TetherLRS:(Tx|Rx):([^:\x00]*):(v\d+\.\d+(?:\.\d+)?(?:-RC\d+)?):(?:([^:\x00]*):)?', f.read())
+    marker = re.search(rb'TetherLRS:(Tx|Rx):([^:\x00]*):(v\d+\.\d+(?:\.\d+)?(?:-(?:RC\d+|dev))?):(?:([^:\x00]*):)?', f.read()) # as the tool's detect.ts
 if not marker:
     sys.exit(f'{ENV}: no TetherLRS marker in the image, the tool could not match it to a radio')
 info['role'] = marker.group(1).decode()
